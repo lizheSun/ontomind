@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml
+
+# Python
+*.py[cod]
+*.so
+.Python
+
+# Java
+target/
+*.class
+*.jar
+*.war
+
+# AI Models
+models/
+*.pkl
+*.pt
+*.h5
+
+# Data
+data/
+*.db
+*.sqlite
