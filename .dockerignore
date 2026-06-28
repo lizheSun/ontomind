@@ -1,0 +1,7 @@
+backend/uploads/
+*.pyc
+__pycache__/
+.venv/
+*.egg-info/
+.DS_Store
+backend/.env

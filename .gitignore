@@ -50,3 +50,15 @@ models/
 data/
 *.db
 *.sqlite
+
+# Uploads
+backend/uploads/
+*.pem
+
+# Frontend build
+frontend/dist/
+
+# Docker volumes
+mysql_data/
+redis_data/
+uploads_data/

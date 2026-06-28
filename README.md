@@ -12,6 +12,17 @@
 | **执行层** | 策略下发 | 策略分发引擎、风控/营销系统适配器 |
 | **应用层** | 用户产品 | AIbi 智能分析、数据可视化、策略工作台 |
 
+## 技术栈
+
+| 类别 | 技术选型 |
+|------|---------|
+| **前端** | React 19 + TypeScript + Vite + Ant Design 5 |
+| **后端** | Python 3.12+ + FastAPI + SQLAlchemy 2.0 |
+| **数据库** | MySQL 8.0 |
+| **缓存** | Redis 7 |
+| **AI/ML** | LangChain + OpenAI / 本地 LLM |
+| **容器化** | Docker + Docker Compose |
+
 ## 快速开始
 
 ```bash
@@ -19,29 +30,69 @@
 git clone git@github.com:lizheSun/ontomind.git
 cd ontomind
 
-# 查看项目计划
-cat docs/project-plan.md
+# 启动所有服务（MySQL + Redis + 后端 + 前端）
+docker compose up -d
+
+# 或手动启动：
+# 1. 后端
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+
+# 2. 前端
+cd frontend
+npm install
+npm run dev
 ```
 
-## 技术栈
-
-- **前端**：React + TypeScript + Ant Design
-- **后端**：Python (FastAPI) + Java (Spring Boot)
-- **AI**：LangChain + LLM
-- **知识图谱**：Neo4j
-- **向量数据库**：Milvus
+- 后端 API 文档：http://localhost:8000/api/docs
+- 前端页面：http://localhost:5173
 
 ## 项目结构
 
-详见 [docs/project-plan.md](docs/project-plan.md)
+```
+ontomind/
+├── backend/                    # FastAPI 后端
+│   ├── app/
+│   │   ├── api/v1/             # 五层 API 路由
+│   │   │   ├── auth.py         # 认证模块
+│   │   │   ├── perception.py   # 感知层 API
+│   │   │   ├── cognition.py    # 认知层 API
+│   │   │   ├── decision.py     # 决策层 API
+│   │   │   ├── execution.py    # 执行层 API
+│   │   │   └── application.py  # 应用层 API
+│   │   ├── core/               # 核心配置 & 安全
+│   │   ├── db/                 # 数据库会话
+│   │   ├── models/             # SQLAlchemy ORM 模型
+│   │   ├── schemas/            # Pydantic 校验模型
+│   │   ├── services/           # 业务逻辑层
+│   │   └── main.py             # FastAPI 入口
+│   ├── alembic/                # 数据库迁移
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/                   # React 前端
+│   ├── src/
+│   │   ├── components/         # 组件
+│   │   ├── pages/              # 五层页面 + 仪表盘 + 登录
+│   │   ├── services/           # API 调用层
+│   │   ├── stores/             # Zustand 状态管理
+│   │   └── types/              # TypeScript 类型
+│   └── Dockerfile
+├── docs/
+│   └── project-plan.md         # 详细项目计划
+├── docker-compose.yml          # 本地开发环境
+└── README.md
+```
 
 ## 开发路线图
 
-- Phase 1：感知层（1-3月）
-- Phase 2：认知层（3-6月）
-- Phase 3：决策层（6-9月）
-- Phase 4：执行层（9-11月）
-- Phase 5：应用层（11-14月）
+| 阶段 | 时间 | 内容 |
+|------|------|------|
+| Phase 1 | 1-3月 | 感知层 — 数据源连接器 & 文档管理 |
+| Phase 2 | 3-6月 | 认知层 — 本体图谱构建 & 语义搜索 |
+| Phase 3 | 6-9月 | 决策层 — 特征挖掘 & ML模型 & 策略引擎 |
+| Phase 4 | 9-11月 | 执行层 — 策略下发 & 执行监控 |
+| Phase 5 | 11-14月 | 应用层 — AIbi & 数据可视化 |
 
 ## License
 

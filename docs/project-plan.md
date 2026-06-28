@@ -36,7 +36,7 @@
 
 | 能力模块 | 描述 | 技术方向 |
 |---------|------|---------|
-| 数据源连接器 | 支持 JDBC/ODBC 连接关系型数据库（MySQL、PostgreSQL、Oracle 等） | Spring Boot + MyBatis |
+| 数据源连接器 | 支持 JDBC/ODBC 连接关系型数据库（MySQL、PostgreSQL、Oracle 等） | SQLAlchemy + PyMySQL |
 | 文档解析引擎 | 上传并解析 PDF、Word、Excel、Markdown、TXT 等非结构化文档 | Apache Tika / Unstructured |
 | 大数据连接器 | 对接数据仓库（Hive、ClickHouse）、数据湖（Iceberg/Hudi） | Spark / Trino |
 | 数据资产系统 | 接入企业数据资产目录、元数据管理系统 | REST API 集成 |
@@ -121,37 +121,68 @@
 
 ## 三、技术架构
 
-### 3.1 技术栈
+### 3.1 架构模式
 
-| 层级 | 技术选型 |
-|------|---------|
-| 前端 | React + TypeScript + Ant Design / ECharts |
-| 后端 | Python (FastAPI) + Java (Spring Boot) 微服务 |
-| AI/ML | LangChain / LlamaIndex + OpenAI / 本地 LLM |
-| 知识图谱 | Neo4j / NebulaGraph |
-| 向量数据库 | Milvus / Qdrant |
-| 消息队列 | Kafka / RabbitMQ |
-| 任务调度 | Apache Airflow / Temporal |
-| 数据存储 | PostgreSQL + MinIO (对象存储) |
-| 容器化 | Docker + Kubernetes |
-| CI/CD | GitHub Actions |
-
-### 3.2 微服务划分
+**前后端分离架构**：前端 React SPA 通过 REST API 与后端 FastAPI 通信，MySQL 作为统一数据存储。
 
 ```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  gateway     │  │  auth-svc    │  │  user-svc    │
-│  API 网关     │  │  认证服务     │  │  用户服务     │
-└──────────────┘  └──────────────┘  └──────────────┘
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ perception   │  │ cognition    │  │ decision     │
-│ 感知层服务    │  │  认知层服务   │  │  决策层服务   │
-└──────────────┘  └──────────────┘  └──────────────┘
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ execution    │  │ application  │  │  ontology    │
-│ 执行层服务    │  │  应用层服务   │  │  本体引擎     │
-└──────────────┘  └──────────────┘  └──────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    前端 (React 19 + TS)                   │
+│              Ant Design 5 · ECharts · Vite              │
+├─────────────────────────────────────────────────────────┤
+│                    REST API (JSON)                       │
+├─────────────────────────────────────────────────────────┤
+│                后端 (Python FastAPI)                      │
+│    ┌──────────┬──────────┬──────────┬──────────┐       │
+│    │ 感知层    │ 认知层    │ 决策层    │ 执行层    │       │
+│    │ API路由   │ API路由   │ API路由   │ API路由   │       │
+│    └──────────┴──────────┴──────────┴──────────┘       │
+│    ┌──────────────────────────────────────────┐        │
+│    │           应用层 API路由                    │        │
+│    └──────────────────────────────────────────┘        │
+├─────────────────────────────────────────────────────────┤
+│                 MySQL 8.0 · Redis 7                     │
+└─────────────────────────────────────────────────────────┘
 ```
+
+### 3.2 技术栈
+
+| 类别 | 技术选型 | 说明 |
+|------|---------|------|
+| **前端框架** | React 19 + TypeScript | 企业级前端框架，生态成熟，复杂状态管理能力强 |
+| **UI 组件库** | Ant Design 5 | 数据密集型后台管理系统首选，中文友好 |
+| **图表** | ECharts + @ant-design/charts | 数据可视化 |
+| **状态管理** | Zustand | 轻量级 React 状态管理 |
+| **路由** | React Router v7 | SPA 路由 |
+| **构建工具** | Vite 6 | 极速开发体验 |
+| **后端框架** | Python FastAPI | 异步原生、Pydantic 校验、自动 API 文档、AI 生态最佳 |
+| **ORM** | SQLAlchemy 2.0 | Python 最成熟的 ORM |
+| **数据库迁移** | Alembic | SQLAlchemy 配套迁移工具 |
+| **数据库** | MySQL 8.0 | 稳定可靠的关系型数据库 |
+| **缓存** | Redis 7 | 高性能缓存 & 会话存储 |
+| **认证** | JWT (python-jose) | 无状态认证 |
+| **AI/ML** | LangChain + OpenAI | LLM 编排 & 文本处理 |
+| **容器化** | Docker + Docker Compose | 本地开发 & 部署 |
+| **CI/CD** | GitHub Actions | 自动化测试 & 部署 |
+
+### 3.3 框架选型理由
+
+**为什么选 FastAPI（而非 Django/Flask）？**
+- 异步原生支持（asyncio），高并发场景性能优异
+- Pydantic 自动数据校验，与 AI/ML 工作流天然契合
+- 自动生成 OpenAPI 文档（Swagger UI）
+- 2026 年 AI 后端首选框架
+
+**为什么选 React（而非 Vue）？**
+- 企业级应用市场占有率最高（~42%）
+- 复杂状态管理和数据密集型场景表现更好
+- Ant Design 组件库与 React 深度绑定
+- 生态丰富：图表、拖拽、富文本等组件选择多
+
+**为什么选 MySQL（而非 PostgreSQL）？**
+- 团队熟悉度高，运维成本低
+- 满足项目 OLTP 场景需求
+- 社区资源丰富
 
 ---
 
@@ -203,35 +234,73 @@
 
 ```
 ontomind/
-├── docs/                        # 文档
-│   ├── project-plan.md          # 项目计划
-│   ├── architecture.md          # 架构设计
-│   └── api/                     # API 文档
-├── services/                    # 微服务
-│   ├── gateway/                 # API 网关
-│   ├── auth/                    # 认证服务
-│   ├── perception/              # 感知层服务
-│   ├── cognition/               # 认知层服务
-│   ├── decision/                # 决策层服务
-│   ├── execution/               # 执行层服务
-│   └── application/             # 应用层服务
-├── frontend/                    # 前端
-│   ├── aibi/                    # AIbi 产品
-│   ├── dashboard/               # 数据可视化
-│   └── shared/                  # 共享组件
-├── ai/                          # AI 模块
-│   ├── ontology-engine/         # 本体引擎
-│   ├── feature-engineering/     # 特征工程
-│   └── ml-pipeline/             # ML 管道
-├── infra/                       # 基础设施
-│   ├── docker/                  # Docker 配置
-│   ├── k8s/                     # Kubernetes 配置
-│   └── terraform/               # IaC
-├── scripts/                     # 脚本工具
-├── .github/                     # GitHub 配置
-│   └── workflows/               # CI/CD
-├── docker-compose.yml           # 本地开发环境
-└── README.md                    # 项目说明
+├── backend/                          # FastAPI 后端
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── __init__.py           # 路由聚合
+│   │   │   └── v1/
+│   │   │       ├── __init__.py
+│   │   │       ├── router.py         # V1 路由注册
+│   │   │       ├── auth.py           # 认证 API
+│   │   │       ├── perception.py     # 感知层 API
+│   │   │       ├── cognition.py      # 认知层 API
+│   │   │       ├── decision.py       # 决策层 API
+│   │   │       ├── execution.py      # 执行层 API
+│   │   │       └── application.py    # 应用层 API
+│   │   ├── core/
+│   │   │   ├── config.py             # Pydantic 配置
+│   │   │   └── security.py           # JWT 认证
+│   │   ├── db/
+│   │   │   └── session.py            # SQLAlchemy 会话
+│   │   ├── models/
+│   │   │   └── __init__.py           # ORM 模型 (User/DataSource/Strategy等)
+│   │   ├── schemas/                  # Pydantic 请求/响应模型
+│   │   ├── services/                 # 业务逻辑层
+│   │   │   ├── perception/           # 感知层服务
+│   │   │   ├── cognition/            # 认知层服务
+│   │   │   ├── decision/             # 决策层服务
+│   │   │   ├── execution/            # 执行层服务
+│   │   │   └── application/          # 应用层服务
+│   │   └── main.py                   # FastAPI 入口
+│   ├── alembic/                      # 数据库迁移
+│   │   ├── env.py
+│   │   └── versions/
+│   ├── tests/                        # 单元测试
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── alembic.ini
+│   └── .env
+├── frontend/                         # React 前端
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── layout/
+│   │   │   │   └── AppLayout.tsx      # 主布局（侧边栏+顶栏）
+│   │   │   └── common/               # 通用组件
+│   │   ├── pages/
+│   │   │   ├── dashboard/            # 仪表盘
+│   │   │   ├── perception/           # 感知层页面
+│   │   │   ├── cognition/            # 认知层页面
+│   │   │   ├── decision/             # 决策层页面
+│   │   │   ├── execution/            # 执行层页面
+│   │   │   ├── application/          # 应用层页面
+│   │   │   └── Login.tsx             # 登录页
+│   │   ├── services/
+│   │   │   ├── api.ts                # Axios 封装
+│   │   │   └── index.ts              # 各层 API 调用
+│   │   ├── stores/
+│   │   │   └── appStore.ts           # Zustand 状态管理
+│   │   ├── types/
+│   │   │   └── index.ts              # TypeScript 类型
+│   │   ├── App.tsx                   # 路由配置
+│   │   └── main.tsx                  # 入口
+│   ├── public/
+│   ├── Dockerfile
+│   └── package.json
+├── docs/
+│   └── project-plan.md               # 项目计划文档
+├── docker-compose.yml                # 本地开发环境 (MySQL+Redis+后端+前端)
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -258,4 +327,4 @@ ontomind/
 
 ---
 
-> 最后更新：2026-06-27
+> 最后更新：2026-06-28
