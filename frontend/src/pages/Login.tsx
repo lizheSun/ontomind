@@ -27,7 +27,7 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await userService.login(values);
-      localStorage.setItem('access_token', res.data.access_token);
+      localStorage.setItem('access_token', res.data.accessToken);
       if (res.data.user) {
         localStorage.setItem('user', JSON.stringify(res.data.user));
       }
