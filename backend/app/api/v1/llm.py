@@ -1,6 +1,6 @@
 """LLM 资源管理 API."""
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.llm_config_schema import (
@@ -69,13 +69,18 @@ async def chat_completion(
     svc: LLMConfigService = Depends(get_llm_service),
 ):
     """调用已配置的 LLM 进行对话"""
-    data = await svc.chat_completion(
-        messages=payload.messages,
-        config_id=payload.config_id,
-        temperature=payload.temperature,
-        max_tokens=payload.max_tokens,
-    )
-    return {"code": "SUCCESS", "message": "调用成功", "data": data}
+    try:
+        data = await svc.chat_completion(
+            messages=payload.messages,
+            config_id=payload.config_id,
+            temperature=payload.temperature or 0.7,
+            max_tokens=payload.max_tokens or 2048,
+        )
+        return {"code": "SUCCESS", "message": "调用成功", "data": data}
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/active/info")

@@ -3,7 +3,7 @@ import api from './api';
 export interface LLMConfig {
   id: number;
   name: string;
-  provider: 'openai' | 'anthropic';
+  provider: 'openai' | 'anthropic' | 'qwen';
   base_url: string;
   api_key: string;
   model_name: string;

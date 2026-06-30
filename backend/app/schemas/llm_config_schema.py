@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 
-VALID_PROVIDERS = {"openai", "anthropic"}
+VALID_PROVIDERS = {"openai", "anthropic", "qwen"}
 
 
 class LLMConfigBase(BaseModel):

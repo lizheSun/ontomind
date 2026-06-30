@@ -6,6 +6,54 @@
 
 ## 2025-06-30
 
+### Agent: 主开发 Agent（晚间 — 感知层智能添加 & Bug 修复）
+
+### 目标
+修复前端白屏和智能添加失败问题，打通感知层完整链路（LLM 解析 → 保存 → 测试连接）。
+
+### Bug 修复
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 前端白屏 | `perception/index.tsx` 使用不存在的图标 `TestOutlined`（`@ant-design/icons` 无此导出） | 替换为 `ExperimentOutlined` |
+| 智能添加返回 500 | Qwen 推理模型返回 `content: null`，实际内容在 `reasoning` 字段 | `_call_openai()` 增加 fallback：`content` → `reasoning` → `reasoning_content` |
+| LLM 解析 token 不足 | `max_tokens=1024` 不够推理模型思考 | 增加为 `4096`（parse-config / auto-configure），诊断类增加为 `512` |
+| 保存数据源事务冲突 | `DataSourceService` 多处 `with self.db.begin()` 嵌套导致冲突 | 改为手动 `self.db.commit()` |
+| LLM 返回字段名不标准 | Qwen 返回 `"type": "doris"` 而非 `"source_type": "doris"`，导致类型设为 unknown | 新增 `_normalize_parsed()` 辅助函数，`_FIELD_ALIASES` 映射 15+ 别名 |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `backend/app/db/models/data_source_model.py` | DataSource ORM 模型 |
+| `backend/app/db/repositories/data_source_repo.py` | DataSourceRepository 数据层 |
+| `backend/app/schemas/data_source_schema.py` | DataSource Pydantic Schema |
+| `backend/app/services/data_source_service.py` | DataSourceService 服务层（含 create/update/delete/update_status/test_connection） |
+
+### 修改文件
+
+| 文件 | 变更要点 |
+|------|---------|
+| `backend/app/api/v1/perception.py` | 新增智能添加 3 个端点（parse-config / auto-configure / test-connection-for-source）、LLM 调用集成、`_normalize_parsed` 字段别名映射 |
+| `backend/app/services/llm_config_service.py` | `_call_openai()` 增加 reasoning 字段 fallback；统一 `_call` 方法 |
+| `backend/app/api/v1/llm.py` | 新增 `/active/info` 端点获取当前活跃 LLM 配置快照 |
+| `backend/app/db/models/llm_config_model.py` | 补充字段 |
+| `backend/app/schemas/llm_config_schema.py` | 补充 Schema 字段 |
+| `backend/app/db/models/__init__.py` | 注册 DataSource 模型 |
+| `frontend/src/pages/perception/index.tsx` | 重写：完整 CRUD 表格 + 智能添加对话框 + 连接测试 |
+| `frontend/src/services/index.ts` | 新增 `DataSource` 类型和 API |
+| `frontend/src/types/index.ts` | 新增 DataSource 类型定义 |
+| `frontend/src/services/llm.service.ts` | 补充 API 方法 |
+| `frontend/src/pages/resources/index.tsx` | 适配新类型 |
+
+### 验证
+- ✅ 智能添加全链路：LLM 解析配置 → 保存数据库 → 连接测试成功
+- ✅ 解析返回正确字段：`source_type: doris` 带全部连接参数
+- ✅ 前端无白屏，页面正常渲染
+- ✅ TypeScript 编译零错误
+
+---
+
 ### Agent: 主开发 Agent（下午 — UI/UE 框架重构）
 
 ### 目标

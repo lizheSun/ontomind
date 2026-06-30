@@ -37,7 +37,7 @@ export default function ResourcesPage() {
       const res = await llmService.listConfigs();
       setConfigs(res.data || []);
     } catch {
-      notification.error({ message: '加载配置失败', placement: 'top' });
+      notification.error({ title: '加载配置失败', placement: 'top' });
     } finally {
       setLoading(false);
     }
@@ -90,7 +90,7 @@ export default function ResourcesPage() {
     } catch (err: any) {
       if (err?.errorFields) return; // form validation
       notification.error({
-        message: '操作失败',
+        title: '操作失败',
         description: err?.response?.data?.detail || err?.message,
         placement: 'top',
       });
@@ -106,7 +106,7 @@ export default function ResourcesPage() {
       fetchConfigs();
     } catch (err: any) {
       notification.error({
-        message: '删除失败',
+        title: '删除失败',
         description: err?.response?.data?.detail || err?.message,
         placement: 'top',
       });
@@ -120,7 +120,7 @@ export default function ResourcesPage() {
       fetchConfigs();
     } catch (err: any) {
       notification.error({
-        message: '操作失败',
+        title: '操作失败',
         description: err?.response?.data?.detail || err?.message,
         placement: 'top',
       });
@@ -139,7 +139,7 @@ export default function ResourcesPage() {
       setTestMessages([...msgs, { role: 'assistant', content: reply }]);
     } catch (err: any) {
       notification.error({
-        message: '调用失败',
+        title: '调用失败',
         description: err?.response?.data?.detail || err?.message,
         placement: 'top',
       });
@@ -149,9 +149,10 @@ export default function ResourcesPage() {
   };
 
   const providerLabel = (p: string) =>
-    p === 'openai' ? 'OpenAI 协议' : 'Anthropic 协议';
+    p === 'openai' ? 'OpenAI 协议' : p === 'qwen' ? 'Qwen 协议' : 'Anthropic 协议';
 
-  const providerColor = (p: string) => (p === 'openai' ? 'blue' : 'purple');
+  const providerColor = (p: string) =>
+    p === 'openai' ? 'blue' : p === 'qwen' ? 'green' : 'purple';
 
   const columns: ColumnsType<LLMConfig> = [
     {
@@ -370,6 +371,7 @@ export default function ResourcesPage() {
               <Select>
                 <Option value="openai">OpenAI 协议</Option>
                 <Option value="anthropic">Anthropic 协议</Option>
+                <Option value="qwen">Qwen 协议</Option>
               </Select>
             </Form.Item>
 

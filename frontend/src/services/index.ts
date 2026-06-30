@@ -2,8 +2,22 @@ import api from './api';
 
 // ===== 感知层 =====
 export const perceptionAPI = {
-  listDataSources: () => api.get('/perception/datasources'),
+  // Data Sources CRUD
+  listDataSources: (params?: { skip?: number; limit?: number }) =>
+    api.get('/perception/datasources', { params }),
+  getDataSource: (id: number) => api.get(`/perception/datasources/${id}`),
   createDataSource: (data: any) => api.post('/perception/datasources', data),
+  updateDataSource: (id: number, data: any) => api.put(`/perception/datasources/${id}`, data),
+  deleteDataSource: (id: number) => api.delete(`/perception/datasources/${id}`),
+
+  // Auto-configure
+  parseConfig: (rawText: string) => api.post('/perception/datasources/parse-config', { raw_text: rawText }),
+  autoConfigure: (rawText: string) => api.post('/perception/datasources/auto-configure', { raw_text: rawText }),
+
+  // Test connection
+  testConnection: (id: number) => api.post(`/perception/datasources/${id}/test`),
+
+  // Documents
   uploadDocument: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

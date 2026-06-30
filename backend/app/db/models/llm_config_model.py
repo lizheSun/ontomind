@@ -7,6 +7,7 @@ from app.db.models.base import BaseModel
 class LLMProvider(str, enum.Enum):
     openai = "openai"
     anthropic = "anthropic"
+    qwen = "qwen"
 
 
 class LLMConfig(BaseModel):

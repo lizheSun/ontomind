@@ -4,9 +4,37 @@ export interface DataSource {
   id: number;
   name: string;
   source_type: string;
-  status: 'active' | 'inactive' | 'error';
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  database?: string;
+  charset?: string;
   description?: string;
+  status: 'active' | 'inactive' | 'error';
+  extra_params?: string;
+  is_active: boolean;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface TestConnectionResult {
+  success: boolean;
+  message: string;
+  details?: string;
+  diagnosis?: string;
+}
+
+export interface AutoConfigureResult {
+  datasource: DataSource;
+  parsed_config: Record<string, any>;
+  test_result: TestConnectionResult;
+}
+
+export interface ParsedConfigResult {
+  parsed: Record<string, any>;
+  raw_text: string;
+  model_used?: string;
 }
 
 export interface OntologyEntity {

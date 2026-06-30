@@ -87,7 +87,7 @@ class LLMConfigService:
         """调用 LLM 进行对话补全"""
         config = self.get_config_for_call(config_id)
         provider = config["provider"]
-        base_url = config["base_url"].rstrip("/")
+        base_url = config["base_url"].strip().rstrip("/")
         api_key = config["api_key"]
         model = config["model_name"]
 
@@ -108,7 +108,7 @@ class LLMConfigService:
         timeout = int(config.get("timeout", 60))
         max_retries = int(config.get("max_retries", 2))
 
-        if provider == "openai":
+        if provider == "openai" or provider == "qwen":
             return await self._call_openai(
                 base_url, api_key, model, messages, temperature, max_tokens,
                 extra_headers, extra_body, timeout, max_retries,
@@ -140,6 +140,7 @@ class LLMConfigService:
             **extra_body,
         }
 
+        last_error = None
         async with httpx.AsyncClient(timeout=timeout) as client:
             for attempt in range(max_retries + 1):
                 try:
@@ -147,17 +148,24 @@ class LLMConfigService:
                     resp.raise_for_status()
                     data = resp.json()
                     choice = data["choices"][0]
+                    msg = choice["message"]
+                    content = msg.get("content")
+                    # 部分模型（如 Qwen 推理模型）可能 content 为 null，实际内容在 reasoning 字段
+                    if not content:
+                        content = msg.get("reasoning") or msg.get("reasoning_content") or ""
                     return {
-                        "content": choice["message"]["content"],
+                        "content": content,
                         "model": data.get("model", model),
                         "usage": data.get("usage"),
                     }
                 except httpx.HTTPStatusError as e:
-                    if attempt >= max_retries:
+                    # 4xx 客户端错误不重试
+                    if 400 <= e.response.status_code < 500:
                         raise RuntimeError(f"OpenAI API 错误 {e.response.status_code}: {e.response.text}")
+                    last_error = e
                 except httpx.RequestError as e:
-                    if attempt >= max_retries:
-                        raise RuntimeError(f"请求 OpenAI 失败: {str(e)}")
+                    last_error = e
+        raise RuntimeError(f"请求 OpenAI 失败: {str(last_error)}")
 
     async def _call_anthropic(
         self, base_url, api_key, model, messages, temperature, max_tokens,
@@ -186,6 +194,7 @@ class LLMConfigService:
         if system_msgs:
             payload["system"] = "\n".join(system_msgs)
 
+        last_error = None
         async with httpx.AsyncClient(timeout=timeout) as client:
             for attempt in range(max_retries + 1):
                 try:
@@ -202,8 +211,10 @@ class LLMConfigService:
                         "usage": data.get("usage"),
                     }
                 except httpx.HTTPStatusError as e:
-                    if attempt >= max_retries:
+                    # 4xx 客户端错误不重试
+                    if 400 <= e.response.status_code < 500:
                         raise RuntimeError(f"Anthropic API 错误 {e.response.status_code}: {e.response.text}")
+                    last_error = e
                 except httpx.RequestError as e:
-                    if attempt >= max_retries:
-                        raise RuntimeError(f"请求 Anthropic 失败: {str(e)}")
+                    last_error = e
+        raise RuntimeError(f"请求 Anthropic 失败: {str(last_error)}")
