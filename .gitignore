@@ -41,7 +41,7 @@ target/
 *.war
 
 # AI Models
-models/
+/models/
 *.pkl
 *.pt
 *.h5
@@ -63,3 +63,6 @@ mysql_data/
 redis_data/
 uploads_data/
 .playwright-cli/
+
+# Vite cache
+.vite/

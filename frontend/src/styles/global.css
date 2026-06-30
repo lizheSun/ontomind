@@ -315,13 +315,6 @@ body {
   background: transparent !important;
 }
 
-.ant-layout-sider {
-  background: rgba(10, 15, 31, 0.85) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid var(--border-subtle) !important;
-}
-
 .ant-layout-header {
   background: rgba(10, 15, 31, 0.7) !important;
   backdrop-filter: blur(16px);
@@ -335,36 +328,41 @@ body {
   background: transparent !important;
 }
 
-/* Menu */
-.ant-menu-dark,
-.ant-menu-dark .ant-menu-sub {
+/* ---------- Horizontal Menu ---------- */
+.ant-menu-dark.ant-menu-horizontal {
   background: transparent !important;
+  border-bottom: none !important;
+  line-height: 56px !important;
 }
 
-.ant-menu-dark .ant-menu-item {
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item {
+  top: 0 !important;
+  height: 56px !important;
+  line-height: 56px !important;
+  margin: 0 2px !important;
+  padding: 0 14px !important;
   border-radius: var(--radius-md) !important;
-  margin: 2px 8px !important;
-  width: auto !important;
-  height: 40px !important;
-  line-height: 40px !important;
+  border-bottom: 2px solid transparent !important;
+  color: var(--text-secondary) !important;
   transition: all var(--duration-fast) var(--ease-out) !important;
 }
 
-.ant-menu-dark .ant-menu-item:hover {
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item:hover {
+  color: var(--text-primary) !important;
   background: var(--bg-glass-hover) !important;
 }
 
-.ant-menu-dark .ant-menu-item-selected {
-  background: rgba(59, 130, 246, 0.12) !important;
-  border-right: none !important;
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item-selected {
+  color: var(--accent-soft) !important;
+  background: rgba(59, 130, 246, 0.08) !important;
 }
 
-.ant-menu-dark .ant-menu-item-selected::after {
-  display: none !important;
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item-selected::after {
+  border-bottom: 2px solid var(--accent) !important;
 }
 
-.ant-menu-dark .ant-menu-item .anticon {
-  font-size: 18px !important;
+.ant-menu-dark.ant-menu-horizontal > .ant-menu-item .anticon {
+  font-size: 16px !important;
 }
 
 /* Card */

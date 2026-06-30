@@ -9,6 +9,7 @@ import CognitionIndex from './pages/cognition/index';
 import DecisionIndex from './pages/decision/index';
 import ExecutionIndex from './pages/execution/index';
 import ApplicationIndex from './pages/application/index';
+import ResourcesPage from './pages/resources/index';
 import UsersPage from './pages/users/index';
 
 /** 路由守卫 */
@@ -48,8 +49,6 @@ export default function App() {
           Layout: {
             bodyBg: '#060b14',
             headerBg: 'rgba(10,15,31,0.7)',
-            siderBg: 'rgba(10,15,31,0.85)',
-            triggerBg: 'rgba(10,15,31,0.9)',
           },
           Menu: {
             darkItemBg: 'transparent',
@@ -94,6 +93,7 @@ export default function App() {
               <Route path="decision" element={<DecisionIndex />} />
               <Route path="execution" element={<ExecutionIndex />} />
               <Route path="application" element={<ApplicationIndex />} />
+              <Route path="resources" element={<ResourcesPage />} />
               <Route path="users" element={<UsersPage />} />
             </Route>
 

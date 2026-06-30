@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Button, Avatar, Dropdown, Typography, theme } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   DashboardOutlined,
@@ -9,48 +9,29 @@ import {
   ThunderboltOutlined,
   SendOutlined,
   AppstoreOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  SettingOutlined,
   UserOutlined,
   LogoutOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { useAppStore } from '../../stores/appStore';
 import useUserStore from '../../stores/userStore';
 
-const { Header, Sider, Content } = Layout;
+const { Header, Content } = Layout;
 
 type MenuItem = Required<MenuProps>['items'][number];
 
-const sideMenuItems: MenuItem[] = [
-  {
-    key: '/',
-    icon: <DashboardOutlined />,
-    label: '仪表盘',
-  },
-  {
-    key: 'layer-group',
-    label: '五层架构',
-    type: 'group',
-    children: [
-      { key: '/perception', icon: <ApiOutlined />, label: '感知层' },
-      { key: '/cognition', icon: <NodeIndexOutlined />, label: '认知层' },
-      { key: '/decision', icon: <ThunderboltOutlined />, label: '决策层' },
-      { key: '/execution', icon: <SendOutlined />, label: '执行层' },
-      { key: '/application', icon: <AppstoreOutlined />, label: '应用层' },
-    ],
-  },
-  { type: 'divider' },
-  {
-    key: '/users',
-    icon: <TeamOutlined />,
-    label: '用户管理',
-  },
+const topMenuItems: MenuItem[] = [
+  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
+  { key: '/perception', icon: <ApiOutlined />, label: '感知层' },
+  { key: '/cognition', icon: <NodeIndexOutlined />, label: '认知层' },
+  { key: '/decision', icon: <ThunderboltOutlined />, label: '决策层' },
+  { key: '/execution', icon: <SendOutlined />, label: '执行层' },
+  { key: '/application', icon: <AppstoreOutlined />, label: '应用层' },
+  { key: '/resources', icon: <SettingOutlined />, label: '资源管理' },
+  { key: '/users', icon: <TeamOutlined />, label: '用户管理' },
 ];
 
 export default function AppLayout() {
-  const collapsed = useAppStore((s) => s.collapsed);
-  const setCollapsed = useAppStore((s) => s.setCollapsed);
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
@@ -71,28 +52,32 @@ export default function AppLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }} className="bg-grid">
-      {/* ---------- 侧边导航 ---------- */}
-      <Sider
-        trigger={null}
-        collapsible
-        collapsed={collapsed}
-        width={240}
+      {/* ---------- 顶栏导航 ---------- */}
+      <Header
         style={{
-          background: 'rgba(10,15,31,0.85)',
-          backdropFilter: 'blur(20px)',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
+          height: 56,
+          padding: '0 20px',
+          background: 'rgba(10,15,31,0.7)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
         }}
       >
-        {/* Logo 区域 */}
+        {/* Logo */}
         <div
           style={{
-            height: 56,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? 0 : '0 20px',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            flexShrink: 0,
+            marginRight: 32,
+            cursor: 'pointer',
           }}
+          onClick={() => navigate('/')}
         >
           <div
             style={{
@@ -112,70 +97,39 @@ export default function AppLayout() {
           >
             O
           </div>
-          {!collapsed && (
-            <span
-              style={{
-                marginLeft: 12,
-                fontSize: 17,
-                fontWeight: 700,
-                color: '#e8eef5',
-                letterSpacing: -0.3,
-              }}
-            >
-              OntoMind
-            </span>
-          )}
+          <span
+            style={{
+              marginLeft: 10,
+              fontSize: 16,
+              fontWeight: 700,
+              color: '#e8eef5',
+              letterSpacing: -0.3,
+            }}
+          >
+            OntoMind
+          </span>
         </div>
 
+        {/* 横向导航菜单 */}
         <Menu
           theme="dark"
-          mode="inline"
+          mode="horizontal"
           selectedKeys={[selectedKey]}
-          defaultOpenKeys={['layer-group']}
-          items={sideMenuItems}
+          items={topMenuItems}
           onClick={({ key }) => {
             if (key.startsWith('/')) navigate(key);
           }}
           style={{
+            flex: 1,
+            minWidth: 0,
             background: 'transparent',
-            borderInlineEnd: 'none',
-            marginTop: 8,
+            borderBottom: 'none',
             fontSize: 13,
           }}
         />
-      </Sider>
 
-      {/* ---------- 主区域 ---------- */}
-      <Layout>
-        {/* 顶栏 */}
-        <Header
-          style={{
-            height: 56,
-            padding: '0 20px',
-            background: 'rgba(10,15,31,0.7)',
-            backdropFilter: 'blur(16px)',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            position: 'sticky',
-            top: 0,
-            zIndex: 100,
-          }}
-        >
-          <Button
-            type="text"
-            icon={
-              collapsed ? (
-                <MenuUnfoldOutlined style={{ fontSize: 18, color: token.colorTextSecondary }} />
-              ) : (
-                <MenuFoldOutlined style={{ fontSize: 18, color: token.colorTextSecondary }} />
-              )
-            }
-            onClick={() => setCollapsed(!collapsed)}
-            style={{ width: 40, height: 40 }}
-          />
-
+        {/* 用户区域 */}
+        <div style={{ flexShrink: 0, marginLeft: 16 }}>
           <Dropdown
             menu={{
               items: [
@@ -233,8 +187,7 @@ export default function AppLayout() {
                 size={32}
                 style={{
                   backgroundColor: 'transparent',
-                  backgroundImage:
-                    'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                  backgroundImage: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                   flexShrink: 0,
                 }}
                 icon={<UserOutlined />}
@@ -246,20 +199,15 @@ export default function AppLayout() {
               </Typography.Text>
             </div>
           </Dropdown>
-        </Header>
+        </div>
+      </Header>
 
-        {/* 内容区 */}
-        <Content
-          style={{
-            margin: 24,
-            minHeight: 280,
-          }}
-        >
-          <div className="page-enter">
-            <Outlet />
-          </div>
-        </Content>
-      </Layout>
+      {/* 内容区 */}
+      <Content style={{ margin: 24, minHeight: 280 }}>
+        <div className="page-enter">
+          <Outlet />
+        </div>
+      </Content>
     </Layout>
   );
 }
