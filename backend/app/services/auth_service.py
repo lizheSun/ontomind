@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.repositories.user_repo import UserRepository
 from app.schemas.user_schema import UserLogin, Token, UserResponse
 from app.core.security import create_access_token, verify_password
-from app.core.exceptions import BusinessException, UnauthorizedException
+from app.core.exceptions import BusinessException, UnauthorizedException, NotFoundException
 
 class AuthService:
     """认证服务 - 处理登录、注册、Token 管理等业务逻辑"""

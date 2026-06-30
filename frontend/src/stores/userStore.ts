@@ -13,8 +13,11 @@ interface UserState {
   setCurrentUser: (user: User | null) => void;
   fetchCurrentUser: () => Promise<void>;
   fetchUsers: (params?: { skip?: number; limit?: number }) => Promise<void>;
-  createUser: (data: Parameters<typeof userService.createUser>[0]) => Promise<void>;
-  updateUser: (id: number, data: Parameters<typeof userService.updateUser>[1]) => Promise<void>;
+  createUser: (data: Parameters<typeof userService.createUser>[0]) => Promise<User>;
+  updateUser: (
+    id: number,
+    data: Parameters<typeof userService.updateUser>[1],
+  ) => Promise<void>;
   deleteUser: (id: number) => Promise<void>;
   clearError: () => void;
 }
@@ -26,14 +29,12 @@ export const useUserStore = create<UserState>((set, get) => ({
   loading: false,
   error: null,
 
-  // 操作方法
   setCurrentUser: (user) => set({ currentUser: user }),
 
   fetchCurrentUser: async () => {
     set({ loading: true, error: null });
     try {
-      // TODO: 获取当前登录用户 ID
-      const response = await userService.getUser(1);
+      const response = await userService.getCurrentUser();
       set({ currentUser: response.data, loading: false });
     } catch (error: any) {
       set({ error: error.message, loading: false });
@@ -58,6 +59,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         users: [...state.users, response.data],
         loading: false,
       }));
+      return response.data;
     } catch (error: any) {
       set({ error: error.message, loading: false });
       throw error;
@@ -69,10 +71,9 @@ export const useUserStore = create<UserState>((set, get) => ({
     try {
       const response = await userService.updateUser(id, data);
       set((state) => ({
-        users: state.users.map((user) =>
-          user.id === id ? response.data : user
-        ),
-        currentUser: state.currentUser?.id === id ? response.data : state.currentUser,
+        users: state.users.map((user) => (user.id === id ? response.data : user)),
+        currentUser:
+          state.currentUser?.id === id ? response.data : state.currentUser,
         loading: false,
       }));
     } catch (error: any) {
@@ -98,3 +99,5 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+export default useUserStore;

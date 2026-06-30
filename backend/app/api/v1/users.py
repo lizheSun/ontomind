@@ -1,24 +1,35 @@
 """用户模块 API - 接口层实现."""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.db.session import get_db
 from app.services.user_service import UserService
-from app.schemas.user_schema import (
-    UserCreate, 
-    UserUpdate, 
-    UserResponse, 
-    UserLogin, 
-    Token
-)
+from app.schemas.user_schema import UserCreate, UserUpdate
 from app.core.exceptions import BusinessException
 
-router = APIRouter(prefix="/users", tags=["用户管理"])
+router = APIRouter()
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
     """依赖注入: 创建 UserService 实例"""
     return UserService(db)
+
+# NOTE: GET "" (列表) 必须在 GET "/{user_id}" (详情) 之前，避免路由冲突
+
+@router.get("", response_model=dict)
+async def list_users(
+    skip: int = 0,
+    limit: int = 100,
+    active_only: bool = False,
+    user_service: UserService = Depends(get_user_service)
+):
+    """获取用户列表"""
+    users = user_service.list_users(skip, limit, active_only)
+    return {
+        "code": "SUCCESS",
+        "message": "操作成功",
+        "data": users,
+        "total": len(users)
+    }
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_user(
@@ -84,45 +95,3 @@ async def delete_user(
         }
     except BusinessException as e:
         raise HTTPException(status_code=e.status_code, detail={"code": e.code, "message": e.message})
-
-@router.get("", response_model=dict)
-async def list_users(
-    skip: int = 0,
-    limit: int = 100,
-    active_only: bool = False,
-    user_service: UserService = Depends(get_user_service)
-):
-    """获取用户列表"""
-    users = user_service.list_users(skip, limit, active_only)
-    return {
-        "code": "SUCCESS",
-        "message": "操作成功",
-        "data": users,
-        "total": len(users)
-    }
-
-@router.post("/login", response_model=dict)
-async def login(
-    login_data: UserLogin,
-    user_service: UserService = Depends(get_user_service)
-):
-    """用户登录"""
-    user = user_service.authenticate_user(login_data.username, login_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "LOGIN_FAILED", "message": "用户名或密码错误"}
-        )
-    
-    # TODO: 生成 JWT Token
-    access_token = "placeholder_token"
-    
-    return {
-        "code": "SUCCESS",
-        "message": "登录成功",
-        "data": {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": user
-        }
-    }

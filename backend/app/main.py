@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api.v1.router import api_router
+from app.core.exceptions import add_exception_handlers
 
 
 @asynccontextmanager
@@ -35,6 +36,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register exception handlers
+add_exception_handlers(app)
 
 # Register API routes
 app.include_router(api_router, prefix="/api/v1")

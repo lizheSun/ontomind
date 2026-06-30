@@ -41,6 +41,22 @@ class ConflictException(BusinessException):
     def __init__(self, message: str = "资源冲突", code: str = "RESOURCE_CONFLICT"):
         super().__init__(message, code, status.HTTP_409_CONFLICT)
 
+class UnauthorizedException(BusinessException):
+    """认证失败异常"""
+    
+    def __init__(self, message: str = "认证失败", code: str = "UNAUTHORIZED"):
+        super().__init__(message, code, status.HTTP_401_UNAUTHORIZED)
+
+__all__ = [
+    "BusinessException",
+    "NotFoundException", 
+    "ValidationException",
+    "PermissionException", 
+    "ConflictException",
+    "UnauthorizedException",
+    "add_exception_handlers",
+]
+
 # 全局异常处理器
 def business_exception_handler(request: Request, exc: BusinessException) -> JSONResponse:
     """处理业务异常"""
