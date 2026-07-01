@@ -288,7 +288,7 @@ function CrudTab({ config }: { config: CrudConfig }) {
     setLoading(true);
     try {
       const res = await config.api.list({ skip: 0, limit: 200 });
-      setItems(res.data || []);
+      setItems(res.data?.data || []);
     } catch { notification.error({ title: '加载失败', placement: 'top' }); }
     finally { setLoading(false); }
   }, [config.api]);
@@ -601,7 +601,7 @@ function AgentRunTab() {
     setLoading(true);
     try {
       const res = await resourcesAPI.listRuns({ skip: 0, limit: 200 });
-      setRuns(res.data || []);
+      setRuns(res.data?.data || []);
     } catch { notification.error({ title: '加载失败', placement: 'top' }); }
     finally { setLoading(false); }
   }, []);
