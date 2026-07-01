@@ -4,6 +4,89 @@
 
 ---
 
+## 2025-07-01
+
+### Agent: 主开发 Agent（上午 — 资源管理中心完整实现）
+
+### 目标
+实现资源管理的 5 个核心实体（Instance / Agent / Skill / MCP / AgentRun）+ WebSocket 实时日志，支撑 Agent 编排配置能力。
+
+### 设计决策
+| 决策点 | 选择 |
+|--------|------|
+| 节点管理协议 | SSH + Docker API（不做 k8s） |
+| Agent 运行方式 | 混合支持：docker / python / node / binary |
+| Skill 归属 | 全局共享，Agent 管理页一键安装 |
+| MCP 自动发现 | 任意 HTTP API + LLM 推断参数 |
+| 实时日志 | WebSocket 流式推送 |
+
+### 新增文件（后端）
+
+| 文件 | 层 | 说明 |
+|------|------|------|
+| `backend/app/db/models/instance_model.py` | 数据层 | Instance ORM（instance_type / protocol / credential / labels / status） |
+| `backend/app/db/models/agent_model.py` | 数据层 | Agent ORM（agent_type / runtime / docker_image / skill_ids） |
+| `backend/app/db/models/skill_model.py` | 数据层 | Skill ORM（skill_type / install_cmd / is_installed / tags） |
+| `backend/app/db/models/mcp_model.py` | 数据层 | MCPConfig ORM（mcp_type / auto_discovery / tools_manifest） |
+| `backend/app/db/models/agent_run_model.py` | 数据层 | AgentRun ORM（status / container_id / pid / log_offset） |
+| `backend/app/db/repositories/instance_repo.py` | 数据层 | InstanceRepository（update_heartbeat） |
+| `backend/app/db/repositories/agent_repo.py` | 数据层 | AgentRepository（get_by_type） |
+| `backend/app/db/repositories/skill_repo.py` | 数据层 | SkillRepository（get_installed / get_by_tags） |
+| `backend/app/db/repositories/mcp_repo.py` | 数据层 | MCPRepository |
+| `backend/app/db/repositories/agent_run_repo.py` | 数据层 | AgentRunRepository（get_running / get_by_agent / get_by_instance） |
+| `backend/app/schemas/instance_schema.py` | Schema | Instance CRUD Pydantic 校验 |
+| `backend/app/schemas/agent_schema.py` | Schema | Agent CRUD + AgentUpdate |
+| `backend/app/schemas/skill_schema.py` | Schema | Skill CRUD + SkillInstallRequest |
+| `backend/app/schemas/mcp_schema.py` | Schema | MCP CRUD + MCPAutoDiscoverRequest（api_url / method / LLM 推断参数） |
+| `backend/app/schemas/agent_run_schema.py` | Schema | AgentRun CRUD + LogEntry |
+| `backend/app/services/instance_service.py` | 服务层 | InstanceService 完整 CRUD |
+| `backend/app/services/agent_service.py` | 服务层 | AgentService 完整 CRUD |
+| `backend/app/services/skill_service.py` | 服务层 | SkillService + install() 一键安装 |
+| `backend/app/services/mcp_service.py` | 服务层 | MCPService + auto_discover() LLM 推断 |
+| `backend/app/services/agent_run_service.py` | 服务层 | AgentRunService + stream_logs() WebSocket 日志流 |
+| `backend/app/api/v1/resources.py` | 接口层 | 完整 API：Instance/Agent/Skill/MCP/AgentRun 全部 CRUD + WebSocket 日志 + MCP 自动发现 |
+
+### 新增文件（前端）
+
+| 文件 | 说明 |
+|------|------|
+| `frontend/src/pages/resources/index.tsx` | 全面重写：6 个 Tab（LLM 配置 + 计算节点 + 智能体 + 技能 + MCP 工具 + 运行监控），含 WebSocket 日志抽屉、MCP 自动发现弹窗、Skill 一键安装按钮 |
+| `docs/RESOURCE_MANAGEMENT_DESIGN.md` | 资源管理模块设计文档（实体关系、字段设计） |
+
+### 修改文件
+
+| 文件 | 变更 |
+|------|------|
+| `backend/app/db/models/__init__.py` | 注册 5 个新模型 |
+| `backend/app/api/v1/router.py` | 挂载 resources 路由 `/resources` |
+| `backend/app/main.py` | 添加启动时自动建表 `Base.metadata.create_all()` |
+| `backend/schema.sql` | 新增 5 张表 DDL（instances / agents / skills / mcp_configs / agent_runs） |
+| `frontend/src/types/index.ts` | 新增 5 个实体类型定义 |
+| `frontend/src/services/index.ts` | 新增 resourcesAPI 完整调用封装 |
+
+### API 端点汇总（全部测试通过）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST/PUT/DELETE | `/resources/instances` | 计算节点 CRUD |
+| POST | `/resources/instances/{id}/heartbeat` | 心跳刷新 |
+| GET/POST/PUT/DELETE | `/resources/agents` | Smart Agent CRUD |
+| GET/POST/PUT/DELETE | `/resources/skills` | Skill CRUD |
+| POST | `/resources/skills/{id}/install` | 一键安装 Skill |
+| GET/POST/PUT/DELETE | `/resources/mcps` | MCP 工具 CRUD |
+| POST | `/resources/mcps/auto-discover` | LLM 自动发现 MCP |
+| GET/POST/PUT | `/resources/runs` | AgentRun 管理 |
+| POST | `/resources/runs/{id}/stop` | 停止运行 |
+| **WS** | `/resources/runs/{id}/logs` | WebSocket 实时日志 |
+
+### 验证
+- ✅ TypeScript 编译零错误
+- ✅ 5 个端点全部返回 `{"code":"SUCCESS"}`
+- ✅ 创建/查询/删除 Instance、Agent 全链路验证通过
+- ✅ 后端自动建表生效（8 张表完整）
+
+---
+
 ## 2025-06-30
 
 ### Agent: 主开发 Agent（晚间 — 感知层智能添加 & Bug 修复）
