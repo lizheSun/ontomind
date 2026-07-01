@@ -27,15 +27,17 @@ export default function Execution() {
                 border: '1px solid rgba(255,255,255,0.06)',
                 background: `linear-gradient(135deg, ${item.c}10, ${item.c}03)`,
               }}
-              bodyStyle={{ padding: '18px 22px' }}
+              styles={{ body: { padding: '18px 22px' } }}
             >
               <Statistic
                 title={item.title}
                 value={item.val}
-                valueStyle={{
-                  color: item.c,
-                  fontSize: 26,
-                  fontWeight: 700,
+                styles={{
+                  content: {
+                    color: item.c,
+                    fontSize: 26,
+                    fontWeight: 700,
+                  },
                 }}
               />
             </Card>

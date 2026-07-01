@@ -95,7 +95,7 @@ export default function Dashboard() {
                 borderRadius: 14,
                 border: `1px solid rgba(255,255,255,0.06)`,
               }}
-              bodyStyle={{ padding: '20px 22px' }}
+              styles={{ body: { padding: '20px 22px' } }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <Statistic
@@ -105,7 +105,7 @@ export default function Dashboard() {
                     </span>
                   }
                   value={s.value}
-                  valueStyle={{ color: '#e8eef5', fontSize: 28, fontWeight: 700 }}
+                  styles={{ content: { color: '#e8eef5', fontSize: 28, fontWeight: 700 } }}
                 />
                 <div
                   style={{

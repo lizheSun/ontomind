@@ -26,13 +26,13 @@ export default function Decision() {
                 border: '1px solid rgba(255,255,255,0.06)',
                 background: `linear-gradient(135deg, ${item.c}10, ${item.c}03)`,
               }}
-              bodyStyle={{ padding: '20px 22px' }}
+              styles={{ body: { padding: '20px 22px' } }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Statistic
                   title={item.title}
                   value={item.val}
-                  valueStyle={{ color: '#e8eef5', fontSize: 28, fontWeight: 700 }}
+                  styles={{ content: { color: '#e8eef5', fontSize: 28, fontWeight: 700 } }}
                 />
                 <div
                   style={{

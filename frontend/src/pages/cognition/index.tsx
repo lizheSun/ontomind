@@ -45,14 +45,16 @@ export default function Cognition() {
               </div>
             }
             style={{ borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)' }}
-            bodyStyle={{
-              height: 380,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background:
-                'radial-gradient(ellipse at center, rgba(139,92,246,0.04) 0%, transparent 70%)',
-              borderRadius: '0 0 14px 14px',
+            styles={{
+              body: {
+                height: 380,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background:
+                  'radial-gradient(ellipse at center, rgba(139,92,246,0.04) 0%, transparent 70%)',
+                borderRadius: '0 0 14px 14px',
+              },
             }}
           >
             <div style={{ textAlign: 'center' }}>
