@@ -336,8 +336,8 @@ function ProjectModal({
           <Form.Item name="icon" label="图标" style={{ width: 100 }}>
             <Input placeholder="📁" maxLength={4} style={{ fontSize: 18 }} />
           </Form.Item>
-          <Form.Item name="key" label="标识" rules={[{ required: true, message: '请输入' }, { pattern: /^[A-Z0-9]+$/, message: '大写字母+数字' }]} style={{ width: 140 }}>
-            <Input placeholder="PROJ" maxLength={16} style={{ textTransform: 'uppercase' }} />
+          <Form.Item name="key" label="标识" rules={[{ required: true, message: '请输入' }, { pattern: /^[A-Z0-9]+$/, message: '大写字母+数字' }]} style={{ width: 140 }} normalize={(v: string) => (v || '').toUpperCase()}>
+            <Input placeholder="PROJ" maxLength={16} />
           </Form.Item>
         </Space>
         <Form.Item name="name" label="项目名称" rules={[{ required: true, message: '请输入' }]}>
