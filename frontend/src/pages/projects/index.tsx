@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Button, Modal, Form, Input, Select, Tag, Typography, Space, Popconfirm,
-  message, Empty, Tooltip, Badge, Segmented, App, Progress, Divider,
+  Empty, Tooltip, Badge, Segmented, App, Progress, Divider,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, RocketOutlined,
@@ -212,7 +212,7 @@ function RequirementModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const { notification } = App.useApp();
+  const { message, notification } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
@@ -295,7 +295,7 @@ function ProjectModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const { notification } = App.useApp();
+  const { message, notification } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
@@ -362,7 +362,7 @@ function PlanModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const { notification } = App.useApp();
+  const { message, notification } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
@@ -435,7 +435,7 @@ function PlanModal({
 function KanbanBoard({ projectId }: { projectId: number | null }) {
   const [kanban, setKanban] = useState<KanbanData>({ todo: [], in_progress: [], review: [], done: [] });
   const [loading, setLoading] = useState(false);
-  const { notification } = App.useApp();
+  const { message, notification } = App.useApp();
   const dragItem = useRef<{ id: number; status: string } | null>(null);
 
   const fetchKanban = useCallback(async () => {
@@ -567,7 +567,7 @@ function PlanList({ projectId }: { projectId: number | null }) {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Plan | null>(null);
-  const { notification } = App.useApp();
+  const { message, notification } = App.useApp();
 
   const fetchPlans = useCallback(async () => {
     if (!projectId) return;
@@ -648,7 +648,7 @@ function PlanList({ projectId }: { projectId: number | null }) {
 // ===================== 主页面 =====================
 
 export default function ProjectsPage() {
-  const { notification } = App.useApp();
+  const { message, notification } = App.useApp();
 
   // State
   const [projects, setProjects] = useState<Project[]>([]);
