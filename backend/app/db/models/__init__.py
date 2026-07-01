@@ -7,5 +7,10 @@ from app.db.models.agent_model import Agent
 from app.db.models.skill_model import Skill
 from app.db.models.mcp_model import MCPConfig
 from app.db.models.agent_run_model import AgentRun
+from app.db.models.project_model import Project
+from app.db.models.requirement_model import Requirement
+from app.db.models.plan_model import Plan
+from app.db.models.task_model import Task
 
-__all__ = ["User", "LLMConfig", "DataSource", "Instance", "Agent", "Skill", "MCPConfig", "AgentRun"]
+__all__ = ["User", "LLMConfig", "DataSource", "Instance", "Agent", "Skill", "MCPConfig", "AgentRun",
+           "Project", "Requirement", "Plan", "Task"]

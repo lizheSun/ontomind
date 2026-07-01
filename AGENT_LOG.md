@@ -6,6 +6,78 @@
 
 ## 2025-07-01
 
+### Agent: 主开发 Agent（下午 — 需求项目管理完整实现）
+
+### 目标
+实现 Agent 驱动的需求项目管理（Project / Requirement / Plan / Task + Kanban），打通「需求提交 → Agent评审打分 → Agent拆解为Task → 看板跟踪」全链路。
+
+### 设计决策
+
+| 决策 | 方案 |
+|------|------|
+| 需求模板 | 标题 / 类型(feature|bug|improvement|perf) / 优先级(P0-P3) / 描述 / 验收标准 / 影响范围 |
+| Agent 评审 | LLM 三维打分：需求清晰度 + 技术可行性 + 业务价值 → 综合评分 ≥5 通过 |
+| 任务拆解 | LLM 自动拆分为 3-8 个 Task，含标题/描述/优先级/工时/建议Agent类型 |
+| 敏捷看板 | 4 列（待开始/进行中/评审中/已完成），HTML5 原生拖拽移动 |
+| 项目层级 | Project → Plan (Sprint/Release/Milestone) → Task |
+
+### 新增文件（后端）
+
+| 文件 | 说明 |
+|------|------|
+| `backend/app/db/models/project_model.py` | Project ORM（name/key/icon/color/status） |
+| `backend/app/db/models/requirement_model.py` | Requirement ORM（模板字段 + Agent 评分字段） |
+| `backend/app/db/models/plan_model.py` | Plan ORM（sprint/release/milestone + 日期范围） |
+| `backend/app/db/models/task_model.py` | Task ORM（status/assignee_agent/工时/position） |
+| `backend/app/db/repositories/project_repo.py` | ProjectRepository |
+| `backend/app/db/repositories/requirement_repo.py` | RequirementRepository |
+| `backend/app/db/repositories/plan_repo.py` | PlanRepository |
+| `backend/app/db/repositories/task_repo.py` | TaskRepository（含 get_kanban / batch_create） |
+| `backend/app/schemas/project_schema.py` | 全部 Pydantic Schema（含 TaskMove 看板移动） |
+| `backend/app/services/project_service.py` | ProjectService CRUD |
+| `backend/app/services/requirement_service.py` | RequirementService + analyze() LLM评审 + decompose() LLM拆解 |
+| `backend/app/api/v1/projects.py` | 完整 REST API（20 个端点 + /kanban 看板查询） |
+
+### 新增文件（前端）
+
+| 文件 | 说明 |
+|------|------|
+| `frontend/src/pages/projects/index.tsx` | 完整页面：项目选择器 + 需求池(卡片列表) + 敏捷看板(拖拽4列) + 计划列表 + Agent工作流引导 |
+
+### 修改文件
+
+| 文件 | 变更 |
+|------|------|
+| `backend/app/db/models/__init__.py` | 注册 4 个新模型 |
+| `backend/app/api/v1/router.py` | 挂载 projects 路由 |
+| `backend/schema.sql` | 新增 4 张表 DDL（projects/requirements/plans/tasks） |
+| `frontend/src/App.tsx` | 注册 /projects 路由 |
+| `frontend/src/components/layout/AppLayout.tsx` | 导航新增「项目管理」 |
+| `frontend/src/types/index.ts` | 新增 5 个类型（Project/Requirement/Plan/Task/KanbanData） |
+| `frontend/src/services/index.ts` | 新增 projectsAPI 完整封装（20+ 方法） |
+
+### API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST/PUT/DELETE | `/projects` | 项目 CRUD |
+| GET/POST | `/projects/{id}/requirements` | 需求列表/创建 |
+| PUT/DELETE | `/projects/{id}/requirements/{rid}` | 需求更新/删除 |
+| POST | `/projects/{id}/requirements/{rid}/analyze` | 🤖 Agent 评审打分 |
+| POST | `/projects/{id}/requirements/{rid}/decompose` | 🤖 Agent 拆解为 Task |
+| GET/POST/PUT/DELETE | `/projects/{id}/plans` | 计划 CRUD |
+| GET/POST/PUT/DELETE | `/projects/{id}/tasks` | 任务 CRUD |
+| PUT | `/projects/{id}/tasks/{tid}/move` | 看板拖拽移动 |
+| GET | `/projects/{id}/kanban` | 看板数据 |
+
+### 验证
+- ✅ TypeScript 编译零错误
+- ✅ 全部 API 端点返回正常
+- ✅ 项目 CRUD + 需求 CRUD + 计划 CRUD 全链路验证
+- ✅ 后端自动建表生效（12 张表完整）
+
+---
+
 ### Agent: 主开发 Agent（上午 — 资源管理中心完整实现）
 
 ### 目标

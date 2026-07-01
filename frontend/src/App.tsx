@@ -11,6 +11,7 @@ import ExecutionIndex from './pages/execution/index';
 import ApplicationIndex from './pages/application/index';
 import ResourcesPage from './pages/resources/index';
 import UsersPage from './pages/users/index';
+import ProjectsPage from './pages/projects/index';
 
 /** 路由守卫 */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -94,6 +95,7 @@ export default function App() {
               <Route path="execution" element={<ExecutionIndex />} />
               <Route path="application" element={<ApplicationIndex />} />
               <Route path="resources" element={<ResourcesPage />} />
+              <Route path="projects" element={<ProjectsPage />} />
               <Route path="users" element={<UsersPage />} />
             </Route>
 

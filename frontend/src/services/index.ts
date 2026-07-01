@@ -46,6 +46,57 @@ export const resourcesAPI = {
   stopRun: (id: number) => api.post(`/resources/runs/${id}/stop`),
 };
 
+// ===== 项目管理 =====
+export const projectsAPI = {
+  // Project
+  listProjects: (params?: { skip?: number; limit?: number }) =>
+    api.get('/projects', { params }),
+  getProject: (id: number) => api.get(`/projects/${id}`),
+  createProject: (data: any) => api.post('/projects', data),
+  updateProject: (id: number, data: any) => api.put(`/projects/${id}`, data),
+  deleteProject: (id: number) => api.delete(`/projects/${id}`),
+
+  // Requirements
+  listRequirements: (projectId: number, params?: { skip?: number; limit?: number }) =>
+    api.get(`/projects/${projectId}/requirements`, { params }),
+  createRequirement: (projectId: number, data: any) =>
+    api.post(`/projects/${projectId}/requirements`, data),
+  updateRequirement: (projectId: number, reqId: number, data: any) =>
+    api.put(`/projects/${projectId}/requirements/${reqId}`, data),
+  deleteRequirement: (projectId: number, reqId: number) =>
+    api.delete(`/projects/${projectId}/requirements/${reqId}`),
+  analyzeRequirement: (projectId: number, reqId: number) =>
+    api.post(`/projects/${projectId}/requirements/${reqId}/analyze`),
+  decomposeRequirement: (projectId: number, reqId: number) =>
+    api.post(`/projects/${projectId}/requirements/${reqId}/decompose`),
+
+  // Plans
+  listPlans: (projectId: number, params?: { skip?: number; limit?: number }) =>
+    api.get(`/projects/${projectId}/plans`, { params }),
+  createPlan: (projectId: number, data: any) =>
+    api.post(`/projects/${projectId}/plans`, data),
+  updatePlan: (projectId: number, planId: number, data: any) =>
+    api.put(`/projects/${projectId}/plans/${planId}`, data),
+  deletePlan: (projectId: number, planId: number) =>
+    api.delete(`/projects/${projectId}/plans/${planId}`),
+
+  // Tasks
+  listTasks: (projectId: number, params?: { requirement_id?: number }) =>
+    api.get(`/projects/${projectId}/tasks`, { params }),
+  createTask: (projectId: number, data: any) =>
+    api.post(`/projects/${projectId}/tasks`, data),
+  updateTask: (projectId: number, taskId: number, data: any) =>
+    api.put(`/projects/${projectId}/tasks/${taskId}`, data),
+  moveTask: (projectId: number, taskId: number, data: { status: string; position?: number }) =>
+    api.put(`/projects/${projectId}/tasks/${taskId}/move`, data),
+  deleteTask: (projectId: number, taskId: number) =>
+    api.delete(`/projects/${projectId}/tasks/${taskId}`),
+
+  // Kanban
+  getKanban: (projectId: number) =>
+    api.get(`/projects/${projectId}/kanban`),
+};
+
 // ===== 感知层 =====
 export const perceptionAPI = {
   // Data Sources CRUD

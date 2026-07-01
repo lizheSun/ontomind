@@ -224,3 +224,107 @@ CREATE TABLE `agent_runs` (
   CONSTRAINT `fk_agent_runs_agent` FOREIGN KEY (`agent_id`) REFERENCES `agents` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_agent_runs_instance` FOREIGN KEY (`instance_id`) REFERENCES `instances` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent 运行实例追踪表';
+
+
+-- ============================================================
+-- 9. 项目表
+-- ============================================================
+DROP TABLE IF EXISTS `projects`;
+CREATE TABLE `projects` (
+  `id`          INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `name`        VARCHAR(128)  NOT NULL COMMENT '项目名称',
+  `key`         VARCHAR(16)   NOT NULL COMMENT '项目唯一标识',
+  `description` TEXT          DEFAULT NULL COMMENT '项目描述',
+  `status`      VARCHAR(20)   DEFAULT 'active' COMMENT '状态: active / archived',
+  `icon`        VARCHAR(8)    DEFAULT NULL COMMENT 'Emoji 图标',
+  `color`       VARCHAR(7)    DEFAULT NULL COMMENT '主题色',
+  `extra`       JSON          DEFAULT NULL COMMENT '扩展字段',
+  `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_key` (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目表';
+
+
+-- ============================================================
+-- 10. 需求表
+-- ============================================================
+DROP TABLE IF EXISTS `requirements`;
+CREATE TABLE `requirements` (
+  `id`                  INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `project_id`          INT           NOT NULL COMMENT '所属项目',
+  `title`               VARCHAR(256)  NOT NULL COMMENT '需求标题',
+  `req_type`            VARCHAR(20)   DEFAULT 'feature' COMMENT '类型: feature / bug / improvement / performance',
+  `priority`            VARCHAR(4)    DEFAULT 'P2' COMMENT '优先级: P0 / P1 / P2 / P3',
+  `status`              VARCHAR(20)   DEFAULT 'pending_review' COMMENT '状态: pending_review / passed / rejected / in_progress / done',
+  `description`         TEXT          DEFAULT NULL COMMENT '详细描述',
+  `acceptance_criteria` TEXT          DEFAULT NULL COMMENT '验收标准',
+  `impact_scope`        TEXT          DEFAULT NULL COMMENT '影响范围',
+  `related_modules`     JSON          DEFAULT NULL COMMENT '关联模块列表',
+  `score_clarity`       FLOAT         DEFAULT NULL COMMENT '需求清晰度 1-10',
+  `score_feasibility`   FLOAT         DEFAULT NULL COMMENT '技术可行性 1-10',
+  `score_value`         FLOAT         DEFAULT NULL COMMENT '业务价值 1-10',
+  `score_total`         FLOAT         DEFAULT NULL COMMENT '综合评分',
+  `review_comment`      TEXT          DEFAULT NULL COMMENT 'Agent 评审意见',
+  `review_agent_id`     INT           DEFAULT NULL COMMENT '评审 Agent ID',
+  `is_decomposed`       TINYINT(1)    DEFAULT 0 COMMENT '是否已拆解',
+  `decompose_agent_id`  INT           DEFAULT NULL COMMENT '拆解 Agent ID',
+  `created_at`          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`          DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_project_id` (`project_id`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `fk_req_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求表';
+
+
+-- ============================================================
+-- 11. 计划/迭代表
+-- ============================================================
+DROP TABLE IF EXISTS `plans`;
+CREATE TABLE `plans` (
+  `id`          INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `project_id`  INT           NOT NULL COMMENT '所属项目',
+  `name`        VARCHAR(256)  NOT NULL COMMENT '计划/迭代名称',
+  `plan_type`   VARCHAR(20)   DEFAULT 'sprint' COMMENT '类型: sprint / release / milestone',
+  `goal`        TEXT          DEFAULT NULL COMMENT '迭代目标',
+  `start_date`  DATE          DEFAULT NULL COMMENT '开始日期',
+  `end_date`    DATE          DEFAULT NULL COMMENT '结束日期',
+  `status`      VARCHAR(20)   DEFAULT 'planned' COMMENT '状态: planned / active / completed / cancelled',
+  `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_project_id` (`project_id`),
+  CONSTRAINT `fk_plan_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='计划/迭代表';
+
+
+-- ============================================================
+-- 12. 任务表
+-- ============================================================
+DROP TABLE IF EXISTS `tasks`;
+CREATE TABLE `tasks` (
+  `id`                  INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `project_id`          INT           NOT NULL COMMENT '所属项目',
+  `plan_id`             INT           DEFAULT NULL COMMENT '所属计划',
+  `requirement_id`      INT           DEFAULT NULL COMMENT '来源需求',
+  `title`               VARCHAR(256)  NOT NULL COMMENT '任务标题',
+  `description`         TEXT          DEFAULT NULL COMMENT '任务描述',
+  `status`              VARCHAR(20)   DEFAULT 'todo' COMMENT '状态: todo / in_progress / review / done',
+  `priority`            VARCHAR(4)    DEFAULT 'P2' COMMENT '优先级: P0 / P1 / P2 / P3',
+  `assignee_agent_type` VARCHAR(64)   DEFAULT NULL COMMENT '分配 Agent 类型',
+  `assignee_agent_id`   INT           DEFAULT NULL COMMENT '分配 Agent ID',
+  `estimated_hours`     FLOAT         DEFAULT NULL COMMENT '预估工时',
+  `actual_hours`        FLOAT         DEFAULT NULL COMMENT '实际工时',
+  `position`            INT           DEFAULT 0 COMMENT '看板排序',
+  `created_at`          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`          DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_project_id` (`project_id`),
+  KEY `idx_plan_id` (`plan_id`),
+  KEY `idx_requirement_id` (`requirement_id`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `fk_task_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_task_plan` FOREIGN KEY (`plan_id`) REFERENCES `plans` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_task_req` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务表';

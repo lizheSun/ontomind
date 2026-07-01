@@ -13,6 +13,7 @@ import {
   UserOutlined,
   LogoutOutlined,
   TeamOutlined,
+  ProjectOutlined,
 } from '@ant-design/icons';
 import useUserStore from '../../stores/userStore';
 
@@ -27,6 +28,7 @@ const topMenuItems: MenuItem[] = [
   { key: '/decision', icon: <ThunderboltOutlined />, label: '决策层' },
   { key: '/execution', icon: <SendOutlined />, label: '执行层' },
   { key: '/application', icon: <AppstoreOutlined />, label: '应用层' },
+  { key: '/projects', icon: <ProjectOutlined />, label: '项目管理' },
   { key: '/resources', icon: <SettingOutlined />, label: '资源管理' },
   { key: '/users', icon: <TeamOutlined />, label: '用户管理' },
 ];

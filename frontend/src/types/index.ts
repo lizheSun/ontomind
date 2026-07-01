@@ -104,6 +104,81 @@ export interface LogEntry {
   message: string;
 }
 
+// ===== 项目管理 =====
+
+export interface Project {
+  id: number;
+  name: string;
+  key: string;
+  description?: string;
+  status: 'active' | 'archived';
+  icon?: string;
+  color?: string;
+  extra?: Record<string, any>;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Requirement {
+  id: number;
+  project_id: number;
+  title: string;
+  req_type: 'feature' | 'bug' | 'improvement' | 'performance';
+  priority: 'P0' | 'P1' | 'P2' | 'P3';
+  status: 'pending_review' | 'passed' | 'rejected' | 'in_progress' | 'done';
+  description?: string;
+  acceptance_criteria?: string;
+  impact_scope?: string;
+  related_modules?: string[];
+  score_clarity?: number;
+  score_feasibility?: number;
+  score_value?: number;
+  score_total?: number;
+  review_comment?: string;
+  review_agent_id?: number;
+  is_decomposed: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Plan {
+  id: number;
+  project_id: number;
+  name: string;
+  plan_type: 'sprint' | 'release' | 'milestone';
+  goal?: string;
+  start_date?: string;
+  end_date?: string;
+  status: 'planned' | 'active' | 'completed' | 'cancelled';
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Task {
+  id: number;
+  project_id: number;
+  plan_id?: number;
+  requirement_id?: number;
+  title: string;
+  description?: string;
+  status: 'todo' | 'in_progress' | 'review' | 'done';
+  priority: 'P0' | 'P1' | 'P2' | 'P3';
+  assignee_agent_type?: string;
+  assignee_agent_id?: number;
+  estimated_hours?: number;
+  actual_hours?: number;
+  position: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface KanbanData {
+  todo: Task[];
+  in_progress: Task[];
+  review: Task[];
+  done: Task[];
+}
+
 // ===== 感知层 =====
 
 export interface DataSource {
