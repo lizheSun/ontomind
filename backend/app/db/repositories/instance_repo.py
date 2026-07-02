@@ -19,8 +19,12 @@ class InstanceRepository(BaseRepository[Instance]):
         return self.db.query(Instance).filter(Instance.status == "online").all()
 
     def update_heartbeat(self, instance_id: int):
+        """刷新心跳时间，同时将实例状态设为 online"""
         from datetime import datetime, timezone
         self.db.query(Instance).filter(Instance.id == instance_id).update(
-            {"last_heartbeat": datetime.now(timezone.utc)}
+            {
+                "last_heartbeat": datetime.now(timezone.utc),
+                "status": "online",
+            }
         )
         self.db.commit()

@@ -20,7 +20,7 @@ import type { ColumnsType } from 'antd/es/table';
 import llmService from '../../services/llm.service';
 import type { LLMConfig, LLMConfigCreate, LLMConfigUpdate } from '../../services/llm.service';
 import { resourcesAPI } from '../../services/index';
-import type { Instance, Agent, Skill, MCPConfig as MCPConfigType, AgentRun, LogEntry } from '../../types/index';
+import type { Instance, Agent, Skill, MCPConfig as MCPConfigType, AgentRun, LogEntry, DiscoveredAgent, AgentScanResult } from '../../types/index';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -138,6 +138,8 @@ function InstancesPanel() {
   const [editing, setEditing] = useState<Instance | null>(null);
   const [form] = Form.useForm();
   const [registeringLocal, setRegisteringLocal] = useState(false);
+  const [scanningMap, setScanningMap] = useState<Record<number, boolean>>({});
+  const [discoveredAgents, setDiscoveredAgents] = useState<Record<number, DiscoveredAgent[]>>({});
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -165,10 +167,30 @@ function InstancesPanel() {
     catch (err: any) { notification.error({ title: '删除失败', description: err?.response?.data?.detail || err?.message, placement: 'top' }); }
   };
 
+  const handleScanAgents = async (instId: number) => {
+    setScanningMap(prev => ({ ...prev, [instId]: true }));
+    try {
+      const res = await resourcesAPI.scanAgents(instId);
+      const data: AgentScanResult = res.data?.data || res.data;
+      if (data?.agents) {
+        setDiscoveredAgents(prev => ({ ...prev, [instId]: data.agents }));
+        const healthy = data.agents.filter(a => a.is_healthy).length;
+        message.success(`扫描完成：${data.total_ports_scanned} 个端口，发现 ${data.agents.length} 个 Agent，${healthy} 个健康`);
+      }
+    } catch (err: any) {
+      notification.error({ title: '扫描失败', description: err?.response?.data?.detail || err?.message, placement: 'top' });
+    } finally { setScanningMap(prev => ({ ...prev, [instId]: false })); }
+  };
+
   const handleRegisterLocal = async () => {
     setRegisteringLocal(true);
     try {
       const res = await resourcesAPI.registerLocalInstance();
+      const discovered = res.data?.discovered_agents as DiscoveredAgent[] | undefined;
+      const instData = res.data?.data as Instance | undefined;
+      if (instData && discovered) {
+        setDiscoveredAgents(prev => ({ ...prev, [instData.id]: discovered }));
+      }
       message.success(res.data?.message || '本地服务器已添加');
       fetch();
     } catch (err: any) {
@@ -270,6 +292,63 @@ function InstancesPanel() {
                       <div style={{ height: 3, borderRadius: 3, background: 'rgba(255,255,255,0.06)', marginTop: 3, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${Math.min(100, (diskGb / 500) * 100)}%`, borderRadius: 3, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} />
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Agent 发现区域 */}
+                <div style={{ marginTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ color: '#657a9a', fontSize: 11 }}>Agent 服务</Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<ExperimentOutlined />}
+                      loading={scanningMap[item.id]}
+                      onClick={() => handleScanAgents(item.id)}
+                      style={{ color: '#60a5fa', fontSize: 11, padding: '0 4px', height: 22 }}
+                    >
+                      扫描
+                    </Button>
+                  </div>
+                  {discoveredAgents[item.id] && discoveredAgents[item.id].length > 0 ? (
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      {discoveredAgents[item.id].map((a, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            background: a.is_healthy ? 'rgba(52,211,153,0.06)' : 'rgba(245,158,11,0.06)',
+                            borderRadius: 8, padding: '6px 10px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 13 }}>{a.icon}</span>
+                            <span style={{ fontSize: 12, color: '#e8eef5', fontWeight: 500 }}>{a.label}</span>
+                            {a.version && (
+                              <Tag style={{ borderRadius: 4, fontSize: 10, background: 'rgba(255,255,255,0.06)', color: '#657a9a', border: 'none', margin: 0 }}>{a.version}</Tag>
+                            )}
+                          </div>
+                          <Space size={6}>
+                            {a.port > 0 && (
+                              <span style={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: '#506380' }}>:{a.port}</span>
+                            )}
+                            <Tag style={{
+                              borderRadius: 4, fontSize: 10, margin: 0,
+                              background: a.is_healthy ? 'rgba(52,211,153,0.15)' : 'rgba(245,158,11,0.15)',
+                              color: a.is_healthy ? '#34d399' : '#f59e0b',
+                              border: `1px solid ${a.is_healthy ? 'rgba(52,211,153,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                            }}>
+                              <span style={{ fontSize: 8, marginRight: 3 }}>{a.is_healthy ? '●' : '○'}</span>
+                              {a.is_healthy ? '可用' : a.error || '不可用'}
+                            </Tag>
+                          </Space>
+                        </div>
+                      ))}
+                    </Space>
+                  ) : (
+                    <div style={{ color: '#3d4e6b', fontSize: 11, textAlign: 'center', padding: '6px 0' }}>
+                      {scanningMap[item.id] ? '扫描中...' : '点击扫描发现 Agent'}
                     </div>
                   )}
                 </div>

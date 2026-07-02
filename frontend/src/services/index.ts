@@ -11,6 +11,7 @@ export const resourcesAPI = {
   deleteInstance: (id: number) => api.delete(`/resources/instances/${id}`),
   heartbeatInstance: (id: number) => api.post(`/resources/instances/${id}/heartbeat`),
   registerLocalInstance: () => api.post('/resources/instances/register-local'),
+  scanAgents: (instId: number) => api.post(`/resources/instances/${instId}/scan-agents`),
 
   // Agent
   listAgents: (params?: { skip?: number; limit?: number }) =>

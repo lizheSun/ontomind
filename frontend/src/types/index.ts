@@ -80,6 +80,27 @@ export interface MCPConfig {
   updated_at?: string;
 }
 
+export interface DiscoveredAgent {
+  agent_type: 'openclaw' | 'opencode' | 'harness' | 'custom';
+  label: string;
+  icon: string;
+  port: number;
+  host: string;
+  health_url?: string;
+  is_healthy: boolean;
+  version?: string;
+  process_name?: string;
+  error?: string;
+}
+
+export interface AgentScanResult {
+  instance_id: number;
+  host: string;
+  agents: DiscoveredAgent[];
+  total_ports_scanned: number;
+  errors?: string[];
+}
+
 export interface AgentRun {
   id: number;
   agent_id?: number;

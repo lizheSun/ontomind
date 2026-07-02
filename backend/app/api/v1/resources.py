@@ -120,7 +120,93 @@ def register_local_instance(db: Session = Depends(get_db)):
         description="本地开发服务器（自动注册）",
     )
     result = svc.create(data)
-    return {"code": "SUCCESS", "message": "本地服务器已添加", "data": result}
+    # 本地服务器注册后直接设为 online（不需要等心跳）
+    from app.db.models.instance_model import Instance
+    inst = db.query(Instance).filter(Instance.id == result["id"]).first()
+    if inst:
+        inst.status = "online"
+        from datetime import datetime, timezone
+        inst.last_heartbeat = datetime.now(timezone.utc)
+        db.commit()
+        result["status"] = "online"
+        result["last_heartbeat"] = inst.last_heartbeat.isoformat()
+
+    # 自动扫描本地 Agent
+    from app.services.agent_discovery import discover_agents
+    discovery = discover_agents(ip, instance_id=result["id"])
+    agents_data = [
+        {
+            "agent_type": a.agent_type,
+            "label": a.label,
+            "icon": a.icon,
+            "port": a.port,
+            "host": a.host,
+            "health_url": a.health_url,
+            "is_healthy": a.is_healthy,
+            "version": a.version,
+            "process_name": a.process_name,
+            "error": a.error,
+        }
+        for a in discovery.agents
+    ]
+    return {
+        "code": "SUCCESS",
+        "message": f"本地服务器已添加，发现 {len(agents_data)} 个 Agent",
+        "data": result,
+        "discovered_agents": agents_data,
+        "total_ports_scanned": discovery.total_ports_scanned,
+    }
+
+
+# ==================== Agent 发现 ====================
+
+
+@router.post("/instances/{inst_id}/scan-agents")
+def scan_agents(inst_id: int, db: Session = Depends(get_db)):
+    """
+    扫描指定计算节点上的 Agent 服务。
+
+    通过端口扫描 + HTTP 健康检查 + 进程检测（仅本机）来发现：
+    - OpenClaw（端口 3000/8080/8000/7860）
+    - OpenCode（端口 5173/3000/8080/8787）
+    - Harness（端口 3000/8080/4000）
+
+    返回每个 Agent 的可用性和版本信息。
+    """
+    from app.db.models.instance_model import Instance
+    from app.services.agent_discovery import discover_agents
+
+    inst = db.query(Instance).filter(Instance.id == inst_id).first()
+    if not inst:
+        raise HTTPException(status_code=404, detail="实例不存在")
+
+    host = inst.host
+    discovery = discover_agents(host, instance_id=inst_id)
+    agents_data = [
+        {
+            "agent_type": a.agent_type,
+            "label": a.label,
+            "icon": a.icon,
+            "port": a.port,
+            "host": a.host,
+            "health_url": a.health_url,
+            "is_healthy": a.is_healthy,
+            "version": a.version,
+            "process_name": a.process_name,
+            "error": a.error,
+        }
+        for a in discovery.agents
+    ]
+    return {
+        "code": "SUCCESS",
+        "data": {
+            "instance_id": inst_id,
+            "host": host,
+            "agents": agents_data,
+            "total_ports_scanned": discovery.total_ports_scanned,
+            "errors": discovery.errors,
+        },
+    }
 
 
 # ==================== Agent 智能体定义 ====================
