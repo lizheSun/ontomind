@@ -4,6 +4,100 @@
 
 ---
 
+## 2025-07-02
+
+### Agent: 主开发 Agent（资源管理增强 — 本地服务器一键注册 + Agent 自动发现 + CLI 流式交互）
+
+### 目标
+1. 修复计算节点显示 offline 问题
+2. 实现一键添加本地服务器为计算节点
+3. 自动发现计算节点上运行的 Agent（OpenClaw/OpenCode）
+4. 支持与 Agent 实时流式交互测试（WebSocket）
+
+### Bug 修复
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 计算节点显示 offline | `status` 默认值是 `offline`，心跳接口只写 `last_heartbeat` 不写 `status` | `update_heartbeat()` 同时设置 `status=online`；`register-local` 注册后立即设为 `online` |
+| Ant Design v5 废弃警告 | `bodyStyle`/`valueStyle`/`width`/`direction` 等 prop 被废弃 | 全量替换为 `styles.body`/`styles.content`/`styles.wrapper`/`orientation` |
+| Agent 测试「无响应内容」 | OpenClaw/OpenCode 是 CLI 工具不是 HTTP 服务，之前用 HTTP 请求打 dev server 端口 | 改为 CLI 模式，用 `shutil.which` 检测命令路径 |
+| OpenCode 输出解析失败 | 输出带 ANSI 转义码 + JSONL 事件流，旧代码直接 `json.loads` 整体失败 | 逐行解析 JSONL + ANSI 清理 |
+| OpenClaw 需要 --agent 参数 | `agent` 命令必须指定 `--agent <name>` | 自动执行 `agents list` 获取第一个可用 agent 名称 |
+| WebSocket 连接失败 | 后端缺少 `websockets` 库 | `pip install websockets` |
+| 发送后不自动停止 loading | 后端 `while True` 循环发完 `done` 后没 `break`；前端 `onclose` 只在无内容时才 `setChatSending(false)` | 后端加 `break`；前端 `onclose` 无条件重置 |
+| Space.Compact DOM 错误 | antd Drawer 内 `getBoundingClientRect` on null | 改为普通 flex div |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `backend/app/services/agent_discovery.py` | Agent 发现与可用性检测服务（CLI 检测 + 进程扫描 + 端口扫描 + HTTP 健康检查） |
+
+### 修改文件
+
+| 文件 | 变更要点 |
+|------|---------|
+| `backend/app/api/v1/resources.py` | 新增 `register-local`、`scan-agents`、`agents/{id}/chat`（POST）、`agents/{id}/chat/stream`（WebSocket）4 个端点 |
+| `backend/app/db/repositories/instance_repo.py` | `update_heartbeat` 同时更新 `status=online` |
+| `frontend/src/pages/resources/index.tsx` | 计算节点卡片新增「添加本地服务器」按钮 + Agent 发现区域 + Agent 卡片新增 💬 测试按钮 + WebSocket 流式聊天 Drawer |
+| `frontend/src/services/index.ts` | 新增 `registerLocalInstance`、`scanAgents`、`chatWithAgent`、`chatWithAgentStream` |
+| `frontend/src/types/index.ts` | 新增 `DiscoveredAgent`、`AgentScanResult` 类型 |
+
+### 设计决策
+
+| 决策点 | 选择 |
+|--------|------|
+| Agent 发现策略 | CLI 命令检测（`shutil.which`）> 进程扫描（`pgrep`）> 端口扫描 + HTTP 健康检查 |
+| Agent 交互模式 | 自动判断：entrypoint 以 `http` 开头 → HTTP 模式，否则 → CLI 模式 |
+| CLI 命令模板 | 参照 multica 项目封装方式，每种 agent_type 有专属 `cli_chat_args` |
+| 流式交互 | WebSocket + `asyncio.create_subprocess_exec` 逐行读取 stdout，实时推送事件 |
+| agent_name 存储 | OpenClaw 的 `--agent` 参数值存入 `env_template` 字段 |
+
+### Agent 发现配置（参照 multica）
+
+| Agent | CLI 命令 | 交互参数 | 环境变量 |
+|-------|---------|---------|---------|
+| OpenClaw | `openclaw` | `agent --agent {agent_name} -m "{msg}" --json` | — |
+| OpenCode | `opencode` | `run --format json "{msg}"` | `OPENCODE_PERMISSION={"*":"allow"}` |
+| Harness | `harness` | `"{msg}"` | — |
+
+### WebSocket 事件类型
+
+| 事件 | 图标 | 说明 |
+|------|------|------|
+| `status` | ⏳ | 执行状态 |
+| `thinking` | 💭 | 思考过程 |
+| `text` | 💬 | 文本回复 |
+| `tool_use` | 🔧 | 工具调用 |
+| `tool_result` | 📋 | 工具结果 |
+| `error` | ⚠️ | 错误信息 |
+| `log` | ┃ | 原始日志 |
+| `meta` | ℹ️ | 模型信息 |
+| `done` | — | 完成（exit_code + stderr） |
+
+### API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/resources/instances/register-local` | 一键添加本地服务器 |
+| POST | `/resources/instances/{id}/scan-agents` | 扫描 Agent + 自动注册 |
+| POST | `/resources/agents/{id}/chat` | Agent 交互（HTTP，兼容旧版） |
+| **WS** | `/resources/agents/{id}/chat/stream` | Agent 交互（WebSocket 流式） |
+
+### 本机检测结果
+- OpenClaw → `/opt/homebrew/bin/openclaw` (v2026.3.13) — CLI 模式，agent_name=testagent
+- OpenCode → `/Users/sunleone/.opencode/bin/opencode` (v1.14.39) — CLI 模式
+- 当前状态：两个 Agent 的 API key/订阅均过期（OpenCode: Coding Plan expired，OpenClaw: API rate limit）
+
+### 验证
+- ✅ TypeScript 编译零错误
+- ✅ 后端所有路由注册正常
+- ✅ WebSocket 流式交互可用（thinking/text/error/log 实时推送）
+- ✅ 前端事件流渲染正常（带图标+颜色区分）
+- ✅ 发送/停止 loading 状态正确
+
+---
+
 ## 2025-07-01
 
 ### Agent: 主开发 Agent（下午 — 需求项目管理完整实现）
