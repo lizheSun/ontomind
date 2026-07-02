@@ -276,6 +276,229 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
     }
 
 
+# ==================== WebSocket 实时 Agent 交互 ====================
+
+
+@router.websocket("/agents/{agent_id}/chat/stream")
+async def stream_agent_chat(websocket: WebSocket, agent_id: int):
+    """
+    WebSocket 实时流式 Agent 交互。
+
+    前端发送: {"message": "你好"}
+    后端实时推送事件:
+      {"type":"status","content":"正在执行 CLI..."}
+      {"type":"thinking","content":"让我想想..."}
+      {"type":"text","content":"回复内容"}
+      {"type":"error","content":"错误信息"}
+      {"type":"tool_use","tool":"read_file","input":{...}}
+      {"type":"done","exit_code":0}
+    """
+    import os as _os
+    import re as _re
+    import subprocess as _sp
+    import asyncio as _aio
+
+    from app.db.models.agent_model import Agent
+    from app.db.session import SessionLocal
+    from app.services.agent_discovery import KNOWN_AGENTS
+
+    await websocket.accept()
+
+    try:
+        # 等待前端发消息
+        while True:
+            raw = await websocket.receive_text()
+            payload = json.loads(raw)
+            message = payload.get("message", "").strip()
+            if not message:
+                await websocket.send_text(json.dumps({"type": "error", "content": "消息不能为空"}))
+                continue
+
+            db = SessionLocal()
+            agent = db.query(Agent).filter(Agent.id == agent_id).first()
+            if not agent:
+                await websocket.send_text(json.dumps({"type": "error", "content": "Agent 不存在"}))
+                db.close()
+                continue
+
+            entrypoint = (agent.entrypoint or "").strip()
+            if not entrypoint:
+                await websocket.send_text(json.dumps({"type": "error", "content": "Agent 未配置 entrypoint"}))
+                db.close()
+                continue
+
+            is_http = entrypoint.startswith("http://") or entrypoint.startswith("https://")
+
+            if is_http:
+                # HTTP 模式暂不支持流式，回退提示
+                await websocket.send_text(json.dumps({"type": "error", "content": "HTTP 模式暂不支持流式，请使用 CLI 模式"}))
+                db.close()
+                continue
+
+            # ============ CLI 流式模式 ============
+            cli_path = entrypoint.split()[0]
+            extra_args = entrypoint.split()[1:] if len(entrypoint.split()) > 1 else []
+
+            agent_info = KNOWN_AGENTS.get(agent.agent_type, {})
+            cli_chat_args = agent_info.get("cli_chat_args", ["{msg}"])
+            args = [arg.replace("{msg}", message) for arg in cli_chat_args]
+
+            env = {**_os.environ, "NO_COLOR": "1", "TERM": "dumb"}
+            cli_env = agent_info.get("cli_env", {})
+            env.update(cli_env)
+
+            full_cmd = [cli_path] + extra_args + args
+            cmd_display = f"{cli_path} {' '.join(args[:2])}"
+
+            await websocket.send_text(json.dumps({
+                "type": "status",
+                "content": f"⚡ 执行: {cmd_display}..."
+            }))
+
+            # 启动子进程，流式读取 stdout
+            try:
+                proc = await _aio.create_subprocess_exec(
+                    *full_cmd,
+                    stdout=_sp.PIPE,
+                    stderr=_sp.PIPE,
+                    env=env,
+                )
+            except FileNotFoundError:
+                await websocket.send_text(json.dumps({"type": "error", "content": f"CLI 命令不存在: {cli_path}"}))
+                db.close()
+                continue
+
+            ansi_escape = _re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+
+            # 流式读取 stdout 行
+            stdout_buffer = []
+            async for raw_line in proc.stdout:
+                line = raw_line.decode(errors="ignore").rstrip("\n\r")
+                line_clean = ansi_escape.sub("", line).strip()
+                if not line_clean:
+                    continue
+                stdout_buffer.append(line_clean)
+
+                # 尝试解析为 JSON 事件
+                parsed = False
+                try:
+                    evt = json.loads(line_clean)
+                    parsed = True
+                    evt_type = evt.get("type", "")
+
+                    if evt_type in ("text", "message"):
+                        content = evt.get("content", "")
+                        if content:
+                            await websocket.send_text(json.dumps({"type": "text", "content": content}))
+                    elif evt_type == "thinking":
+                        content = evt.get("content", "")
+                        if content:
+                            await websocket.send_text(json.dumps({"type": "thinking", "content": content}))
+                    elif evt_type == "reasoning":
+                        content = evt.get("content", "")
+                        if content:
+                            await websocket.send_text(json.dumps({"type": "thinking", "content": content}))
+                    elif evt_type == "tool_use":
+                        await websocket.send_text(json.dumps({
+                            "type": "tool_use",
+                            "tool": evt.get("tool", evt.get("name", "unknown")),
+                            "input": evt.get("input", {}),
+                        }))
+                    elif evt_type == "tool_result":
+                        await websocket.send_text(json.dumps({
+                            "type": "tool_result",
+                            "tool": evt.get("tool", ""),
+                            "output": str(evt.get("output", evt.get("content", "")))[:2000],
+                        }))
+                    elif evt_type == "status":
+                        await websocket.send_text(json.dumps({"type": "status", "content": evt.get("content", "")}))
+                    elif evt_type == "error":
+                        err_data = evt.get("error", {})
+                        if isinstance(err_data, dict):
+                            err_msg = err_data.get("data", {}).get("message") or err_data.get("message", str(err_data))
+                        else:
+                            err_msg = str(err_data)
+                        await websocket.send_text(json.dumps({"type": "error", "content": err_msg}))
+                    elif evt_type == "session":
+                        await websocket.send_text(json.dumps({"type": "session", "session_id": evt.get("sessionID", evt.get("session_id", ""))}))
+                    else:
+                        # 未知事件类型，原样转发
+                        await websocket.send_text(json.dumps({"type": evt_type or "raw", "content": json.dumps(evt, ensure_ascii=False)[:2000]}))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+                # 如果不是 JSON，作为 raw text 推送（可能有用的日志/输出）
+                if not parsed:
+                    # 过滤掉无用的进度行
+                    if any(skip in line_clean.lower() for skip in ["%", "downloading", "loading"]):
+                        continue
+                    await websocket.send_text(json.dumps({"type": "log", "content": line_clean[:1000]}))
+
+            # 等待进程结束
+            exit_code = await proc.wait()
+
+            # 读取 stderr
+            stderr_data = b""
+            if proc.stderr:
+                stderr_data = await proc.stderr.read()
+            stderr_text = ansi_escape.sub("", stderr_data.decode(errors="ignore")).strip()
+
+            # 如果 stdout 是整体 JSON（OpenClaw 多行格式），buffer 里有多行
+            # 尝试整体解析
+            if stdout_buffer and exit_code == 0:
+                full_stdout = "\n".join(stdout_buffer)
+                # 检查是否还没解析出 text 事件（OpenClaw 的多行 JSON 会被逐行推送为 log）
+                # 尝试整体解析
+                try:
+                    data = json.loads(full_stdout)
+                    result_obj = data.get("result", {})
+                    payloads = result_obj.get("payloads", [])
+                    if payloads:
+                        for p in payloads:
+                            text = p.get("text", "")
+                            if text:
+                                await websocket.send_text(json.dumps({"type": "text", "content": text}))
+                    status = data.get("status", "")
+                    if status == "error":
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "content": f"OpenClaw 状态错误: {data.get('summary', 'unknown')}"
+                        }))
+                    meta = result_obj.get("meta", {})
+                    agent_meta = meta.get("agentMeta", {})
+                    if agent_meta:
+                        await websocket.send_text(json.dumps({
+                            "type": "meta",
+                            "model": agent_meta.get("model", ""),
+                            "provider": agent_meta.get("provider", ""),
+                            "session_id": agent_meta.get("sessionId", ""),
+                            "duration_ms": meta.get("durationMs", 0),
+                        }))
+                except (json.JSONDecodeError, ValueError):
+                    pass  # 已经逐行推送过了
+
+            await websocket.send_text(json.dumps({
+                "type": "done",
+                "exit_code": exit_code,
+                **({"stderr": stderr_text[:1000]} if stderr_text else {}),
+            }))
+
+            db.close()
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "content": f"服务器异常: {e}"}))
+        except Exception:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
 @router.post("/agents/{agent_id}/chat")
 def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db)):
     """

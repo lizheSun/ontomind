@@ -1,5 +1,8 @@
 import api from './api';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
+
 // ===== 资源管理 =====
 export const resourcesAPI = {
   // Instance
@@ -22,6 +25,8 @@ export const resourcesAPI = {
   deleteAgent: (id: number) => api.delete(`/resources/agents/${id}`),
   chatWithAgent: (agentId: number, message: string) =>
     api.post(`/resources/agents/${agentId}/chat`, { message, stream: false }),
+  chatWithAgentStream: (agentId: number): string =>
+    `${WS_BASE_URL}/resources/agents/${agentId}/chat/stream`,
 
   // Skill
   listSkills: (params?: { skip?: number; limit?: number }) =>

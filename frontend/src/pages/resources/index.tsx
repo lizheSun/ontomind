@@ -409,8 +409,9 @@ function AgentsPanel() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
-  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'agent'; content: string; error?: boolean }[]>([]);
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'agent'; content: string; error?: boolean; events?: { type: string; content?: string; tool?: string }[] }[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatWsRef = useRef<WebSocket | null>(null);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -448,26 +449,122 @@ function AgentsPanel() {
   const handleSendChat = async () => {
     if (!chatInput.trim() || !chatAgent) return;
     const msg = chatInput.trim();
+
+    // 添加用户消息
     setChatHistory(prev => [...prev, { role: 'user', content: msg }]);
     setChatInput('');
     setChatSending(true);
-    try {
-      const res = await resourcesAPI.chatWithAgent(chatAgent.id, msg);
-      const d = res.data?.data;
-      const reply = d?.response || '（无响应内容）';
-      const isError = res.data?.code === 'ERROR';
-      const mode = d?.mode || (chatAgent.entrypoint?.startsWith('http') ? 'http' : 'cli');
-      const prefix = mode === 'cli' ? '⚡ [CLI] ' : '🌐 [HTTP] ';
-      setChatHistory(prev => [...prev, { role: 'agent', content: prefix + reply, error: isError }]);
-      if (isError) message.warning('Agent 交互失败，请检查 CLI 命令或服务是否可用');
-    } catch (err: any) {
-      const errMsg = err?.response?.data?.detail || err?.message || '请求失败';
-      setChatHistory(prev => [...prev, { role: 'agent', content: errMsg, error: true }]);
-      notification.error({ title: '交互失败', description: errMsg, placement: 'top' });
-    } finally {
+
+    // 创建 agent 消息占位，后面实时更新
+    const agentMsgIndex = chatHistory.length + 1;
+    const events: { type: string; content?: string; tool?: string }[] = [];
+    setChatHistory(prev => [...prev, { role: 'agent', content: '', events }]);
+
+    // 连接 WebSocket
+    const wsUrl = resourcesAPI.chatWithAgentStream(chatAgent.id);
+    const ws = new WebSocket(wsUrl);
+    chatWsRef.current = ws;
+
+    let textParts: string[] = [];
+    let errorContent: string | null = null;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ message: msg }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const evt = JSON.parse(event.data);
+        const evtType = evt.type;
+
+        if (evtType === 'text') {
+          textParts.push(evt.content || '');
+          events.push({ type: 'text', content: evt.content });
+        } else if (evtType === 'thinking') {
+          events.push({ type: 'thinking', content: evt.content });
+        } else if (evtType === 'tool_use') {
+          events.push({ type: 'tool_use', tool: evt.tool, content: JSON.stringify(evt.input || {}).slice(0, 200) });
+        } else if (evtType === 'tool_result') {
+          events.push({ type: 'tool_result', tool: evt.tool, content: (evt.output || '').slice(0, 200) });
+        } else if (evtType === 'status') {
+          events.push({ type: 'status', content: evt.content });
+        } else if (evtType === 'log') {
+          events.push({ type: 'log', content: evt.content });
+        } else if (evtType === 'error') {
+          errorContent = evt.content;
+          events.push({ type: 'error', content: evt.content });
+        } else if (evtType === 'meta') {
+          events.push({ type: 'meta', content: `model: ${evt.model}, provider: ${evt.provider}` });
+        } else if (evtType === 'session') {
+          events.push({ type: 'session', content: evt.session_id });
+        } else if (evtType === 'done') {
+          if (evt.stderr) {
+            events.push({ type: 'log', content: `[stderr] ${evt.stderr}` });
+          }
+        }
+
+        // 实时更新 agent 消息
+        const finalContent = textParts.join('\n') || errorContent || '';
+        setChatHistory(prev => {
+          const updated = [...prev];
+          if (updated[agentMsgIndex]) {
+            updated[agentMsgIndex] = {
+              role: 'agent',
+              content: finalContent,
+              error: !!errorContent,
+              events: [...events],
+            };
+          }
+          return updated;
+        });
+
+        setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+      } catch (e) {
+        // 忽略解析错误
+      }
+    };
+
+    ws.onerror = () => {
+      setChatHistory(prev => {
+        const updated = [...prev];
+        if (updated[agentMsgIndex]) {
+          updated[agentMsgIndex] = {
+            role: 'agent',
+            content: 'WebSocket 连接失败',
+            error: true,
+            events,
+          };
+        }
+        return updated;
+      });
       setChatSending(false);
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    };
+
+    ws.onclose = () => {
+      // 如果没有任何内容，显示提示
+      setChatHistory(prev => {
+        const updated = [...prev];
+        if (updated[agentMsgIndex] && !updated[agentMsgIndex].content && (!events || events.length === 0)) {
+          updated[agentMsgIndex] = {
+            role: 'agent',
+            content: '（无响应内容 — 检查 CLI 命令或 API key）',
+            error: true,
+            events,
+          };
+        }
+        return updated;
+      });
+      setChatSending(false);
+      chatWsRef.current = null;
+    };
+  };
+
+  const handleStopChat = () => {
+    if (chatWsRef.current) {
+      chatWsRef.current.close();
+      chatWsRef.current = null;
     }
+    setChatSending(false);
   };
 
   const filtered = useMemo(() => {
@@ -608,8 +705,8 @@ function AgentsPanel() {
               输入消息与 Agent 交互测试<br />
               <span style={{ fontSize: 11 }}>
                 {chatAgent?.entrypoint?.startsWith('http')
-                  ? '🌐 HTTP 模式 — 支持 OpenAI 兼容接口及 /chat 端点'
-                  : '⚡ CLI 模式 — 直接执行命令行工具'}
+                  ? '🌐 HTTP 模式 — 支持 OpenAI 兼容接口'
+                  : '⚡ CLI 流式模式 — 实时显示 thinking / text / tool 事件'}
               </span>
             </div>
           ) : (
@@ -617,7 +714,7 @@ function AgentsPanel() {
               {chatHistory.map((m, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                   <div style={{
-                    maxWidth: '80%', padding: '10px 14px', borderRadius: 12,
+                    maxWidth: '88%', padding: '10px 14px', borderRadius: 12,
                     background: m.role === 'user'
                       ? 'rgba(96,165,250,0.12)'
                       : m.error ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)',
@@ -628,13 +725,56 @@ function AgentsPanel() {
                     <div style={{ fontSize: 10, color: m.role === 'user' ? '#60a5fa' : m.error ? '#f59e0b' : '#657a9a', marginBottom: 4, fontWeight: 600 }}>
                       {m.role === 'user' ? 'YOU' : (chatAgent?.name || 'AGENT')}
                     </div>
-                    <div style={{
-                      fontSize: 13, color: m.error ? '#f59e0b' : '#e8eef5',
-                      lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                      fontFamily: m.role === 'agent' && !m.error ? 'JetBrains Mono, monospace' : 'inherit',
-                    }}>
-                      {m.content}
-                    </div>
+
+                    {/* 事件流（thinking/tool_use/log 等） */}
+                    {m.events && m.events.length > 0 && (
+                      <div style={{ marginBottom: m.content ? 8 : 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {m.events.map((evt, ei) => {
+                          let evtColor = '#506380';
+                          let evtBg = 'rgba(255,255,255,0.03)';
+                          let evtIcon = '·';
+                          if (evt.type === 'thinking' || evt.type === 'reasoning') { evtColor = '#a78bfa'; evtBg = 'rgba(167,139,250,0.06)'; evtIcon = '💭'; }
+                          else if (evt.type === 'text') { evtColor = '#34d399'; evtBg = 'rgba(52,211,153,0.04)'; evtIcon = '💬'; }
+                          else if (evt.type === 'tool_use') { evtColor = '#60a5fa'; evtBg = 'rgba(96,165,250,0.06)'; evtIcon = '🔧'; }
+                          else if (evt.type === 'tool_result') { evtColor = '#94a3b8'; evtBg = 'rgba(148,163,184,0.04)'; evtIcon = '📋'; }
+                          else if (evt.type === 'status') { evtColor = '#657a9a'; evtBg = 'rgba(255,255,255,0.03)'; evtIcon = '⏳'; }
+                          else if (evt.type === 'error') { evtColor = '#f59e0b'; evtBg = 'rgba(245,158,11,0.06)'; evtIcon = '⚠️'; }
+                          else if (evt.type === 'log') { evtColor = '#3d4e6b'; evtBg = 'transparent'; evtIcon = '┃'; }
+                          else if (evt.type === 'meta') { evtColor = '#7b8ea8'; evtBg = 'rgba(255,255,255,0.03)'; evtIcon = 'ℹ️'; }
+                          else if (evt.type === 'session') { evtColor = '#657a9a'; evtBg = 'transparent'; evtIcon = '🔗'; }
+                          return (
+                            <div key={ei} style={{
+                              fontSize: 11, color: evtColor, background: evtBg,
+                              padding: evt.type === 'log' ? '1px 0' : '3px 8px',
+                              borderRadius: 6, lineHeight: 1.5,
+                              fontFamily: evt.type === 'log' || evt.type === 'thinking' ? 'JetBrains Mono, monospace' : 'inherit',
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                              opacity: evt.type === 'thinking' ? 0.8 : 1,
+                            }}>
+                              <span style={{ marginRight: 4 }}>{evtIcon}</span>
+                              {evt.type === 'tool_use' && <span style={{ fontWeight: 600 }}>{evt.tool}: </span>}
+                              {evt.content}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* 最终回复内容 */}
+                    {m.content && (
+                      <div style={{
+                        fontSize: 13, color: m.error ? '#f59e0b' : '#e8eef5',
+                        lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        fontFamily: m.role === 'agent' && !m.error ? 'JetBrains Mono, monospace' : 'inherit',
+                      }}>
+                        {m.content}
+                      </div>
+                    )}
+
+                    {/* 加载指示 */}
+                    {m.role === 'agent' && !m.content && (!m.events || m.events.length === 0) && chatSending && (
+                      <div style={{ fontSize: 12, color: '#506380', fontStyle: 'italic' }}>等待响应...</div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -652,9 +792,11 @@ function AgentsPanel() {
               disabled={chatSending}
               style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
             />
-            <Button type="primary" icon={<SendOutlined />} onClick={handleSendChat} loading={chatSending}>
-              发送
-            </Button>
+            {chatSending ? (
+              <Button danger icon={<StopOutlined />} onClick={handleStopChat}>停止</Button>
+            ) : (
+              <Button type="primary" icon={<SendOutlined />} onClick={handleSendChat}>发送</Button>
+            )}
           </div>
           {chatAgent?.entrypoint && (
             <div style={{ fontSize: 10, color: '#3d4e6b', marginTop: 6, fontFamily: 'JetBrains Mono, monospace' }}>
