@@ -225,6 +225,9 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
         else:
             entrypoint = a.process_name or ""
 
+        # 将 agent_name (OpenClaw 的 testagent 等) 存到 env_template 里
+        env_template = {"agent_name": a.agent_name} if a.agent_name else None
+
         new_agent = Agent(
             name=agent_name,
             agent_type=a.agent_type,
@@ -232,7 +235,7 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
             runtime="binary",
             entrypoint=entrypoint,
             docker_image=None,
-            env_template=None,
+            env_template=env_template,
             config_template=None,
             ports=[a.port] if a.port > 0 else None,
             volume_mounts=None,
@@ -260,6 +263,7 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
             "error": a.error,
             "cli_command": a.cli_command,
             "interaction_mode": a.interaction_mode,
+            "agent_name": a.agent_name,
         }
         for a in discovery.agents
     ]
@@ -341,14 +345,25 @@ async def stream_agent_chat(websocket: WebSocket, agent_id: int):
 
             agent_info = KNOWN_AGENTS.get(agent.agent_type, {})
             cli_chat_args = agent_info.get("cli_chat_args", ["{msg}"])
-            args = [arg.replace("{msg}", message) for arg in cli_chat_args]
+
+            # 获取 agent_name（从 env_template 里取，OpenClaw 需要 --agent 参数）
+            agent_name = ""
+            if agent.env_template and isinstance(agent.env_template, dict):
+                agent_name = agent.env_template.get("agent_name", "")
+
+            # 如果配置了 cli_list_agents_args 但没存 agent_name，自动获取
+            if not agent_name and agent_info.get("cli_list_agents_args"):
+                from app.services.agent_discovery import _get_first_agent_name
+                agent_name = _get_first_agent_name(cli_path, agent_info["cli_list_agents_args"]) or ""
+
+            args = [arg.replace("{msg}", message).replace("{agent_name}", agent_name) for arg in cli_chat_args]
 
             env = {**_os.environ, "NO_COLOR": "1", "TERM": "dumb"}
             cli_env = agent_info.get("cli_env", {})
             env.update(cli_env)
 
             full_cmd = [cli_path] + extra_args + args
-            cmd_display = f"{cli_path} {' '.join(args[:2])}"
+            cmd_display = f"{cli_path} {' '.join(args[:3])}"
 
             await websocket.send_text(json.dumps({
                 "type": "status",
@@ -484,6 +499,8 @@ async def stream_agent_chat(websocket: WebSocket, agent_id: int):
             }))
 
             db.close()
+            # 单次问答完成，关闭连接
+            break
 
     except WebSocketDisconnect:
         pass

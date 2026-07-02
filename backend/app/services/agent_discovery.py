@@ -19,9 +19,9 @@ KNOWN_AGENTS: dict[str, dict] = {
         "label": "OpenClaw",
         "cli_commands": ["openclaw", "claw", "open-claw"],
         # openclaw agent --agent <name> -m "<msg>" --json
-        # --agent 可选，不传用 default agent
-        "cli_chat_args": ["agent", "-m", "{msg}", "--json"],
-        "cli_chat_args_with_agent": ["agent", "--agent", "{agent_id}", "-m", "{msg}", "--json"],
+        # --agent 必填，扫描时自动获取第一个可用 agent
+        "cli_chat_args": ["agent", "--agent", "{agent_name}", "-m", "{msg}", "--json"],
+        "cli_list_agents_args": ["agents", "list"],
         "ports": [3000, 8080, 8000, 7860],
         "proc_names": ["openclaw", "claw", "open-claw"],
         "health_paths": ["/health", "/api/health", "/"],
@@ -74,6 +74,7 @@ class DiscoveredAgent:
     error: Optional[str] = None
     cli_command: Optional[str] = None    # CLI 命令路径（如 /usr/local/bin/openclaw）
     interaction_mode: str = "http"       # "cli" / "http" / "none"
+    agent_name: Optional[str] = None     # OpenClaw 的 agent 名称（如 testagent）
 
 
 @dataclass
@@ -193,6 +194,27 @@ def _get_cli_version(cli_path: str) -> Optional[str]:
     return None
 
 
+def _get_first_agent_name(cli_path: str, list_args: list[str]) -> Optional[str]:
+    """获取 OpenClaw 等工具的第一个可用 agent 名称"""
+    try:
+        result = subprocess.run(
+            [cli_path] + list_args,
+            capture_output=True, text=True, timeout=5,
+        )
+        output = result.stdout
+        # 解析 "Agents:\n- testagent (default)\n  ..." 格式
+        for line in output.split("\n"):
+            line = line.strip()
+            if line.startswith("- "):
+                # "- testagent (default)" → "testagent"
+                name = line[2:].split(" ")[0].split("(")[0].strip()
+                if name:
+                    return name
+    except Exception:
+        pass
+    return None
+
+
 def discover_agents(host: str, instance_id: Optional[int] = None, scan_processes: bool = True) -> DiscoveryResult:
     """扫描指定主机上运行的 Agent。
 
@@ -222,6 +244,11 @@ def discover_agents(host: str, instance_id: Optional[int] = None, scan_processes
             if cli_path:
                 info = KNOWN_AGENTS[agent_type]
                 version = _get_cli_version(cli_path)
+                # 获取第一个可用 agent 名称（OpenClaw 需要 --agent 参数）
+                agent_name = None
+                list_args = info.get("cli_list_agents_args")
+                if list_args:
+                    agent_name = _get_first_agent_name(cli_path, list_args)
                 result.agents.append(DiscoveredAgent(
                     agent_type=agent_type,
                     label=info["label"],
@@ -232,6 +259,7 @@ def discover_agents(host: str, instance_id: Optional[int] = None, scan_processes
                     version=version,
                     cli_command=cli_path,
                     interaction_mode="cli",
+                    agent_name=agent_name,
                 ))
                 cli_discovered_types.add(agent_type)
 

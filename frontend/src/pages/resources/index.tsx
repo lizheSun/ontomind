@@ -541,10 +541,14 @@ function AgentsPanel() {
     };
 
     ws.onclose = () => {
+      // 无论有无内容，WebSocket 关闭就停止 loading
+      setChatSending(false);
+      chatWsRef.current = null;
+
       // 如果没有任何内容，显示提示
       setChatHistory(prev => {
         const updated = [...prev];
-        if (updated[agentMsgIndex] && !updated[agentMsgIndex].content && (!events || events.length === 0)) {
+        if (updated[agentMsgIndex] && !updated[agentMsgIndex].content && (!updated[agentMsgIndex].events || updated[agentMsgIndex].events!.length === 0)) {
           updated[agentMsgIndex] = {
             role: 'agent',
             content: '（无响应内容 — 检查 CLI 命令或 API key）',
@@ -554,8 +558,6 @@ function AgentsPanel() {
         }
         return updated;
       });
-      setChatSending(false);
-      chatWsRef.current = null;
     };
   };
 
