@@ -453,10 +453,13 @@ function AgentsPanel() {
     setChatSending(true);
     try {
       const res = await resourcesAPI.chatWithAgent(chatAgent.id, msg);
-      const reply = res.data?.data?.response || res.data?.data?.error || '（无响应内容）';
+      const d = res.data?.data;
+      const reply = d?.response || '（无响应内容）';
       const isError = res.data?.code === 'ERROR';
-      setChatHistory(prev => [...prev, { role: 'agent', content: reply, error: isError }]);
-      if (isError) message.warning('Agent 交互失败，请检查 Agent 服务是否正常运行');
+      const mode = d?.mode || (chatAgent.entrypoint?.startsWith('http') ? 'http' : 'cli');
+      const prefix = mode === 'cli' ? '⚡ [CLI] ' : '🌐 [HTTP] ';
+      setChatHistory(prev => [...prev, { role: 'agent', content: prefix + reply, error: isError }]);
+      if (isError) message.warning('Agent 交互失败，请检查 CLI 命令或服务是否可用');
     } catch (err: any) {
       const errMsg = err?.response?.data?.detail || err?.message || '请求失败';
       setChatHistory(prev => [...prev, { role: 'agent', content: errMsg, error: true }]);
@@ -603,7 +606,11 @@ function AgentsPanel() {
             <div style={{ textAlign: 'center', color: '#506380', fontSize: 13, padding: '40px 20px' }}>
               <MessageOutlined style={{ fontSize: 32, marginBottom: 12, display: 'block', color: '#3d4e6b' }} />
               输入消息与 Agent 交互测试<br />
-              <span style={{ fontSize: 11 }}>支持 OpenAI 兼容接口及常见 /chat 端点</span>
+              <span style={{ fontSize: 11 }}>
+                {chatAgent?.entrypoint?.startsWith('http')
+                  ? '🌐 HTTP 模式 — 支持 OpenAI 兼容接口及 /chat 端点'
+                  : '⚡ CLI 模式 — 直接执行命令行工具'}
+              </span>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -636,22 +643,22 @@ function AgentsPanel() {
           )}
         </div>
         <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
-          <Space.Compact style={{ width: '100%' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <Input
               placeholder="输入消息..."
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onPressEnter={handleSendChat}
               disabled={chatSending}
-              style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
+              style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
             />
             <Button type="primary" icon={<SendOutlined />} onClick={handleSendChat} loading={chatSending}>
               发送
             </Button>
-          </Space.Compact>
+          </div>
           {chatAgent?.entrypoint && (
             <div style={{ fontSize: 10, color: '#3d4e6b', marginTop: 6, fontFamily: 'JetBrains Mono, monospace' }}>
-              → {chatAgent.entrypoint}
+              {chatAgent.entrypoint.startsWith('http') ? '🌐 HTTP' : '⚡ CLI'} → {chatAgent.entrypoint}
             </div>
           )}
         </div>

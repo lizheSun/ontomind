@@ -187,36 +187,58 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
     # 自动将健康的 Agent 注册到数据库
     auto_registered: list[dict] = []
     for a in discovery.agents:
-        if not a.is_healthy or a.port == 0:
+        if not a.is_healthy:
             continue
 
-        agent_name = f"{a.label}-{a.port}"
+        # CLI 模式优先命名，HTTP 模式用端口
+        if a.cli_command:
+            agent_name = a.label
+        elif a.port > 0:
+            agent_name = f"{a.label}-{a.port}"
+        else:
+            agent_name = f"{a.label}-proc"
+
         # 检查是否已存在（按名称）
         existing = db.query(Agent).filter(Agent.name == agent_name).first()
         if existing:
-            # 更新版本信息
+            # 更新版本和 entrypoint
+            updated = False
             if a.version and existing.version != a.version:
                 existing.version = a.version
+                updated = True
+            if a.cli_command and existing.entrypoint != a.cli_command:
+                existing.entrypoint = a.cli_command
+                updated = True
+            if a.port > 0 and existing.ports != [a.port]:
+                existing.ports = [a.port]
+                updated = True
+            if updated:
                 db.commit()
             auto_registered.append({"id": existing.id, "name": existing.name, "action": "updated"})
             continue
 
-        # 创建新 Agent 记录
-        base_url = f"http://{a.host}:{a.port}"
+        # 确定 entrypoint: CLI 命令路径 或 HTTP URL
+        if a.cli_command:
+            entrypoint = a.cli_command
+        elif a.port > 0:
+            entrypoint = f"http://{a.host}:{a.port}"
+        else:
+            entrypoint = a.process_name or ""
+
         new_agent = Agent(
             name=agent_name,
             agent_type=a.agent_type,
             version=a.version or "latest",
-            runtime="binary",  # 已在运行的服务
-            entrypoint=base_url,
+            runtime="binary",
+            entrypoint=entrypoint,
             docker_image=None,
             env_template=None,
             config_template=None,
-            ports=[a.port],
+            ports=[a.port] if a.port > 0 else None,
             volume_mounts=None,
             resource_limit=None,
             skill_ids=None,
-            description=f"自动发现: {a.label} @ {a.host}:{a.port}（来自节点 {inst.name}）",
+            description=f"自动发现: {a.label} ({a.interaction_mode}) — {'CLI: ' + a.cli_command if a.cli_command else f'{a.host}:{a.port}'}（来自节点 {inst.name}）",
             is_active=True,
         )
         db.add(new_agent)
@@ -236,6 +258,8 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
             "version": a.version,
             "process_name": a.process_name,
             "error": a.error,
+            "cli_command": a.cli_command,
+            "interaction_mode": a.interaction_mode,
         }
         for a in discovery.agents
     ]
@@ -257,13 +281,19 @@ def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db))
     """
     与 Agent 交互测试：向 Agent 发送消息并获取响应。
 
-    请求体: { "message": "你好", "stream": false }
+    支持两种交互模式:
+    1. CLI 模式 — entrypoint 是可执行命令路径（如 /usr/local/bin/openclaw）
+       执行: <command> -p "<message>" 或 <command> "<message>"
+    2. HTTP 模式 — entrypoint 是 URL（如 http://127.0.0.1:8000）
+       POST 到 /v1/chat/completions, /chat, /api/chat 等端点
 
-    支持 OpenAI 兼容格式的 Agent（/v1/chat/completions），
-    也支持简单的 /chat 或 /api/chat 端点。
+    请求体: { "message": "你好" }
     """
     import json as _json
     import urllib.request as _urlreq
+    import subprocess as _subprocess
+    import shlex as _shlex
+    import tempfile
 
     from app.db.models.agent_model import Agent
 
@@ -275,21 +305,136 @@ def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db))
     if not message:
         raise HTTPException(status_code=400, detail="消息不能为空")
 
-    # 从 entrypoint 获取 Agent 的 base URL
-    base_url = (agent.entrypoint or "").rstrip("/")
-    if not base_url:
-        raise HTTPException(status_code=400, detail="Agent 未配置 entrypoint URL，无法交互")
+    entrypoint = (agent.entrypoint or "").strip()
+    if not entrypoint:
+        raise HTTPException(status_code=400, detail="Agent 未配置 entrypoint，无法交互")
 
-    # 尝试多种常见的 chat 端点
+    # 判断交互模式: 如果 entrypoint 以 http 开头 → HTTP 模式，否则 → CLI 模式
+    is_http = entrypoint.startswith("http://") or entrypoint.startswith("https://")
+
+    # ============ CLI 模式 ============
+    if not is_http:
+        from app.services.agent_discovery import KNOWN_AGENTS
+
+        cli_path = entrypoint.split()[0]
+        extra_args = entrypoint.split()[1:] if len(entrypoint.split()) > 1 else []
+
+        # 根据 agent_type 获取 CLI 交互参数模板
+        agent_info = KNOWN_AGENTS.get(agent.agent_type, {})
+        cli_chat_args = agent_info.get("cli_chat_args", ["{msg}"])
+
+        # 替换 {msg} 占位符
+        args = [arg.replace("{msg}", message) for arg in cli_chat_args]
+
+        try:
+            full_cmd = [cli_path] + extra_args + args
+            result = _subprocess.run(
+                full_cmd,
+                capture_output=True, text=True, timeout=120,
+                env={**__import__("os").environ, "NO_COLOR": "1", "TERM": "dumb"},
+            )
+            stdout = result.stdout.strip()
+            stderr = result.stderr.strip()
+
+            cmd_display = f"{cli_path} {' '.join(args[:2])}"
+
+            # 成功且有输出
+            if result.returncode == 0 and stdout:
+                # 尝试解析 JSON 输出（openclaw --json 模式）
+                try:
+                    data = _json.loads(stdout)
+                    # 尝试提取回复文本
+                    for key in ["response", "reply", "output", "message", "answer", "text", "result", "content"]:
+                        if key in data and data[key]:
+                            return {
+                                "code": "SUCCESS",
+                                "data": {
+                                    "agent_id": agent_id,
+                                    "agent_name": agent.name,
+                                    "mode": "cli",
+                                    "command": cmd_display,
+                                    "response": str(data[key])[:8000],
+                                },
+                            }
+                    # 如果 JSON 没有明确字段，返回格式化后的内容
+                    return {
+                        "code": "SUCCESS",
+                        "data": {
+                            "agent_id": agent_id,
+                            "agent_name": agent.name,
+                            "mode": "cli",
+                            "command": cmd_display,
+                            "response": _json.dumps(data, indent=2, ensure_ascii=False)[:8000],
+                        },
+                    }
+                except _json.JSONDecodeError:
+                    # 纯文本输出
+                    return {
+                        "code": "SUCCESS",
+                        "data": {
+                            "agent_id": agent_id,
+                            "agent_name": agent.name,
+                            "mode": "cli",
+                            "command": cmd_display,
+                            "response": stdout[:8000],
+                        },
+                    }
+
+            # 返回码非 0 但有 stdout
+            if stdout:
+                return {
+                    "code": "SUCCESS",
+                    "data": {
+                        "agent_id": agent_id,
+                        "agent_name": agent.name,
+                        "mode": "cli",
+                        "command": cmd_display,
+                        "response": stdout[:8000],
+                        "warning": f"exit_code={result.returncode}" + (f", stderr={stderr[:500]}" if stderr else ""),
+                    },
+                }
+
+            # 完全失败
+            return {
+                "code": "ERROR",
+                "message": f"CLI 执行失败 (exit={result.returncode})。stderr: {stderr[:500] or '(空)'}",
+                "data": {
+                    "agent_id": agent_id,
+                    "cli_path": cli_path,
+                    "command": cmd_display,
+                    "exit_code": result.returncode,
+                    "stderr": stderr[:1000],
+                },
+            }
+        except _subprocess.TimeoutExpired:
+            return {
+                "code": "ERROR",
+                "message": "CLI 命令执行超时（120s），可能是 Agent 需要交互式输入或等待模型响应",
+                "data": {"agent_id": agent_id, "cli_path": cli_path, "command": f"{cli_path} {' '.join(args[:2])}"},
+            }
+        except FileNotFoundError:
+            return {
+                "code": "ERROR",
+                "message": f"CLI 命令不存在: {cli_path}",
+                "data": {"agent_id": agent_id, "cli_path": cli_path},
+            }
+        except Exception as e:
+            return {
+                "code": "ERROR",
+                "message": f"CLI 执行异常: {e}",
+                "data": {"agent_id": agent_id, "cli_path": cli_path},
+            }
+
+    # ============ HTTP 模式 ============
+    base_url = entrypoint.rstrip("/")
     chat_endpoints = [
-        "/v1/chat/completions",   # OpenAI 兼容
-        "/chat",                  # 简单 chat
-        "/api/chat",              # API chat
-        "/api/v1/chat",           # 版本化 API
-        "/v1/chat",               # 简化版本
+        "/v1/chat/completions",
+        "/chat",
+        "/api/chat",
+        "/api/v1/chat",
+        "/v1/chat",
     ]
 
-    # 构建请求体（OpenAI 兼容格式）
     openai_body = _json.dumps({
         "model": agent.name,
         "messages": [{"role": "user", "content": message}],
@@ -297,7 +442,6 @@ def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db))
         "max_tokens": 2000,
     }).encode("utf-8")
 
-    # 简单 chat 格式
     simple_body = _json.dumps({
         "message": message,
         "input": message,
@@ -307,7 +451,6 @@ def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db))
     last_error = None
     for endpoint in chat_endpoints:
         url = f"{base_url}{endpoint}"
-        # 先尝试 OpenAI 格式
         for body in [openai_body, simple_body]:
             try:
                 req = _urlreq.Request(url, data=body, method="POST")
@@ -316,10 +459,8 @@ def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db))
                 resp = _urlreq.urlopen(req, timeout=30)
                 resp_body = resp.read().decode(errors="ignore")[:10000]
 
-                # 尝试解析响应
                 try:
                     data = _json.loads(resp_body)
-                    # OpenAI 格式: choices[0].message.content
                     if "choices" in data and len(data["choices"]) > 0:
                         content = data["choices"][0].get("message", {}).get("content", "")
                         if content:
@@ -328,12 +469,11 @@ def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db))
                                 "data": {
                                     "agent_id": agent_id,
                                     "agent_name": agent.name,
+                                    "mode": "http",
                                     "endpoint": endpoint,
                                     "response": content,
-                                    "raw": data if len(resp_body) < 2000 else None,
                                 },
                             }
-                    # 简单格式: response / reply / output / message
                     for key in ["response", "reply", "output", "message", "answer", "text", "result"]:
                         if key in data and data[key]:
                             return {
@@ -341,30 +481,30 @@ def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db))
                                 "data": {
                                     "agent_id": agent_id,
                                     "agent_name": agent.name,
+                                    "mode": "http",
                                     "endpoint": endpoint,
                                     "response": str(data[key]),
-                                    "raw": data if len(resp_body) < 2000 else None,
                                 },
                             }
-                    # 如果是字符串直接返回
                     if isinstance(data, str) and data:
                         return {
                             "code": "SUCCESS",
                             "data": {
                                 "agent_id": agent_id,
                                 "agent_name": agent.name,
+                                "mode": "http",
                                 "endpoint": endpoint,
                                 "response": data,
                             },
                         }
                 except _json.JSONDecodeError:
-                    # 非 JSON 响应，直接返回文本
                     if resp_body.strip():
                         return {
                             "code": "SUCCESS",
                             "data": {
                                 "agent_id": agent_id,
                                 "agent_name": agent.name,
+                                "mode": "http",
                                 "endpoint": endpoint,
                                 "response": resp_body[:2000],
                             },

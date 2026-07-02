@@ -91,6 +91,8 @@ export interface DiscoveredAgent {
   version?: string;
   process_name?: string;
   error?: string;
+  cli_command?: string;
+  interaction_mode: 'cli' | 'http' | 'none';
 }
 
 export interface AgentScanResult {
