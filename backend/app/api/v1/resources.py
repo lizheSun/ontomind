@@ -319,92 +319,143 @@ def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db))
         cli_path = entrypoint.split()[0]
         extra_args = entrypoint.split()[1:] if len(entrypoint.split()) > 1 else []
 
-        # 根据 agent_type 获取 CLI 交互参数模板
+        # 根据 agent_type 获取 CLI 交互参数模板（参照 multica）
         agent_info = KNOWN_AGENTS.get(agent.agent_type, {})
         cli_chat_args = agent_info.get("cli_chat_args", ["{msg}"])
 
         # 替换 {msg} 占位符
         args = [arg.replace("{msg}", message) for arg in cli_chat_args]
 
+        # 构建环境变量（参照 multica: OPENCODE_PERMISSION 等）
+        import os as _os
+        env = {**_os.environ, "NO_COLOR": "1", "TERM": "dumb"}
+        cli_env = agent_info.get("cli_env", {})
+        env.update(cli_env)
+
         try:
             full_cmd = [cli_path] + extra_args + args
             result = _subprocess.run(
                 full_cmd,
                 capture_output=True, text=True, timeout=120,
-                env={**__import__("os").environ, "NO_COLOR": "1", "TERM": "dumb"},
+                env=env,
             )
             stdout = result.stdout.strip()
             stderr = result.stderr.strip()
 
             cmd_display = f"{cli_path} {' '.join(args[:2])}"
 
-            # 成功且有输出
-            if result.returncode == 0 and stdout:
-                # 尝试解析 JSON 输出（openclaw --json 模式）
-                try:
-                    data = _json.loads(stdout)
-                    # 尝试提取回复文本
-                    for key in ["response", "reply", "output", "message", "answer", "text", "result", "content"]:
-                        if key in data and data[key]:
-                            return {
-                                "code": "SUCCESS",
-                                "data": {
-                                    "agent_id": agent_id,
-                                    "agent_name": agent.name,
-                                    "mode": "cli",
-                                    "command": cmd_display,
-                                    "response": str(data[key])[:8000],
-                                },
-                            }
-                    # 如果 JSON 没有明确字段，返回格式化后的内容
-                    return {
-                        "code": "SUCCESS",
-                        "data": {
-                            "agent_id": agent_id,
-                            "agent_name": agent.name,
-                            "mode": "cli",
-                            "command": cmd_display,
-                            "response": _json.dumps(data, indent=2, ensure_ascii=False)[:8000],
-                        },
-                    }
-                except _json.JSONDecodeError:
-                    # 纯文本输出
-                    return {
-                        "code": "SUCCESS",
-                        "data": {
-                            "agent_id": agent_id,
-                            "agent_name": agent.name,
-                            "mode": "cli",
-                            "command": cmd_display,
-                            "response": stdout[:8000],
-                        },
-                    }
+            # 清理 ANSI 转义码
+            import re as _re
+            ansi_escape = _re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+            stdout_clean = ansi_escape.sub('', stdout).strip()
 
-            # 返回码非 0 但有 stdout
-            if stdout:
+            if not stdout_clean:
                 return {
-                    "code": "SUCCESS",
-                    "data": {
-                        "agent_id": agent_id,
-                        "agent_name": agent.name,
-                        "mode": "cli",
-                        "command": cmd_display,
-                        "response": stdout[:8000],
-                        "warning": f"exit_code={result.returncode}" + (f", stderr={stderr[:500]}" if stderr else ""),
-                    },
+                    "code": "ERROR",
+                    "message": f"CLI 无输出 (exit={result.returncode})。stderr: {stderr[:500] or '(空)'}",
+                    "data": {"agent_id": agent_id, "cli_path": cli_path, "command": cmd_display, "stderr": stderr[:1000]},
                 }
 
-            # 完全失败
+            # ---- 解析输出，参照 multica 的事件流模式 ----
+            # OpenCode (--format json): 每行一个 JSON 事件，提取 type=text 的 content
+            # OpenClaw (--json): 整体一个多行 JSON，提取 result.payloads[].text
+            # 通用 fallback: 纯文本
+
+            response_text = None
+
+            # 1. 先尝试整体解析为单个 JSON（OpenClaw 格式: 多行格式化 JSON）
+            try:
+                data = _json.loads(stdout_clean)
+                # OpenClaw 格式: {"status":"ok","result":{"payloads":[{"text":"..."}]}}
+                result_obj = data.get("result", {})
+                payloads = result_obj.get("payloads", [])
+                if payloads:
+                    text_parts = [p.get("text", "") for p in payloads if p.get("text")]
+                    if text_parts:
+                        response_text = "\n".join(text_parts)
+
+                # 检查错误状态
+                status = data.get("status", "")
+                if status == "error" and not response_text:
+                    return {
+                        "code": "ERROR",
+                        "message": f"Agent 返回错误: {data.get('summary', 'unknown')}",
+                        "data": {"agent_id": agent_id, "agent_name": agent.name, "mode": "cli", "command": cmd_display, "raw_status": status},
+                    }
+
+                # 通用 JSON 字段
+                if not response_text:
+                    for key in ["response", "reply", "output", "message", "answer", "text", "result", "content"]:
+                        val = data.get(key)
+                        if val and isinstance(val, str):
+                            response_text = val
+                            break
+                        elif val and isinstance(val, dict):
+                            # 嵌套 result
+                            for sub_key in ["text", "content", "message", "output"]:
+                                sub_val = val.get(sub_key)
+                                if sub_val and isinstance(sub_val, str):
+                                    response_text = sub_val
+                                    break
+                            if response_text:
+                                break
+            except _json.JSONDecodeError:
+                pass
+
+            # 2. 尝试逐行解析 JSONL（opencode 事件流格式）
+            if not response_text:
+                lines = [l.strip() for l in stdout_clean.split('\n') if l.strip()]
+                json_lines = []
+                for line in lines:
+                    try:
+                        json_lines.append(_json.loads(line))
+                    except _json.JSONDecodeError:
+                        continue
+
+                if json_lines:
+                    text_parts = []
+                    error_parts = []
+                    for evt in json_lines:
+                        evt_type = evt.get("type", "")
+                        if evt_type in ("text", "message"):
+                            content = evt.get("content", "")
+                            if content:
+                                text_parts.append(content)
+                        elif evt_type == "error":
+                            err_data = evt.get("error", {})
+                            if isinstance(err_data, dict):
+                                err_msg = err_data.get("data", {}).get("message") or err_data.get("message", str(err_data))
+                            else:
+                                err_msg = str(err_data)
+                            error_parts.append(err_msg)
+
+                    if text_parts:
+                        response_text = "\n".join(text_parts)
+                    elif error_parts:
+                        return {
+                            "code": "ERROR",
+                            "message": f"Agent 返回错误: {'; '.join(error_parts)}",
+                            "data": {"agent_id": agent_id, "agent_name": agent.name, "mode": "cli", "command": cmd_display, "errors": error_parts},
+                        }
+
+            # Fallback: 如果 JSON 解析失败，用清理后的纯文本
+            if not response_text:
+                response_text = stdout_clean[:8000]
+
+            # 判断是否是错误响应
+            is_error = "Error:" in response_text or "error" in response_text.lower()[:50]
+
             return {
-                "code": "ERROR",
-                "message": f"CLI 执行失败 (exit={result.returncode})。stderr: {stderr[:500] or '(空)'}",
+                "code": "ERROR" if is_error else "SUCCESS",
                 "data": {
                     "agent_id": agent_id,
-                    "cli_path": cli_path,
+                    "agent_name": agent.name,
+                    "mode": "cli",
                     "command": cmd_display,
-                    "exit_code": result.returncode,
-                    "stderr": stderr[:1000],
+                    "response": response_text[:8000],
+                    **({"warning": f"exit_code={result.returncode}"} if result.returncode != 0 else {}),
                 },
+                **({"message": "Agent 执行返回错误"} if is_error else {}),
             }
         except _subprocess.TimeoutExpired:
             return {

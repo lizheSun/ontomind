@@ -13,11 +13,15 @@ from dataclasses import dataclass, field
 
 # 已知 Agent 类型及其 CLI 命令名、常见端口、进程名、健康检查路径
 # cli_chat_args: 交互测试时的参数模板，{msg} 会被替换为用户消息
+# 参照 multica 项目的封装方式
 KNOWN_AGENTS: dict[str, dict] = {
     "openclaw": {
         "label": "OpenClaw",
         "cli_commands": ["openclaw", "claw", "open-claw"],
+        # openclaw agent --agent <name> -m "<msg>" --json
+        # --agent 可选，不传用 default agent
         "cli_chat_args": ["agent", "-m", "{msg}", "--json"],
+        "cli_chat_args_with_agent": ["agent", "--agent", "{agent_id}", "-m", "{msg}", "--json"],
         "ports": [3000, 8080, 8000, 7860],
         "proc_names": ["openclaw", "claw", "open-claw"],
         "health_paths": ["/health", "/api/health", "/"],
@@ -26,11 +30,14 @@ KNOWN_AGENTS: dict[str, dict] = {
     "opencode": {
         "label": "OpenCode",
         "cli_commands": ["opencode", "open-code"],
-        "cli_chat_args": ["run", "{msg}"],
+        # opencode run --format json "<msg>" — 参照 multica
+        "cli_chat_args": ["run", "--format", "json", "{msg}"],
         "ports": [5173, 3000, 8080, 8787],
         "proc_names": ["opencode", "open-code"],
         "health_paths": ["/health", "/api/health", "/"],
         "icon": "💻",
+        # 自动批准所有工具调用（参照 multica）
+        "cli_env": {"OPENCODE_PERMISSION": '{"*":"allow"}'},
     },
     "harness": {
         "label": "Harness",
