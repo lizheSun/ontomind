@@ -14,6 +14,7 @@ import {
   DownloadOutlined, SearchOutlined, FilterOutlined,
   CloseCircleOutlined, MinusCircleOutlined, ArrowRightOutlined,
   ClusterOutlined, DatabaseOutlined, AppstoreOutlined, BuildOutlined,
+  HomeOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import llmService from '../../services/llm.service';
@@ -136,6 +137,7 @@ function InstancesPanel() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Instance | null>(null);
   const [form] = Form.useForm();
+  const [registeringLocal, setRegisteringLocal] = useState(false);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -163,6 +165,17 @@ function InstancesPanel() {
     catch (err: any) { notification.error({ title: '删除失败', description: err?.response?.data?.detail || err?.message, placement: 'top' }); }
   };
 
+  const handleRegisterLocal = async () => {
+    setRegisteringLocal(true);
+    try {
+      const res = await resourcesAPI.registerLocalInstance();
+      message.success(res.data?.message || '本地服务器已添加');
+      fetch();
+    } catch (err: any) {
+      notification.error({ title: '添加失败', description: err?.response?.data?.detail || err?.message, placement: 'top' });
+    } finally { setRegisteringLocal(false); }
+  };
+
   const filtered = useMemo(() => {
     if (!search) return items;
     const q = search.toLowerCase();
@@ -186,6 +199,9 @@ function InstancesPanel() {
       <SectionHeader icon={<CloudServerOutlined style={{ color: '#60a5fa' }} />} title="计算节点" count={items.length}
         extra={
           <Space>
+            <Tooltip title="一键检测并添加本机为计算节点">
+              <Button icon={<HomeOutlined />} loading={registeringLocal} onClick={handleRegisterLocal}>添加本地服务器</Button>
+            </Tooltip>
             <Input prefix={<SearchOutlined style={{ color: '#506380' }} />} placeholder="搜索节点..." value={search}
               onChange={e => setSearch(e.target.value)} style={{ width: 200 }} allowClear />
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增节点</Button>

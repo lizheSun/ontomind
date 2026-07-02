@@ -61,6 +61,68 @@ def heartbeat_instance(inst_id: int, db: Session = Depends(get_db)):
     return {"code": "SUCCESS", "message": "心跳已刷新"}
 
 
+@router.post("/instances/register-local")
+def register_local_instance(db: Session = Depends(get_db)):
+    """一键添加本地服务器为计算节点，自动检测主机名/OS/CPU/内存"""
+    import platform
+    import os as _os
+    import socket
+    import subprocess
+
+    from app.db.models.instance_model import Instance
+
+    hostname = platform.node()
+    svc = InstanceService(db)
+
+    # 检查是否已注册
+    existing = db.query(Instance).filter(Instance.name == hostname).first()
+    if existing:
+        return {"code": "SUCCESS", "message": "本地服务器已存在", "data": existing.to_response_dict()}
+
+    # 检测系统信息
+    try:
+        cpu = _os.cpu_count() or 1
+    except Exception:
+        cpu = None
+
+    try:
+        mem_bytes = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"]).decode().strip())
+        memory_mb = mem_bytes // (1024 * 1024)
+    except Exception:
+        try:
+            # Linux fallback
+            mem_bytes = _os.sysconf("SC_PAGE_SIZE") * _os.sysconf("SC_PHYS_PAGES")
+            memory_mb = mem_bytes // (1024 * 1024)
+        except Exception:
+            memory_mb = None
+
+    try:
+        system = platform.system()
+        os_map = {"Darwin": "macOS", "Linux": "Linux", "Windows": "Windows"}
+        os_name = os_map.get(system, system)
+    except Exception:
+        os_name = None
+
+    try:
+        ip = socket.gethostbyname(hostname)
+    except Exception:
+        ip = "127.0.0.1"
+
+    data = InstanceCreate(
+        name=hostname,
+        host=ip,
+        port=22,
+        instance_type="physical",
+        protocol="ssh",
+        os=os_name,
+        cpu_cores=cpu,
+        memory_mb=memory_mb,
+        description="本地开发服务器（自动注册）",
+    )
+    result = svc.create(data)
+    return {"code": "SUCCESS", "message": "本地服务器已添加", "data": result}
+
+
 # ==================== Agent 智能体定义 ====================
 
 
