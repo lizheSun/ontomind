@@ -265,9 +265,9 @@ function InstancesPanel() {
 
       <Drawer
         title={<Space>{editing ? <EditOutlined style={{ color: '#60a5fa' }} /> : <PlusOutlined style={{ color: '#60a5fa' }} />}{editing ? '编辑节点' : '新增节点'}</Space>}
-        open={drawerOpen} onClose={() => setDrawerOpen(false)} width={480}
+        open={drawerOpen} onClose={() => setDrawerOpen(false)}
         extra={<Space><Button onClick={() => setDrawerOpen(false)}>取消</Button><Button type="primary" onClick={handleSubmit}>保存</Button></Space>}
-        styles={{ body: { paddingBottom: 40 } }}
+        styles={{ body: { paddingBottom: 40 }, wrapper: { width: 480 } }}
       >
         <Form form={form} layout="vertical" size="large">
           <Form.Item name="name" label="节点名称" rules={[{ required: true }]}><Input placeholder="prod-server-01" /></Form.Item>
@@ -428,9 +428,9 @@ function AgentsPanel() {
 
       <Drawer
         title={<Space>{editing ? <EditOutlined style={{ color: '#a78bfa' }} /> : <PlusOutlined style={{ color: '#a78bfa' }} />}{editing ? '编辑 Agent' : '新增 Agent'}</Space>}
-        open={drawerOpen} onClose={() => setDrawerOpen(false)} width={480}
+        open={drawerOpen} onClose={() => setDrawerOpen(false)}
         extra={<Space><Button onClick={() => setDrawerOpen(false)}>取消</Button><Button type="primary" onClick={handleSubmit}>保存</Button></Space>}
-        styles={{ body: { paddingBottom: 40 } }}
+        styles={{ body: { paddingBottom: 40 }, wrapper: { width: 480 } }}
       >
         <Form form={form} layout="vertical" size="large">
           <Form.Item name="name" label="Agent 名称" rules={[{ required: true }]}><Input placeholder="my-custom-agent" /></Form.Item>
@@ -574,9 +574,9 @@ function SkillsPanel() {
 
       <Drawer
         title={<Space>{editing ? <EditOutlined style={{ color: '#f59e0b' }} /> : <PlusOutlined style={{ color: '#f59e0b' }} />}{editing ? '编辑技能' : '新增技能'}</Space>}
-        open={drawerOpen} onClose={() => setDrawerOpen(false)} width={480}
+        open={drawerOpen} onClose={() => setDrawerOpen(false)}
         extra={<Space><Button onClick={() => setDrawerOpen(false)}>取消</Button><Button type="primary" onClick={handleSubmit}>保存</Button></Space>}
-        styles={{ body: { paddingBottom: 40 } }}
+        styles={{ body: { paddingBottom: 40 }, wrapper: { width: 480 } }}
       >
         <Form form={form} layout="vertical" size="large">
           <Form.Item name="name" label="技能名称" rules={[{ required: true }]}><Input placeholder="pdf-reader" /></Form.Item>
@@ -731,9 +731,9 @@ function MCPPanel() {
       {/* Create/Edit Drawer */}
       <Drawer
         title={<Space>{editing ? <EditOutlined style={{ color: '#34d399' }} /> : <PlusOutlined style={{ color: '#34d399' }} />}{editing ? '编辑 MCP' : '新增 MCP'}</Space>}
-        open={drawerOpen} onClose={() => setDrawerOpen(false)} width={480}
+        open={drawerOpen} onClose={() => setDrawerOpen(false)}
         extra={<Space><Button onClick={() => setDrawerOpen(false)}>取消</Button><Button type="primary" onClick={handleSubmit}>保存</Button></Space>}
-        styles={{ body: { paddingBottom: 40 } }}
+        styles={{ body: { paddingBottom: 40 }, wrapper: { width: 480 } }}
       >
         <Form form={form} layout="vertical" size="large">
           <Form.Item name="name" label="MCP 名称" rules={[{ required: true }]}><Input placeholder="my-api-tool" /></Form.Item>
@@ -753,9 +753,9 @@ function MCPPanel() {
       {/* Auto Discover Modal */}
       <Drawer
         title={<Space><ExperimentOutlined style={{ color: '#a78bfa' }} />MCP 自动发现</Space>}
-        open={discoverOpen} onClose={() => setDiscoverOpen(false)} width={500}
+        open={discoverOpen} onClose={() => setDiscoverOpen(false)}
         extra={<Space><Button onClick={() => setDiscoverOpen(false)}>取消</Button><Button type="primary" loading={discovering} onClick={handleDiscover}>开始发现</Button></Space>}
-        styles={{ body: { paddingBottom: 40 } }}
+        styles={{ body: { paddingBottom: 40 }, wrapper: { width: 500 } }}
       >
         <Form form={discoverForm} layout="vertical" size="large">
           <Form.Item name="api_url" label="API 端点 URL" rules={[{ required: true }]}>
@@ -922,9 +922,9 @@ function RunsPanel() {
       {/* Start Agent Drawer */}
       <Drawer
         title={<Space><PlayCircleOutlined style={{ color: '#34d399' }} />启动 Agent</Space>}
-        open={createDrawer} onClose={() => setCreateDrawer(false)} width={400}
+        open={createDrawer} onClose={() => setCreateDrawer(false)}
         extra={<Space><Button onClick={() => setCreateDrawer(false)}>取消</Button><Button type="primary" onClick={handleStart}>启动</Button></Space>}
-        styles={{ body: { paddingBottom: 40 } }}
+        styles={{ body: { paddingBottom: 40 }, wrapper: { width: 400 } }}
       >
         <Form form={form} layout="vertical" size="large">
           <Form.Item name="run_name" label="运行名称" rules={[{ required: true }]}><Input placeholder="production-run-01" /></Form.Item>
@@ -938,8 +938,8 @@ function RunsPanel() {
       {/* Log Drawer */}
       <Drawer
         title={<Space><MonitorOutlined style={{ color: '#60a5fa' }} />实时日志 {logDrawer.runId ? `#${logDrawer.runId}` : ''}</Space>}
-        open={logDrawer.open} onClose={closeLogs} width={640}
-        styles={{ body: { padding: 0 } }}
+        open={logDrawer.open} onClose={closeLogs}
+        styles={{ body: { padding: 0 }, wrapper: { width: 640 } }}
         extra={<Space><Badge status="processing" text="接收中" /><Button size="small" onClick={closeLogs}>断开</Button></Space>}
       >
         <div style={{ height: '100%', overflowY: 'auto', padding: 16, background: '#0a0e17', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, lineHeight: 1.8 }}>
@@ -1096,9 +1096,9 @@ function LLMPanel() {
       {/* LLM Form Drawer */}
       <Drawer
         title={<Space>{editing ? <EditOutlined style={{ color: '#60a5fa' }} /> : <PlusOutlined style={{ color: '#60a5fa' }} />}{editing ? '编辑' : '新增'} LLM 配置</Space>}
-        open={drawerOpen} onClose={() => setDrawerOpen(false)} width={520}
+        open={drawerOpen} onClose={() => setDrawerOpen(false)}
         extra={<Space><Button onClick={() => setDrawerOpen(false)}>取消</Button><Button type="primary" onClick={handleSubmit}>保存</Button></Space>}
-        styles={{ body: { paddingBottom: 40 } }}
+        styles={{ body: { paddingBottom: 40 }, wrapper: { width: 520 } }}
       >
         <Form form={form} layout="vertical" size="large" initialValues={{ provider: 'openai', is_active: false, timeout: '60', max_retries: '2' }}>
           <Form.Item name="name" label="配置名称" rules={[{ required: true }]}><Input placeholder="例如：GPT-4 Azure" /></Form.Item>
