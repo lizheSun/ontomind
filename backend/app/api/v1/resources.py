@@ -164,16 +164,17 @@ def register_local_instance(db: Session = Depends(get_db)):
 @router.post("/instances/{inst_id}/scan-agents")
 def scan_agents(inst_id: int, db: Session = Depends(get_db)):
     """
-    扫描指定计算节点上的 Agent 服务。
+    扫描指定计算节点上的 Agent 服务，并将健康的 Agent 自动添加到 Agent 表。
 
     通过端口扫描 + HTTP 健康检查 + 进程检测（仅本机）来发现：
     - OpenClaw（端口 3000/8080/8000/7860）
     - OpenCode（端口 5173/3000/8080/8787）
     - Harness（端口 3000/8080/4000）
 
-    返回每个 Agent 的可用性和版本信息。
+    返回每个 Agent 的可用性和版本信息，健康的 Agent 会自动注册到数据库。
     """
     from app.db.models.instance_model import Instance
+    from app.db.models.agent_model import Agent
     from app.services.agent_discovery import discover_agents
 
     inst = db.query(Instance).filter(Instance.id == inst_id).first()
@@ -182,6 +183,47 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
 
     host = inst.host
     discovery = discover_agents(host, instance_id=inst_id)
+
+    # 自动将健康的 Agent 注册到数据库
+    auto_registered: list[dict] = []
+    for a in discovery.agents:
+        if not a.is_healthy or a.port == 0:
+            continue
+
+        agent_name = f"{a.label}-{a.port}"
+        # 检查是否已存在（按名称）
+        existing = db.query(Agent).filter(Agent.name == agent_name).first()
+        if existing:
+            # 更新版本信息
+            if a.version and existing.version != a.version:
+                existing.version = a.version
+                db.commit()
+            auto_registered.append({"id": existing.id, "name": existing.name, "action": "updated"})
+            continue
+
+        # 创建新 Agent 记录
+        base_url = f"http://{a.host}:{a.port}"
+        new_agent = Agent(
+            name=agent_name,
+            agent_type=a.agent_type,
+            version=a.version or "latest",
+            runtime="binary",  # 已在运行的服务
+            entrypoint=base_url,
+            docker_image=None,
+            env_template=None,
+            config_template=None,
+            ports=[a.port],
+            volume_mounts=None,
+            resource_limit=None,
+            skill_ids=None,
+            description=f"自动发现: {a.label} @ {a.host}:{a.port}（来自节点 {inst.name}）",
+            is_active=True,
+        )
+        db.add(new_agent)
+        db.commit()
+        db.refresh(new_agent)
+        auto_registered.append({"id": new_agent.id, "name": new_agent.name, "action": "created"})
+
     agents_data = [
         {
             "agent_type": a.agent_type,
@@ -205,6 +247,139 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
             "agents": agents_data,
             "total_ports_scanned": discovery.total_ports_scanned,
             "errors": discovery.errors,
+            "auto_registered": auto_registered,
+        },
+    }
+
+
+@router.post("/agents/{agent_id}/chat")
+def chat_with_agent(agent_id: int, payload: dict, db: Session = Depends(get_db)):
+    """
+    与 Agent 交互测试：向 Agent 发送消息并获取响应。
+
+    请求体: { "message": "你好", "stream": false }
+
+    支持 OpenAI 兼容格式的 Agent（/v1/chat/completions），
+    也支持简单的 /chat 或 /api/chat 端点。
+    """
+    import json as _json
+    import urllib.request as _urlreq
+
+    from app.db.models.agent_model import Agent
+
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
+
+    message = payload.get("message", "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="消息不能为空")
+
+    # 从 entrypoint 获取 Agent 的 base URL
+    base_url = (agent.entrypoint or "").rstrip("/")
+    if not base_url:
+        raise HTTPException(status_code=400, detail="Agent 未配置 entrypoint URL，无法交互")
+
+    # 尝试多种常见的 chat 端点
+    chat_endpoints = [
+        "/v1/chat/completions",   # OpenAI 兼容
+        "/chat",                  # 简单 chat
+        "/api/chat",              # API chat
+        "/api/v1/chat",           # 版本化 API
+        "/v1/chat",               # 简化版本
+    ]
+
+    # 构建请求体（OpenAI 兼容格式）
+    openai_body = _json.dumps({
+        "model": agent.name,
+        "messages": [{"role": "user", "content": message}],
+        "stream": False,
+        "max_tokens": 2000,
+    }).encode("utf-8")
+
+    # 简单 chat 格式
+    simple_body = _json.dumps({
+        "message": message,
+        "input": message,
+        "query": message,
+    }).encode("utf-8")
+
+    last_error = None
+    for endpoint in chat_endpoints:
+        url = f"{base_url}{endpoint}"
+        # 先尝试 OpenAI 格式
+        for body in [openai_body, simple_body]:
+            try:
+                req = _urlreq.Request(url, data=body, method="POST")
+                req.add_header("Content-Type", "application/json")
+                req.add_header("User-Agent", "OntoMind-AgentChat/1.0")
+                resp = _urlreq.urlopen(req, timeout=30)
+                resp_body = resp.read().decode(errors="ignore")[:10000]
+
+                # 尝试解析响应
+                try:
+                    data = _json.loads(resp_body)
+                    # OpenAI 格式: choices[0].message.content
+                    if "choices" in data and len(data["choices"]) > 0:
+                        content = data["choices"][0].get("message", {}).get("content", "")
+                        if content:
+                            return {
+                                "code": "SUCCESS",
+                                "data": {
+                                    "agent_id": agent_id,
+                                    "agent_name": agent.name,
+                                    "endpoint": endpoint,
+                                    "response": content,
+                                    "raw": data if len(resp_body) < 2000 else None,
+                                },
+                            }
+                    # 简单格式: response / reply / output / message
+                    for key in ["response", "reply", "output", "message", "answer", "text", "result"]:
+                        if key in data and data[key]:
+                            return {
+                                "code": "SUCCESS",
+                                "data": {
+                                    "agent_id": agent_id,
+                                    "agent_name": agent.name,
+                                    "endpoint": endpoint,
+                                    "response": str(data[key]),
+                                    "raw": data if len(resp_body) < 2000 else None,
+                                },
+                            }
+                    # 如果是字符串直接返回
+                    if isinstance(data, str) and data:
+                        return {
+                            "code": "SUCCESS",
+                            "data": {
+                                "agent_id": agent_id,
+                                "agent_name": agent.name,
+                                "endpoint": endpoint,
+                                "response": data,
+                            },
+                        }
+                except _json.JSONDecodeError:
+                    # 非 JSON 响应，直接返回文本
+                    if resp_body.strip():
+                        return {
+                            "code": "SUCCESS",
+                            "data": {
+                                "agent_id": agent_id,
+                                "agent_name": agent.name,
+                                "endpoint": endpoint,
+                                "response": resp_body[:2000],
+                            },
+                        }
+            except Exception as e:
+                last_error = str(e)
+                continue
+
+    return {
+        "code": "ERROR",
+        "message": f"无法连接到 Agent 或未找到可用的 chat 端点。最后错误: {last_error}",
+        "data": {
+            "agent_id": agent_id,
+            "base_url": base_url,
+            "tried_endpoints": chat_endpoints,
         },
     }
 

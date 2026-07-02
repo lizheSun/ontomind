@@ -20,6 +20,8 @@ export const resourcesAPI = {
   createAgent: (data: any) => api.post('/resources/agents', data),
   updateAgent: (id: number, data: any) => api.put(`/resources/agents/${id}`, data),
   deleteAgent: (id: number) => api.delete(`/resources/agents/${id}`),
+  chatWithAgent: (agentId: number, message: string) =>
+    api.post(`/resources/agents/${agentId}/chat`, { message, stream: false }),
 
   // Skill
   listSkills: (params?: { skip?: number; limit?: number }) =>

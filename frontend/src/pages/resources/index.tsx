@@ -14,7 +14,7 @@ import {
   DownloadOutlined, SearchOutlined, FilterOutlined,
   CloseCircleOutlined, MinusCircleOutlined, ArrowRightOutlined,
   ClusterOutlined, DatabaseOutlined, AppstoreOutlined, BuildOutlined,
-  HomeOutlined,
+  HomeOutlined, MessageOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import llmService from '../../services/llm.service';
@@ -175,7 +175,11 @@ function InstancesPanel() {
       if (data?.agents) {
         setDiscoveredAgents(prev => ({ ...prev, [instId]: data.agents }));
         const healthy = data.agents.filter(a => a.is_healthy).length;
-        message.success(`扫描完成：${data.total_ports_scanned} 个端口，发现 ${data.agents.length} 个 Agent，${healthy} 个健康`);
+        const autoRegistered = (data as any).auto_registered || [];
+        const msg = autoRegistered.length > 0
+          ? `扫描完成：发现 ${data.agents.length} 个 Agent，${healthy} 个健康，已自动注册 ${autoRegistered.length} 个到智能体列表`
+          : `扫描完成：${data.total_ports_scanned} 个端口，发现 ${data.agents.length} 个 Agent，${healthy} 个健康`;
+        message.success(msg);
       }
     } catch (err: any) {
       notification.error({ title: '扫描失败', description: err?.response?.data?.detail || err?.message, placement: 'top' });
@@ -401,6 +405,12 @@ function AgentsPanel() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [form] = Form.useForm();
+  const [chatAgent, setChatAgent] = useState<Agent | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'agent'; content: string; error?: boolean }[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -426,6 +436,35 @@ function AgentsPanel() {
   const handleDelete = async (id: number) => {
     try { await resourcesAPI.deleteAgent(id); message.success('删除成功'); fetch(); }
     catch (err: any) { notification.error({ title: '删除失败', description: err?.response?.data?.detail || err?.message, placement: 'top' }); }
+  };
+
+  const openChat = (agent: Agent) => {
+    setChatAgent(agent);
+    setChatHistory([]);
+    setChatInput('');
+    setChatOpen(true);
+  };
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || !chatAgent) return;
+    const msg = chatInput.trim();
+    setChatHistory(prev => [...prev, { role: 'user', content: msg }]);
+    setChatInput('');
+    setChatSending(true);
+    try {
+      const res = await resourcesAPI.chatWithAgent(chatAgent.id, msg);
+      const reply = res.data?.data?.response || res.data?.data?.error || '（无响应内容）';
+      const isError = res.data?.code === 'ERROR';
+      setChatHistory(prev => [...prev, { role: 'agent', content: reply, error: isError }]);
+      if (isError) message.warning('Agent 交互失败，请检查 Agent 服务是否正常运行');
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.detail || err?.message || '请求失败';
+      setChatHistory(prev => [...prev, { role: 'agent', content: errMsg, error: true }]);
+      notification.error({ title: '交互失败', description: errMsg, placement: 'top' });
+    } finally {
+      setChatSending(false);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -483,6 +522,9 @@ function AgentsPanel() {
                     </div>
                   </div>
                   <Space size={4}>
+                    <Tooltip title="测试交互">
+                      <Button type="text" size="small" icon={<MessageOutlined />} onClick={() => openChat(item)} style={{ color: '#60a5fa' }} />
+                    </Tooltip>
                     <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openEdit(item)} />
                     <Popconfirm title="确定删除？" onConfirm={() => handleDelete(item.id)} okText="删除" cancelText="取消" okButtonProps={{ danger: true }}>
                       <Button type="text" size="small" danger icon={<DeleteOutlined />} />
@@ -543,6 +585,76 @@ function AgentsPanel() {
           <Form.Item name="description" label="描述"><TextArea rows={2} /></Form.Item>
           <Form.Item name="is_active" label="启用" valuePropName="checked"><Switch /></Form.Item>
         </Form>
+      </Drawer>
+
+      {/* Agent 交互测试 Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <MessageOutlined style={{ color: '#60a5fa' }} />
+            交互测试 — {chatAgent?.name}
+          </Space>
+        }
+        open={chatOpen} onClose={() => setChatOpen(false)}
+        styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }, wrapper: { width: 520 } }}
+      >
+        <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          {chatHistory.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#506380', fontSize: 13, padding: '40px 20px' }}>
+              <MessageOutlined style={{ fontSize: 32, marginBottom: 12, display: 'block', color: '#3d4e6b' }} />
+              输入消息与 Agent 交互测试<br />
+              <span style={{ fontSize: 11 }}>支持 OpenAI 兼容接口及常见 /chat 端点</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {chatHistory.map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <div style={{
+                    maxWidth: '80%', padding: '10px 14px', borderRadius: 12,
+                    background: m.role === 'user'
+                      ? 'rgba(96,165,250,0.12)'
+                      : m.error ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)',
+                    border: m.role === 'user'
+                      ? '1px solid rgba(96,165,250,0.2)'
+                      : m.error ? '1px solid rgba(245,158,11,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                  }}>
+                    <div style={{ fontSize: 10, color: m.role === 'user' ? '#60a5fa' : m.error ? '#f59e0b' : '#657a9a', marginBottom: 4, fontWeight: 600 }}>
+                      {m.role === 'user' ? 'YOU' : (chatAgent?.name || 'AGENT')}
+                    </div>
+                    <div style={{
+                      fontSize: 13, color: m.error ? '#f59e0b' : '#e8eef5',
+                      lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      fontFamily: m.role === 'agent' && !m.error ? 'JetBrains Mono, monospace' : 'inherit',
+                    }}>
+                      {m.content}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+          )}
+        </div>
+        <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              placeholder="输入消息..."
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onPressEnter={handleSendChat}
+              disabled={chatSending}
+              style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
+            />
+            <Button type="primary" icon={<SendOutlined />} onClick={handleSendChat} loading={chatSending}>
+              发送
+            </Button>
+          </Space.Compact>
+          {chatAgent?.entrypoint && (
+            <div style={{ fontSize: 10, color: '#3d4e6b', marginTop: 6, fontFamily: 'JetBrains Mono, monospace' }}>
+              → {chatAgent.entrypoint}
+            </div>
+          )}
+        </div>
       </Drawer>
     </div>
   );
