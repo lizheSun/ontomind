@@ -123,6 +123,22 @@ export const perceptionAPI = {
   // Test connection
   testConnection: (id: number) => api.post(`/perception/datasources/${id}/test`),
 
+  // Metadata - 提取与浏览
+  syncMetadata: (dsId: number, database?: string) =>
+    api.post(`/perception/datasources/${dsId}/sync`, database ? { database } : {}),
+  listDatabases: (dsId: number) => api.get(`/perception/datasources/${dsId}/databases`),
+  listMetaTables: (dsId: number, database?: string) =>
+    api.get(`/perception/datasources/${dsId}/tables`, { params: database ? { database } : {} }),
+  getMetaTable: (tableId: number) => api.get(`/perception/meta/tables/${tableId}`),
+  updateMetaTable: (tableId: number, data: any) => api.put(`/perception/meta/tables/${tableId}`, data),
+  updateMetaColumn: (columnId: number, data: any) => api.put(`/perception/meta/columns/${columnId}`, data),
+  previewData: (tableId: number, limit = 100, offset = 0) =>
+    api.post(`/perception/meta/tables/${tableId}/preview`, { limit, offset }),
+  autoAnnotate: (tableId: number, force = false) =>
+    api.post(`/perception/meta/tables/${tableId}/annotate`, { force }),
+  getOntologyCandidates: (dsId: number) =>
+    api.get(`/perception/datasources/${dsId}/ontology-candidates`),
+
   // Documents
   uploadDocument: (file: File) => {
     const formData = new FormData();
