@@ -136,6 +136,8 @@ export const perceptionAPI = {
     api.post(`/perception/meta/tables/${tableId}/preview`, { limit, offset }),
   autoAnnotate: (tableId: number, force = false, agentId?: number) =>
     api.post(`/perception/meta/tables/${tableId}/annotate`, { force, agent_id: agentId }),
+  annotateStreamUrl: (tableId: number): string =>
+    `${WS_BASE_URL}/perception/meta/tables/${tableId}/annotate/stream`,
   getOntologyCandidates: (dsId: number) =>
     api.get(`/perception/datasources/${dsId}/ontology-candidates`),
 

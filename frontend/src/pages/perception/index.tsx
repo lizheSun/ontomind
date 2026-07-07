@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Button, Table, Tag, Modal, Form, Input, Select, Space, message, Spin, Descriptions, Typography, Alert, Popconfirm, InputNumber, Drawer, Tooltip, Tree } from 'antd';
 import {
   PlusOutlined, UploadOutlined, ApiOutlined, ThunderboltOutlined, ExperimentOutlined,
@@ -82,6 +82,11 @@ export default function Perception() {
   // Agent 选择（标注用）
   const [agents, setAgents] = useState<any[]>([]);
   const [annotateAgentId, setAnnotateAgentId] = useState<number | undefined>(undefined);
+  // 标注对话流
+  const [annotateEvents, setAnnotateEvents] = useState<{ type: string; content?: string; tool?: string; input?: any }[]>([]);
+  const [annotateInput, setAnnotateInput] = useState('');
+  const [annotateSending, setAnnotateSending] = useState(false);
+  const annotateWsRef = useRef<WebSocket | null>(null);
 
   // ===== 元数据操作 =====
   const handleOpenMeta = async (dsId: number) => {
@@ -168,18 +173,52 @@ export default function Perception() {
   };
 
   const handleAnnotate = async (tableId: number) => {
-    setAnnotating(true);
-    try {
-      const res = await perceptionAPI.autoAnnotate(tableId, false, annotateAgentId);
-      message.success(res.data?.message || '注释完成');
-      // 刷新详情
-      const detailRes = await perceptionAPI.getMetaTable(tableId);
-      setTableDetail(detailRes.data?.data);
-    } catch (err: any) {
-      message.error(err?.response?.data?.detail || '注释失败');
-    } finally {
-      setAnnotating(false);
+    setAnnotateSending(true);
+    setAnnotateEvents([]);
+
+    const wsUrl = perceptionAPI.annotateStreamUrl(tableId);
+    const ws = new WebSocket(wsUrl);
+    annotateWsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        prompt: annotateInput.trim() || '',
+        agent_id: annotateAgentId,
+        force: false,
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const evt = JSON.parse(event.data);
+        setAnnotateEvents(prev => [...prev, evt]);
+
+        if (evt.type === 'done') {
+          // 刷新表详情
+          perceptionAPI.getMetaTable(tableId).then(res => {
+            setTableDetail(res.data?.data);
+          });
+        }
+      } catch (e) { /* ignore */ }
+    };
+
+    ws.onerror = () => {
+      setAnnotateEvents(prev => [...prev, { type: 'error', content: 'WebSocket 连接失败' }]);
+      setAnnotateSending(false);
+    };
+
+    ws.onclose = () => {
+      setAnnotateSending(false);
+      annotateWsRef.current = null;
+    };
+  };
+
+  const handleStopAnnotate = () => {
+    if (annotateWsRef.current) {
+      annotateWsRef.current.close();
+      annotateWsRef.current = null;
     }
+    setAnnotateSending(false);
   };
 
   const fetchAgents = useCallback(async () => {
@@ -743,24 +782,10 @@ jdbc:mysql://host:3306/db?user=root&password=xxx`}
         }
         open={tableDetailOpen}
         onClose={() => setTableDetailOpen(false)}
-        width={900}
-        styles={{ body: { padding: 0 } }}
+        width={1200}
+        styles={{ body: { padding: 0, display: 'flex', height: '100%' } }}
         extra={
           <Space>
-            <Select
-              style={{ width: 160 }}
-              placeholder="标注方式"
-              allowClear
-              value={annotateAgentId}
-              onChange={(v) => setAnnotateAgentId(v)}
-              options={[
-                { value: undefined as any, label: '🏷️ 平台 LLM' },
-                ...agents.map(a => ({ value: a.id, label: `${a.agent_type === 'openclaw' ? '🦞' : a.agent_type === 'opencode' ? '💻' : '🤖'} ${a.name}` })),
-              ]}
-            />
-            <Button icon={<RobotOutlined />} loading={annotating} onClick={() => tableDetail && handleAnnotate(tableDetail.id)} style={{ borderRadius: 8 }}>
-              自动注释
-            </Button>
             <Button icon={<EyeOutlined />} loading={previewLoading} onClick={() => tableDetail && handlePreview(tableDetail.id)} style={{ borderRadius: 8 }}>
               数据预览
             </Button>
@@ -768,93 +793,169 @@ jdbc:mysql://host:3306/db?user=root&password=xxx`}
         }
       >
         {tableDetailLoading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+          <div style={{ textAlign: 'center', padding: 60, width: '100%' }}><Spin size="large" /></div>
         ) : tableDetail ? (
-          <div style={{ padding: 16 }}>
-            {/* 表信息 */}
-            <Descriptions column={3} size="small" style={{ marginBottom: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12 }}
-              labelStyle={{ color: '#8895b4', fontSize: 12 }} contentStyle={{ color: '#e8eef5', fontSize: 12 }}>
-              <Descriptions.Item label="数据库">{tableDetail.database_name}</Descriptions.Item>
-              <Descriptions.Item label="表类型">{tableDetail.table_type === 'view' ? '视图' : '表'}</Descriptions.Item>
-              <Descriptions.Item label="存储引擎">{tableDetail.engine || '-'}</Descriptions.Item>
-              <Descriptions.Item label="字段数">{tableDetail.column_count}</Descriptions.Item>
-              <Descriptions.Item label="行数">{tableDetail.row_count?.toLocaleString() || '-'}</Descriptions.Item>
-              <Descriptions.Item label="存储大小">{tableDetail.storage_size_mb ? `${tableDetail.storage_size_mb} MB` : '-'}</Descriptions.Item>
-              <Descriptions.Item label="用途" span={3}>
-                {tableDetail.purpose ? <Tag style={{ borderRadius: 4, fontSize: 11 }}>{tableDetail.purpose}</Tag> : '—'}
-                {tableDetail.domain && <Tag style={{ borderRadius: 4, fontSize: 11, marginLeft: 4 }}>{tableDetail.domain}</Tag>}
-              </Descriptions.Item>
-              <Descriptions.Item label="表注释" span={3}>
-                {tableDetail.table_comment || <span style={{ color: '#3d4e6b' }}>无</span>}
-              </Descriptions.Item>
-              {tableDetail.table_comment_llm && (
-                <Descriptions.Item label="LLM 描述" span={3}>
-                  <span style={{ color: '#a78bfa' }}>🤖 {tableDetail.table_comment_llm}</span>
+          <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+            {/* 左侧：表元数据 */}
+            <div style={{ flex: 1, overflow: 'auto', padding: 16, borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+              <Descriptions column={3} size="small" style={{ marginBottom: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12 }}
+                labelStyle={{ color: '#8895b4', fontSize: 12 }} contentStyle={{ color: '#e8eef5', fontSize: 12 }}>
+                <Descriptions.Item label="数据库">{tableDetail.database_name}</Descriptions.Item>
+                <Descriptions.Item label="表类型">{tableDetail.table_type === 'view' ? '视图' : '表'}</Descriptions.Item>
+                <Descriptions.Item label="存储引擎">{tableDetail.engine || '-'}</Descriptions.Item>
+                <Descriptions.Item label="字段数">{tableDetail.column_count}</Descriptions.Item>
+                <Descriptions.Item label="行数">{tableDetail.row_count?.toLocaleString() || '-'}</Descriptions.Item>
+                <Descriptions.Item label="存储大小">{tableDetail.storage_size_mb ? `${tableDetail.storage_size_mb} MB` : '-'}</Descriptions.Item>
+                <Descriptions.Item label="用途" span={3}>
+                  {tableDetail.purpose ? <Tag style={{ borderRadius: 4, fontSize: 11 }}>{tableDetail.purpose}</Tag> : '—'}
+                  {tableDetail.domain && <Tag style={{ borderRadius: 4, fontSize: 11, marginLeft: 4 }}>{tableDetail.domain}</Tag>}
                 </Descriptions.Item>
-              )}
-              {tableDetail.business_description && (
-                <Descriptions.Item label="业务描述" span={3}>{tableDetail.business_description}</Descriptions.Item>
-              )}
-            </Descriptions>
+                <Descriptions.Item label="表注释" span={3}>
+                  {tableDetail.table_comment || <span style={{ color: '#3d4e6b' }}>无</span>}
+                </Descriptions.Item>
+                {tableDetail.table_comment_llm && (
+                  <Descriptions.Item label="LLM 描述" span={3}>
+                    <span style={{ color: '#a78bfa' }}>🤖 {tableDetail.table_comment_llm}</span>
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
 
-            {/* 字段列表 */}
-            <Typography.Title level={5} style={{ color: '#e8eef5', marginBottom: 12 }}>字段信息（{tableDetail.columns?.length || 0}）</Typography.Title>
-            <Table
-              columns={[
-                { title: '#', dataIndex: 'ordinal_position', key: 'pos', width: 40, render: (p: number) => <span style={{ color: '#506380' }}>{p}</span> },
-                {
-                  title: '字段名', dataIndex: 'column_name', key: 'name', width: 160,
-                  render: (name: string, r: any) => (
-                    <Space>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 500, color: '#e8eef5' }}>{name}</span>
-                      {r.is_primary_key && <Tag style={{ borderRadius: 3, fontSize: 9, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: 'none', margin: 0 }}>PK</Tag>}
-                    </Space>
-                  ),
-                },
-                { title: '类型', dataIndex: 'data_type_full', key: 'type', width: 130, render: (t: string) => <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{t}</span> },
-                {
-                  title: '允许空', dataIndex: 'is_nullable', key: 'nullable', width: 60,
-                  render: (n: boolean) => n ? <span style={{ color: '#506380' }}>YES</span> : <span style={{ color: '#f87171' }}>NO</span>,
-                },
-                {
-                  title: '注释', dataIndex: 'column_comment', key: 'comment', ellipsis: true,
-                  render: (c: string, r: any) => (
-                    <span style={{ fontSize: 12, color: c ? '#8895b4' : (r.column_comment_llm ? '#a78bfa' : '#3d4e6b') }}>
-                      {c || (r.column_comment_llm ? `🤖 ${r.column_comment_llm}` : '—')}
-                    </span>
-                  ),
-                },
-                {
-                  title: '语义', dataIndex: 'semantic_type', key: 'semantic', width: 80,
-                  render: (s: string) => s ? <Tag style={{ borderRadius: 3, fontSize: 10, background: 'rgba(255,255,255,0.06)', color: '#8895b4', border: 'none' }}>{s}</Tag> : null,
-                },
-              ]}
-              dataSource={tableDetail.columns || []}
-              rowKey="id"
-              pagination={false}
-              size="small"
-              scroll={{ y: 400 }}
-            />
+              <Typography.Title level={5} style={{ color: '#e8eef5', marginBottom: 12 }}>字段信息（{tableDetail.columns?.length || 0}）</Typography.Title>
+              <Table
+                columns={[
+                  { title: '#', dataIndex: 'ordinal_position', key: 'pos', width: 40, render: (p: number) => <span style={{ color: '#506380' }}>{p}</span> },
+                  {
+                    title: '字段名', dataIndex: 'column_name', key: 'name', width: 160,
+                    render: (name: string, r: any) => (
+                      <Space>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 500, color: '#e8eef5' }}>{name}</span>
+                        {r.is_primary_key && <Tag style={{ borderRadius: 3, fontSize: 9, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: 'none', margin: 0 }}>PK</Tag>}
+                      </Space>
+                    ),
+                  },
+                  { title: '类型', dataIndex: 'data_type_full', key: 'type', width: 130, render: (t: string) => <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#60a5fa' }}>{t}</span> },
+                  { title: '允许空', dataIndex: 'is_nullable', key: 'nullable', width: 60, render: (n: boolean) => n ? <span style={{ color: '#506380' }}>YES</span> : <span style={{ color: '#f87171' }}>NO</span> },
+                  {
+                    title: '注释', dataIndex: 'column_comment', key: 'comment', ellipsis: true,
+                    render: (c: string, r: any) => (
+                      <span style={{ fontSize: 12, color: c ? '#8895b4' : (r.column_comment_llm ? '#a78bfa' : '#3d4e6b') }}>
+                        {c || (r.column_comment_llm ? `🤖 ${r.column_comment_llm}` : '—')}
+                      </span>
+                    ),
+                  },
+                  { title: '语义', dataIndex: 'semantic_type', key: 'semantic', width: 80, render: (s: string) => s ? <Tag style={{ borderRadius: 3, fontSize: 10, background: 'rgba(255,255,255,0.06)', color: '#8895b4', border: 'none' }}>{s}</Tag> : null },
+                ]}
+                dataSource={tableDetail.columns || []}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                scroll={{ y: 300 }}
+              />
 
-            {/* 数据预览 */}
-            {previewData && (
-              <div style={{ marginTop: 20 }}>
-                <Typography.Title level={5} style={{ color: '#e8eef5', marginBottom: 12 }}>
-                  数据预览（{previewData.rows?.length || 0} / {previewData.total?.toLocaleString()} 行）
-                </Typography.Title>
-                <Table
-                  columns={(previewData.columns || []).map((col: string) => ({
-                    title: col, dataIndex: col, key: col, ellipsis: true, width: 150,
-                    render: (v: any) => <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#8895b4' }}>{v === null ? <span style={{ color: '#3d4e6b' }}>NULL</span> : String(v)}</span>,
-                  }))}
-                  dataSource={(previewData.rows || []).map((row: any, i: number) => ({ ...row, _key: i }))}
-                  rowKey="_key"
-                  pagination={false}
+              {previewData && (
+                <div style={{ marginTop: 20 }}>
+                  <Typography.Title level={5} style={{ color: '#e8eef5', marginBottom: 12 }}>
+                    数据预览（{previewData.rows?.length || 0} / {previewData.total?.toLocaleString()} 行）
+                  </Typography.Title>
+                  <Table
+                    columns={(previewData.columns || []).map((col: string) => ({
+                      title: col, dataIndex: col, key: col, ellipsis: true, width: 150,
+                      render: (v: any) => <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#8895b4' }}>{v === null ? <span style={{ color: '#3d4e6b' }}>NULL</span> : String(v)}</span>,
+                    }))}
+                    dataSource={(previewData.rows || []).map((row: any, i: number) => ({ ...row, _key: i }))}
+                    rowKey="_key"
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: 'max-content', y: 200 }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 右侧：标注对话面板 */}
+            <div style={{ width: 460, display: 'flex', flexDirection: 'column', height: '100%', background: 'rgba(255,255,255,0.01)' }}>
+              {/* 标题栏 */}
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Space>
+                  <RobotOutlined style={{ color: '#a78bfa' }} />
+                  <span style={{ fontWeight: 600, fontSize: 13, color: '#e8eef5' }}>智能标注</span>
+                </Space>
+                <Select
                   size="small"
-                  scroll={{ x: 'max-content', y: 300 }}
+                  style={{ width: 160 }}
+                  value={annotateAgentId}
+                  onChange={(v) => setAnnotateAgentId(v)}
+                  options={[
+                    { value: undefined as any, label: '🏷️ 平台 LLM' },
+                    ...agents.map(a => ({ value: a.id, label: `${a.agent_type === 'openclaw' ? '🦞' : a.agent_type === 'opencode' ? '💻' : '🤖'} ${a.name}` })),
+                  ]}
                 />
               </div>
-            )}
+
+              {/* 事件流区域 */}
+              <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+                {annotateEvents.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#506380', fontSize: 12, padding: '30px 16px' }}>
+                    <RobotOutlined style={{ fontSize: 28, marginBottom: 10, display: 'block', color: '#3d4e6b' }} />
+                    输入自定义 prompt 或直接发送使用默认标注 prompt<br />
+                    <span style={{ fontSize: 11, color: '#3d4e6b' }}>将自动分析表结构并生成注释</span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {annotateEvents.map((evt, i) => {
+                      let color = '#8895b4'; let bg = 'transparent'; let icon = '·';
+                      if (evt.type === 'status') { color = '#60a5fa'; bg = 'rgba(96,165,250,0.06)'; icon = '⏳'; }
+                      else if (evt.type === 'context') { color = '#657a9a'; bg = 'rgba(255,255,255,0.03)'; icon = '📋'; }
+                      else if (evt.type === 'prompt') { color = '#a78bfa'; bg = 'rgba(167,139,250,0.06)'; icon = '📝'; }
+                      else if (evt.type === 'thinking') { color = '#a78bfa'; bg = 'rgba(167,139,250,0.04)'; icon = '💭'; }
+                      else if (evt.type === 'text') { color = '#34d399'; bg = 'rgba(52,211,153,0.04)'; icon = '💬'; }
+                      else if (evt.type === 'tool_use') { color = '#60a5fa'; bg = 'rgba(96,165,250,0.06)'; icon = '🔧'; }
+                      else if (evt.type === 'tool_result') { color = '#94a3b8'; bg = 'rgba(148,163,184,0.04)'; icon = '📋'; }
+                      else if (evt.type === 'error') { color = '#f59e0b'; bg = 'rgba(245,158,11,0.06)'; icon = '⚠️'; }
+                      else if (evt.type === 'applied') { color = '#34d399'; bg = 'rgba(52,211,153,0.08)'; icon = '✅'; }
+                      else if (evt.type === 'done') { color = '#34d399'; bg = 'rgba(52,211,153,0.06)'; icon = '✓'; }
+                      else if (evt.type === 'log') { color = '#3d4e6b'; bg = 'transparent'; icon = '┃'; }
+                      return (
+                        <div key={i} style={{
+                          fontSize: 12, color, background: bg, padding: evt.type === 'log' ? '1px 0' : '6px 10px',
+                          borderRadius: 8, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                          fontFamily: evt.type === 'log' || evt.type === 'thinking' || evt.type === 'context' ? 'JetBrains Mono, monospace' : 'inherit',
+                          opacity: evt.type === 'thinking' ? 0.8 : 1,
+                        }}>
+                          <span style={{ marginRight: 6 }}>{icon}</span>
+                          {evt.type === 'tool_use' && <span style={{ fontWeight: 600 }}>{evt.tool}: </span>}
+                          {evt.type === 'tool_result' && <span style={{ fontWeight: 600 }}>{evt.tool}: </span>}
+                          {evt.content}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 输入区 */}
+              <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <Input.TextArea
+                  rows={2}
+                  placeholder="自定义 prompt（留空使用默认标注 prompt）"
+                  value={annotateInput}
+                  onChange={e => setAnnotateInput(e.target.value)}
+                  disabled={annotateSending}
+                  style={{ marginBottom: 8, background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)', fontSize: 12 }}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {annotateSending ? (
+                    <Button danger icon={<DeleteOutlined />} onClick={handleStopAnnotate} style={{ flex: 1, borderRadius: 8 }}>
+                      停止
+                    </Button>
+                  ) : (
+                    <Button type="primary" icon={<RobotOutlined />} onClick={() => tableDetail && handleAnnotate(tableDetail.id)} style={{ flex: 1, borderRadius: 8 }}>
+                      发送标注
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
       </Drawer>

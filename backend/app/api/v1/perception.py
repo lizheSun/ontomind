@@ -1,7 +1,7 @@
 """感知层 API - 数据源连接器 & 文档管理."""
 import json
 import re
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.data_source_schema import (
@@ -443,6 +443,290 @@ async def auto_annotate_table(table_id: int, payload: dict = None, db: Session =
     agent_id = (payload or {}).get("agent_id")
     result = await svc.auto_annotate(table_id, force, agent_id=agent_id)
     return {"code": "SUCCESS", "message": result["message"], "data": result}
+
+
+@router.websocket("/meta/tables/{table_id}/annotate/stream")
+async def stream_annotate(websocket: WebSocket, table_id: int):
+    """
+    WebSocket 流式标注 — 类似 Cursor/CodeBuddy 的交互体验。
+
+    前端发送: {"prompt": "自定义 prompt", "agent_id": 1, "force": false}
+    后端实时推送:
+      {"type":"status","content":"正在准备元数据..."}
+      {"type":"context","content":"表名: xxx, 字段: ..."}  (发送上下文给前端展示)
+      {"type":"prompt","content":"发送给 Agent 的完整 prompt"}
+      {"type":"thinking","content":"Agent 思考过程..."}  (CLI 流式输出)
+      {"type":"text","content":"Agent 回复..."}
+      {"type":"tool_use","tool":"...","input":{...}}
+      {"type":"error","content":"错误信息"}
+      {"type":"applied","content":"已应用 N 条注释"}
+      {"type":"done"}
+    """
+    import os
+    import re
+    import subprocess
+    import asyncio
+    from app.db.session import SessionLocal
+    from app.services.metadata_service import MetadataService
+    from app.db.models.metadata_model import MetaTable, MetaColumn
+    from app.db.models.agent_model import Agent
+    from app.services.agent_discovery import KNOWN_AGENTS
+
+    await websocket.accept()
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            payload = json.loads(raw)
+            custom_prompt = payload.get("prompt", "").strip()
+            agent_id = payload.get("agent_id")
+            force = payload.get("force", False)
+
+            db = SessionLocal()
+            svc = MetadataService(db)
+
+            table = db.query(MetaTable).filter(MetaTable.id == table_id).first()
+            if not table:
+                await websocket.send_text(json.dumps({"type": "error", "content": "元数据表不存在"}))
+                db.close()
+                break
+
+            columns = svc.col_repo.get_by_table(table_id)
+
+            await websocket.send_text(json.dumps({"type": "status", "content": f"📋 加载表元数据: {table.database_name}.{table.table_name}"}))
+
+            # 构建上下文展示
+            col_info = "\n".join(
+                f"  - {c.column_name} ({c.data_type_full or c.data_type}) PK={c.is_primary_key} 注释={c.column_comment or '无'}"
+                for c in columns
+            )
+            context_text = f"表名: {table.table_name}\n表注释: {table.table_comment or '无'}\n字段数: {len(columns)}\n字段列表:\n{col_info}"
+            await websocket.send_text(json.dumps({"type": "context", "content": context_text}))
+
+            # 构建 prompt（用户可自定义）
+            default_prompt = f"""请分析以下数据库表的元数据，为表和字段生成中文业务描述。
+
+表名: {table.table_name}
+表注释: {table.table_comment or '无'}
+字段列表:
+{col_info}
+
+请返回 JSON 格式（不要 markdown 代码块），结构如下：
+{{
+  "table_description": "这张表的业务用途描述（1-2句话）",
+  "purpose": "用途标签，从以下选一个: dim/fact/ods/dwd/dws/tmp/config/log/other",
+  "domain": "业务域，如: 用户/订单/商品/支付/营销/库存/财务/通用",
+  "columns": [
+    {{
+      "name": "字段名",
+      "comment": "字段的中文业务描述",
+      "semantic_type": "语义类型，从以下选一个: id/name/amount/time/status/category/description/count/ratio/flag/url/email/phone/code/other"
+    }}
+  ]
+}}"""
+
+            final_prompt = custom_prompt if custom_prompt else default_prompt
+            system_prompt = "你是数据治理专家，擅长理解数据库表结构并生成业务描述。只返回纯 JSON。"
+
+            await websocket.send_text(json.dumps({"type": "prompt", "content": final_prompt[:500] + ("..." if len(final_prompt) > 500 else "")}))
+
+            # 执行标注
+            if agent_id:
+                # ===== Agent CLI 流式模式 =====
+                agent = db.query(Agent).filter(Agent.id == agent_id).first()
+                if not agent:
+                    await websocket.send_text(json.dumps({"type": "error", "content": f"Agent 不存在: {agent_id}"}))
+                    db.close()
+                    break
+
+                entrypoint = (agent.entrypoint or "").strip()
+                if not entrypoint:
+                    await websocket.send_text(json.dumps({"type": "error", "content": "Agent 未配置 entrypoint"}))
+                    db.close()
+                    break
+
+                if entrypoint.startswith("http"):
+                    await websocket.send_text(json.dumps({"type": "error", "content": "HTTP 模式 Agent 暂不支持流式，请用平台 LLM 或 CLI Agent"}))
+                    db.close()
+                    break
+
+                cli_path = entrypoint.split()[0]
+                extra_args = entrypoint.split()[1:] if len(entrypoint.split()) > 1 else []
+                agent_info = KNOWN_AGENTS.get(agent.agent_type, {})
+                cli_chat_args = agent_info.get("cli_chat_args", ["{msg}"])
+
+                agent_name = ""
+                if agent.env_template and isinstance(agent.env_template, dict):
+                    agent_name = agent.env_template.get("agent_name", "")
+                if not agent_name and agent_info.get("cli_list_agents_args"):
+                    from app.services.agent_discovery import _get_first_agent_name
+                    agent_name = _get_first_agent_name(cli_path, agent_info["cli_list_agents_args"]) or ""
+
+                full_prompt = f"{system_prompt}\n\n{final_prompt}"
+                args = [arg.replace("{msg}", full_prompt).replace("{agent_name}", agent_name) for arg in cli_chat_args]
+
+                env = {**os.environ, "NO_COLOR": "1", "TERM": "dumb"}
+                cli_env = agent_info.get("cli_env", {})
+                env.update(cli_env)
+
+                await websocket.send_text(json.dumps({"type": "status", "content": f"⚡ 执行 Agent: {agent.name}..."}))
+
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        *([cli_path] + extra_args + args),
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        env=env,
+                    )
+                except FileNotFoundError:
+                    await websocket.send_text(json.dumps({"type": "error", "content": f"CLI 命令不存在: {cli_path}"}))
+                    db.close()
+                    break
+
+                ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+                stdout_buffer = []
+
+                async for raw_line in proc.stdout:
+                    line = raw_line.decode(errors="ignore").rstrip("\n\r")
+                    line_clean = ansi_escape.sub("", line).strip()
+                    if not line_clean:
+                        continue
+                    stdout_buffer.append(line_clean)
+
+                    try:
+                        evt = json.loads(line_clean)
+                        evt_type = evt.get("type", "")
+                        if evt_type in ("text", "message"):
+                            await websocket.send_text(json.dumps({"type": "text", "content": evt.get("content", "")}))
+                        elif evt_type in ("thinking", "reasoning"):
+                            await websocket.send_text(json.dumps({"type": "thinking", "content": evt.get("content", "")}))
+                        elif evt_type == "tool_use":
+                            await websocket.send_text(json.dumps({"type": "tool_use", "tool": evt.get("tool", ""), "input": evt.get("input", {})}))
+                        elif evt_type == "tool_result":
+                            await websocket.send_text(json.dumps({"type": "tool_result", "tool": evt.get("tool", ""), "output": str(evt.get("output", ""))[:500]}))
+                        elif evt_type == "error":
+                            err_data = evt.get("error", {})
+                            err_msg = err_data.get("data", {}).get("message", str(err_data)) if isinstance(err_data, dict) else str(err_data)
+                            await websocket.send_text(json.dumps({"type": "error", "content": err_msg}))
+                        elif evt_type == "status":
+                            await websocket.send_text(json.dumps({"type": "status", "content": evt.get("content", "")}))
+                        else:
+                            await websocket.send_text(json.dumps({"type": "log", "content": line_clean[:500]}))
+                    except (json.JSONDecodeError, ValueError):
+                        if not any(s in line_clean.lower() for s in ["%", "downloading"]):
+                            await websocket.send_text(json.dumps({"type": "log", "content": line_clean[:500]}))
+
+                exit_code = await proc.wait()
+                stderr_data = b""
+                if proc.stderr:
+                    stderr_data = await proc.stderr.read()
+                stderr_text = ansi_escape.sub("", stderr_data.decode(errors="ignore")).strip()
+
+                # 解析 Agent 输出
+                full_stdout = "\n".join(stdout_buffer)
+                response_text = None
+
+                # 尝试整体 JSON (OpenClaw)
+                try:
+                    data = json.loads(full_stdout)
+                    result_obj = data.get("result", {})
+                    payloads = result_obj.get("payloads", [])
+                    if payloads:
+                        texts = [p.get("text", "") for p in payloads if p.get("text")]
+                        if texts:
+                            response_text = "\n".join(texts)
+                    if data.get("status") == "error" and not response_text:
+                        await websocket.send_text(json.dumps({"type": "error", "content": f"Agent 错误: {data.get('summary', 'unknown')}"}))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+                # JSONL (OpenCode)
+                if not response_text:
+                    text_parts = []
+                    for line in stdout_buffer:
+                        try:
+                            evt = json.loads(line)
+                            if evt.get("type") in ("text", "message") and evt.get("content"):
+                                text_parts.append(evt["content"])
+                        except:
+                            continue
+                    if text_parts:
+                        response_text = "\n".join(text_parts)
+
+                if not response_text:
+                    response_text = full_stdout[:3000]
+
+            else:
+                # ===== 平台 LLM 模式 =====
+                from app.services.llm_config_service import LLMConfigService
+
+                await websocket.send_text(json.dumps({"type": "status", "content": "🤖 调用平台 LLM..."}))
+
+                llm_svc = LLMConfigService(db)
+                try:
+                    result = await llm_svc.chat_completion(
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": final_prompt},
+                        ],
+                        temperature=0.1,
+                        max_tokens=4096,
+                    )
+                    response_text = result["content"].strip()
+                    await websocket.send_text(json.dumps({"type": "text", "content": response_text[:1000] + ("..." if len(response_text) > 1000 else "")}))
+                except Exception as e:
+                    await websocket.send_text(json.dumps({"type": "error", "content": f"LLM 调用失败: {e}"}))
+                    response_text = None
+
+            # ===== 解析 JSON 结果并应用注释 =====
+            if response_text:
+                await websocket.send_text(json.dumps({"type": "status", "content": "📝 解析注释结果并应用..."}))
+
+                try:
+                    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                    if json_match:
+                        response_text = json_match.group(0)
+
+                    data = json.loads(response_text)
+                    annotated = 0
+
+                    need_table = force or not table.table_comment_llm
+                    if need_table:
+                        table.table_comment_llm = data.get("table_description")
+                        table.purpose = data.get("purpose")
+                        table.domain = data.get("domain")
+                        annotated += 1
+
+                    col_annotations = {c["name"]: c for c in data.get("columns", [])}
+                    for c in columns:
+                        if c.column_name in col_annotations:
+                            ann = col_annotations[c.column_name]
+                            if force or not c.column_comment_llm:
+                                c.column_comment_llm = ann.get("comment")
+                                c.semantic_type = ann.get("semantic_type")
+                                annotated += 1
+
+                    db.commit()
+                    await websocket.send_text(json.dumps({"type": "applied", "content": f"✅ 已应用 {annotated} 条注释"}))
+                except (json.JSONDecodeError, ValueError) as e:
+                    await websocket.send_text(json.dumps({"type": "error", "content": f"JSON 解析失败: {e}"}))
+
+            await websocket.send_text(json.dumps({"type": "done"}))
+            db.close()
+            break
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "content": f"服务器异常: {e}"}))
+        except Exception:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @router.get("/datasources/{source_id}/ontology-candidates")
