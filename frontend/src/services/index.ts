@@ -124,8 +124,8 @@ export const perceptionAPI = {
   testConnection: (id: number) => api.post(`/perception/datasources/${id}/test`),
 
   // Metadata - 提取与浏览
-  syncMetadata: (dsId: number, database?: string) =>
-    api.post(`/perception/datasources/${dsId}/sync`, database ? { database } : {}),
+  syncMetadata: (dsId: number, database?: string, syncAll?: boolean) =>
+    api.post(`/perception/datasources/${dsId}/sync`, { database, sync_all: syncAll }),
   listDatabases: (dsId: number) => api.get(`/perception/datasources/${dsId}/databases`),
   listMetaTables: (dsId: number, database?: string) =>
     api.get(`/perception/datasources/${dsId}/tables`, { params: database ? { database } : {} }),
@@ -134,8 +134,8 @@ export const perceptionAPI = {
   updateMetaColumn: (columnId: number, data: any) => api.put(`/perception/meta/columns/${columnId}`, data),
   previewData: (tableId: number, limit = 100, offset = 0) =>
     api.post(`/perception/meta/tables/${tableId}/preview`, { limit, offset }),
-  autoAnnotate: (tableId: number, force = false) =>
-    api.post(`/perception/meta/tables/${tableId}/annotate`, { force }),
+  autoAnnotate: (tableId: number, force = false, agentId?: number) =>
+    api.post(`/perception/meta/tables/${tableId}/annotate`, { force, agent_id: agentId }),
   getOntologyCandidates: (dsId: number) =>
     api.get(`/perception/datasources/${dsId}/ontology-candidates`),
 

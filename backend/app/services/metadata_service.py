@@ -21,15 +21,19 @@ class MetadataService:
 
     # ========== 元数据提取 ==========
 
-    def extract_metadata(self, ds_id: int, database: Optional[str] = None) -> dict:
+    # 系统库，同步时跳过
+    _SYSTEM_DATABASES = {"information_schema", "mysql", "performance_schema", "sys", "__recycle_bin__"}
+
+    def extract_metadata(self, ds_id: int, database: Optional[str] = None, sync_all: bool = False) -> dict:
         """从数据源提取表和字段元数据.
 
         Args:
             ds_id: 数据源 ID
             database: 指定库名，None 则提取该数据源配置的默认库
+            sync_all: True 则同步所有用户库（跳过系统库）
 
         Returns:
-            {"tables_synced": N, "columns_synced": M, "errors": [...]}
+            {"tables_synced": N, "columns_synced": M, "databases": [...], "errors": [...]}
         """
         ds = self.ds_repo.get_by_id(ds_id)
         if not ds:
@@ -40,10 +44,6 @@ class MetadataService:
 
         if source_type not in db_drivers:
             raise BusinessException(f"暂不支持 {source_type} 类型的元数据提取", code="UNSUPPORTED_TYPE")
-
-        target_db = database or ds.database
-        if not target_db:
-            raise BusinessException("未指定数据库名，无法提取元数据", code="NO_DATABASE")
 
         try:
             conn = pymysql.connect(
@@ -58,80 +58,35 @@ class MetadataService:
         except Exception as e:
             raise BusinessException(f"连接数据源失败: {e}", code="CONN_FAILED")
 
-        tables_synced = 0
-        columns_synced = 0
-        errors = []
+        # 确定要同步的库列表
+        if sync_all:
+            cursor = conn.cursor()
+            cursor.execute("SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME")
+            all_dbs = [row[0] for row in cursor.fetchall()]
+            target_dbs = [db for db in all_dbs if db not in self._SYSTEM_DATABASES]
+        else:
+            target_db = database or ds.database
+            if not target_db:
+                raise BusinessException("未指定数据库名，无法提取元数据", code="NO_DATABASE")
+            target_dbs = [target_db]
+
+        total_tables = 0
+        total_columns = 0
+        all_errors = []
+        synced_dbs = []
 
         try:
             cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-            # 1. 提取表列表
-            cursor.execute("""
-                SELECT TABLE_NAME, TABLE_TYPE, TABLE_COMMENT, ENGINE, TABLE_COLLATION,
-                       TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH
-                FROM information_schema.TABLES
-                WHERE TABLE_SCHEMA = %s
-                ORDER BY TABLE_NAME
-            """, (target_db,))
-            tables = cursor.fetchall()
-
-            for t in tables:
-                table_name = t["TABLE_NAME"]
-                table_type_raw = (t.get("TABLE_TYPE") or "").upper()
-                table_type = "view" if "VIEW" in table_type_raw else "table"
-
+            for target_db in target_dbs:
                 try:
-                    meta_table = self.table_repo.upsert(
-                        ds_id=ds_id,
-                        database=target_db,
-                        table=table_name,
-                        table_type=table_type,
-                        table_comment=t.get("TABLE_COMMENT") or None,
-                        engine=t.get("ENGINE"),
-                        collation=t.get("TABLE_COLLATION"),
-                        row_count=t.get("TABLE_ROWS"),
-                        storage_size_mb=round((t.get("DATA_LENGTH") or 0) / 1024 / 1024, 2) if t.get("DATA_LENGTH") else None,
-                    )
-
-                    # 2. 提取字段
-                    cursor.execute("""
-                        SELECT COLUMN_NAME, ORDINAL_POSITION, DATA_TYPE, COLUMN_TYPE,
-                               IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT
-                        FROM information_schema.COLUMNS
-                        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
-                        ORDER BY ORDINAL_POSITION
-                    """, (target_db, table_name))
-                    columns = cursor.fetchall()
-
-                    # 先删旧字段再重新插入
-                    self.col_repo.delete_by_table(meta_table.id)
-
-                    for c in columns:
-                        col_key = (c.get("COLUMN_KEY") or "").upper()
-                        col = MetaColumn(
-                            meta_table_id=meta_table.id,
-                            column_name=c["COLUMN_NAME"],
-                            ordinal_position=c.get("ORDINAL_POSITION", 0),
-                            data_type=c.get("DATA_TYPE"),
-                            data_type_full=c.get("COLUMN_TYPE"),
-                            is_nullable=(c.get("IS_NULLABLE") == "YES"),
-                            is_primary_key=(col_key == "PRI"),
-                            is_unique=(col_key in ("PRI", "UNI")),
-                            is_indexed=(col_key in ("PRI", "UNI", "MUL")),
-                            default_value=str(c.get("COLUMN_DEFAULT")) if c.get("COLUMN_DEFAULT") is not None else None,
-                            column_comment=c.get("COLUMN_COMMENT") or None,
-                            is_entity_identifier=(col_key == "PRI"),
-                        )
-                        self.db.add(col)
-                        columns_synced += 1
-
-                    # 更新字段数
-                    meta_table.column_count = len(columns)
-                    tables_synced += 1
-
+                    t_count, c_count, errors = self._sync_one_database(cursor, ds_id, target_db)
+                    total_tables += t_count
+                    total_columns += c_count
+                    all_errors.extend(errors)
+                    synced_dbs.append(target_db)
                 except Exception as e:
-                    errors.append(f"表 {table_name}: {str(e)}")
-                    continue
+                    all_errors.append(f"库 {target_db}: {str(e)}")
 
             self.db.commit()
 
@@ -139,11 +94,116 @@ class MetadataService:
             conn.close()
 
         return {
-            "tables_synced": tables_synced,
-            "columns_synced": columns_synced,
-            "errors": errors,
-            "database": target_db,
+            "tables_synced": total_tables,
+            "columns_synced": total_columns,
+            "databases": synced_dbs,
+            "errors": all_errors,
         }
+
+    def _sync_one_database(self, cursor, ds_id: int, target_db: str) -> tuple:
+        """同步单个库的元数据，返回 (表数, 字段数, 错误列表)."""
+        tables_synced = 0
+        columns_synced = 0
+        errors = []
+
+        # 1. 提取表列表（包括表和视图）
+        cursor.execute("""
+            SELECT TABLE_NAME, TABLE_TYPE, TABLE_COMMENT, ENGINE, TABLE_COLLATION,
+                   TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = %s
+            ORDER BY TABLE_NAME
+        """, (target_db,))
+        tables = cursor.fetchall()
+
+        # 2. 批量提取该库所有字段（一次性查询，按表分组）
+        cursor.execute("""
+            SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, DATA_TYPE, COLUMN_TYPE,
+                   IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = %s
+            ORDER BY TABLE_NAME, ORDINAL_POSITION
+        """, (target_db,))
+        all_columns = cursor.fetchall()
+        # 按表名分组
+        cols_by_table = {}
+        for c in all_columns:
+            tbl = c["TABLE_NAME"]
+            if tbl not in cols_by_table:
+                cols_by_table[tbl] = []
+            cols_by_table[tbl].append(c)
+
+        # 3. 批量提取外键信息
+        fk_map = {}  # {(table, column): (ref_table, ref_column)}
+        try:
+            cursor.execute("""
+                SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+                FROM information_schema.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = %s AND REFERENCED_TABLE_NAME IS NOT NULL
+            """, (target_db,))
+            for row in cursor.fetchall():
+                fk_map[(row["TABLE_NAME"], row["COLUMN_NAME"])] = (
+                    row["REFERENCED_TABLE_NAME"], row["REFERENCED_COLUMN_NAME"]
+                )
+        except Exception:
+            pass  # 某些数据库不支持外键查询
+
+        # 4. 逐表处理
+        for t in tables:
+            table_name = t["TABLE_NAME"]
+            table_type_raw = (t.get("TABLE_TYPE") or "").upper()
+            table_type = "view" if "VIEW" in table_type_raw else "table"
+
+            try:
+                meta_table = self.table_repo.upsert(
+                    ds_id=ds_id,
+                    database=target_db,
+                    table=table_name,
+                    table_type=table_type,
+                    table_comment=t.get("TABLE_COMMENT") or None,
+                    engine=t.get("ENGINE"),
+                    collation=t.get("TABLE_COLLATION"),
+                    row_count=t.get("TABLE_ROWS"),
+                    storage_size_mb=round((t.get("DATA_LENGTH") or 0) / 1024 / 1024, 2) if t.get("DATA_LENGTH") else None,
+                )
+
+                # 删旧字段
+                self.col_repo.delete_by_table(meta_table.id)
+
+                # 插入新字段
+                table_cols = cols_by_table.get(table_name, [])
+                for c in table_cols:
+                    col_key = (c.get("COLUMN_KEY") or "").upper()
+                    fk_info = fk_map.get((table_name, c["COLUMN_NAME"]))
+
+                    col = MetaColumn(
+                        meta_table_id=meta_table.id,
+                        column_name=c["COLUMN_NAME"],
+                        ordinal_position=c.get("ORDINAL_POSITION", 0),
+                        data_type=c.get("DATA_TYPE"),
+                        data_type_full=c.get("COLUMN_TYPE"),
+                        is_nullable=(c.get("IS_NULLABLE") == "YES"),
+                        is_primary_key=(col_key == "PRI"),
+                        is_unique=(col_key in ("PRI", "UNI")),
+                        is_indexed=(col_key in ("PRI", "UNI", "MUL")),
+                        default_value=str(c.get("COLUMN_DEFAULT")) if c.get("COLUMN_DEFAULT") is not None else None,
+                        column_comment=c.get("COLUMN_COMMENT") or None,
+                        is_entity_identifier=(col_key == "PRI"),
+                        is_relationship_key=bool(fk_info),
+                        related_table=fk_info[0] if fk_info else None,
+                        related_column=fk_info[1] if fk_info else None,
+                    )
+                    self.db.add(col)
+                    columns_synced += 1
+
+                meta_table.column_count = len(table_cols)
+                tables_synced += 1
+
+            except Exception as e:
+                errors.append(f"表 {target_db}.{table_name}: {str(e)}")
+                continue
+
+        return tables_synced, columns_synced, errors
 
     # ========== 元数据查询 ==========
 
@@ -249,17 +309,153 @@ class MetadataService:
         except Exception as e:
             raise BusinessException(f"数据预览失败: {e}", code="PREVIEW_FAILED")
 
-    # ========== LLM 自动注释 ==========
+    # ========== LLM / Agent 自动注释 ==========
 
-    async def auto_annotate(self, table_id: int, force: bool = False) -> dict:
-        """使用 LLM 为表和字段自动生成注释/描述.
+    async def _call_agent_for_annotation(self, agent_id: int, system_prompt: str, user_prompt: str) -> str:
+        """调用指定 Agent（CLI 模式）执行标注任务，返回响应文本."""
+        import os
+        import re
+        import subprocess
+        from app.db.models.agent_model import Agent
+        from app.services.agent_discovery import KNOWN_AGENTS
+
+        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+        if not agent:
+            raise NotFoundException(f"Agent 不存在: {agent_id}")
+
+        entrypoint = (agent.entrypoint or "").strip()
+        if not entrypoint or entrypoint.startswith("http"):
+            # HTTP 模式的 Agent，走 HTTP chat
+            return await self._call_agent_http(agent, system_prompt, user_prompt)
+
+        # CLI 模式
+        cli_path = entrypoint.split()[0]
+        extra_args = entrypoint.split()[1:] if len(entrypoint.split()) > 1 else []
+
+        agent_info = KNOWN_AGENTS.get(agent.agent_type, {})
+        cli_chat_args = agent_info.get("cli_chat_args", ["{msg}"])
+
+        # 获取 agent_name（OpenClaw 需要）
+        agent_name = ""
+        if agent.env_template and isinstance(agent.env_template, dict):
+            agent_name = agent.env_template.get("agent_name", "")
+        if not agent_name and agent_info.get("cli_list_agents_args"):
+            from app.services.agent_discovery import _get_first_agent_name
+            agent_name = _get_first_agent_name(cli_path, agent_info["cli_list_agents_args"]) or ""
+
+        # 合并 system + user prompt
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        args = [arg.replace("{msg}", full_prompt).replace("{agent_name}", agent_name) for arg in cli_chat_args]
+
+        env = {**os.environ, "NO_COLOR": "1", "TERM": "dumb"}
+        cli_env = agent_info.get("cli_env", {})
+        env.update(cli_env)
+
+        full_cmd = [cli_path] + extra_args + args
+
+        result = subprocess.run(
+            full_cmd,
+            capture_output=True, text=True, timeout=180,
+            env=env,
+        )
+
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+
+        # 清理 ANSI
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        stdout_clean = ansi_escape.sub('', stdout).strip()
+
+        if not stdout_clean:
+            raise BusinessException(
+                f"Agent CLI 无输出 (exit={result.returncode})。stderr: {stderr[:500]}",
+                code="AGENT_NO_OUTPUT"
+            )
+
+        # 解析输出 — 尝试 JSON
+        try:
+            data = json.loads(stdout_clean)
+            # OpenCode JSONL 事件流
+            if isinstance(data, dict) and data.get("type"):
+                text_parts = []
+                # 可能是多行 JSONL
+                for line in stdout_clean.split('\n'):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        evt = json.loads(line)
+                        if evt.get("type") in ("text", "message") and evt.get("content"):
+                            text_parts.append(evt["content"])
+                        elif evt.get("type") == "error":
+                            err = evt.get("error", {})
+                            if isinstance(err, dict):
+                                raise BusinessException(
+                                    f"Agent 返回错误: {err.get('data', {}).get('message', str(err))}",
+                                    code="AGENT_ERROR"
+                                )
+                    except json.JSONDecodeError:
+                        continue
+                if text_parts:
+                    return "\n".join(text_parts)
+            # OpenClaw 整体 JSON
+            elif isinstance(data, dict) and data.get("result"):
+                payloads = data["result"].get("payloads", [])
+                texts = [p.get("text", "") for p in payloads if p.get("text")]
+                if texts:
+                    return "\n".join(texts)
+            # 通用字段
+            for key in ["response", "reply", "output", "content", "text", "result"]:
+                if data.get(key):
+                    return str(data[key])
+            return json.dumps(data, ensure_ascii=False)
+        except json.JSONDecodeError:
+            return stdout_clean[:8000]
+
+    async def _call_agent_http(self, agent, system_prompt: str, user_prompt: str) -> str:
+        """HTTP 模式 Agent 调用（兼容旧版）."""
+        import json
+        import urllib.request
+
+        base_url = (agent.entrypoint or "").rstrip("/")
+        chat_endpoints = ["/v1/chat/completions", "/chat", "/api/chat"]
+
+        body = json.dumps({
+            "model": agent.name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "stream": False,
+            "max_tokens": 4096,
+        }).encode("utf-8")
+
+        for endpoint in chat_endpoints:
+            url = f"{base_url}{endpoint}"
+            try:
+                req = urllib.request.Request(url, data=body, method="POST")
+                req.add_header("Content-Type", "application/json")
+                resp = urllib.request.urlopen(req, timeout=60)
+                resp_body = resp.read().decode(errors="ignore")[:10000]
+                data = json.loads(resp_body)
+                if "choices" in data:
+                    return data["choices"][0].get("message", {}).get("content", "")
+                for key in ["response", "reply", "output", "content", "text"]:
+                    if data.get(key):
+                        return str(data[key])
+            except Exception:
+                continue
+
+        raise BusinessException("Agent HTTP 调用失败，未找到可用端点", code="AGENT_HTTP_FAILED")
+
+    async def auto_annotate(self, table_id: int, force: bool = False, agent_id: Optional[int] = None) -> dict:
+        """使用 LLM 或指定 Agent 为表和字段自动生成注释/描述.
 
         Args:
             table_id: 元数据表 ID
             force: 是否强制重新生成（即使已有注释）
+            agent_id: 指定 Agent ID（资源管理里的 Agent），None 则用平台 LLM
         """
-        from app.services.llm_config_service import LLMConfigService
-
         table = self.table_repo.get_by_id(table_id)
         if not table:
             raise NotFoundException(f"元数据表不存在: {table_id}")
@@ -281,8 +477,6 @@ class MetadataService:
 
         if not cols_to_annotate and not need_table_annotate:
             return {"message": "所有注释已存在，无需生成", "annotated": 0}
-
-        llm_svc = LLMConfigService(self.db)
 
         # 构建 prompt
         col_info = "\n".join(
@@ -313,7 +507,12 @@ class MetadataService:
 
         system_prompt = "你是数据治理专家，擅长理解数据库表结构并生成业务描述。只返回纯 JSON。"
 
-        try:
+        # 调用 LLM 或 Agent
+        if agent_id:
+            content = await self._call_agent_for_annotation(agent_id, system_prompt, prompt)
+        else:
+            from app.services.llm_config_service import LLMConfigService
+            llm_svc = LLMConfigService(self.db)
             result = await llm_svc.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -322,9 +521,9 @@ class MetadataService:
                 temperature=0.1,
                 max_tokens=4096,
             )
-
             content = result["content"].strip()
 
+        try:
             # 提取 JSON
             import re
             json_match = re.search(r'\{.*\}', content, re.DOTALL)

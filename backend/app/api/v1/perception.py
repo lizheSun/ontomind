@@ -359,12 +359,18 @@ async def auto_configure(
 
 @router.post("/datasources/{source_id}/sync")
 async def sync_data_source(source_id: int, payload: dict = None, db: Session = Depends(get_db)):
-    """同步数据源元数据 — 提取表结构、字段信息、注释到 MySQL."""
+    """同步数据源元数据 — 提取表结构、字段信息、注释到 MySQL.
+
+    请求体: { "database": "指定库", "sync_all": false }
+    - database: 指定库名，不传则用数据源默认库
+    - sync_all: true 则同步所有用户库（跳过系统库）
+    """
     from app.services.metadata_service import MetadataService
     svc = MetadataService(db)
     database = payload.get("database") if payload else None
-    result = svc.extract_metadata(source_id, database)
-    return {"code": "SUCCESS", "message": f"同步完成: {result['tables_synced']} 张表, {result['columns_synced']} 个字段", "data": result}
+    sync_all = (payload or {}).get("sync_all", False)
+    result = svc.extract_metadata(source_id, database, sync_all=sync_all)
+    return {"code": "SUCCESS", "message": f"同步完成: {result['tables_synced']} 张表, {result['columns_synced']} 个字段, {len(result.get('databases', []))} 个库", "data": result}
 
 
 @router.get("/datasources/{source_id}/databases")
@@ -425,11 +431,17 @@ async def preview_table_data(table_id: int, payload: dict = None, db: Session = 
 
 @router.post("/meta/tables/{table_id}/annotate")
 async def auto_annotate_table(table_id: int, payload: dict = None, db: Session = Depends(get_db)):
-    """使用 LLM 自动生成表和字段的注释/描述."""
+    """使用 LLM 或指定 Agent 自动生成表和字段的注释/描述.
+
+    请求体: { "force": false, "agent_id": null }
+    - force: 是否强制重新生成所有注释
+    - agent_id: 指定资源管理里的 Agent ID，None 则用平台 LLM
+    """
     from app.services.metadata_service import MetadataService
     svc = MetadataService(db)
     force = (payload or {}).get("force", False)
-    result = await svc.auto_annotate(table_id, force)
+    agent_id = (payload or {}).get("agent_id")
+    result = await svc.auto_annotate(table_id, force, agent_id=agent_id)
     return {"code": "SUCCESS", "message": result["message"], "data": result}
 
 

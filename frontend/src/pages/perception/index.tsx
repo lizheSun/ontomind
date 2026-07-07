@@ -5,7 +5,7 @@ import {
   EditOutlined, DeleteOutlined, ReloadOutlined, DatabaseOutlined, TableOutlined,
   EyeOutlined, RobotOutlined, SyncOutlined, FileSearchOutlined,
 } from '@ant-design/icons';
-import { perceptionAPI } from '../../services';
+import { perceptionAPI, resourcesAPI } from '../../services';
 import type { DataSource, TestConnectionResult, AutoConfigureResult } from '../../types';
 
 const { TextArea } = Input;
@@ -72,12 +72,16 @@ export default function Perception() {
   const [metaTables, setMetaTables] = useState<any[]>([]);
   const [metaLoading, setMetaLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncAll, setSyncAll] = useState(false);
   const [tableDetail, setTableDetail] = useState<any>(null);
   const [tableDetailOpen, setTableDetailOpen] = useState(false);
   const [tableDetailLoading, setTableDetailLoading] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [annotating, setAnnotating] = useState(false);
+  // Agent 选择（标注用）
+  const [agents, setAgents] = useState<any[]>([]);
+  const [annotateAgentId, setAnnotateAgentId] = useState<number | undefined>(undefined);
 
   // ===== 元数据操作 =====
   const handleOpenMeta = async (dsId: number) => {
@@ -113,12 +117,23 @@ export default function Perception() {
   };
 
   const handleSyncMeta = async () => {
-    if (!metaDsId || !selectedDb) return;
+    if (!metaDsId) return;
+    if (!syncAll && !selectedDb) {
+      message.warning('请先选择数据库或勾选「同步所有库」');
+      return;
+    }
     setSyncing(true);
     try {
-      const res = await perceptionAPI.syncMetadata(metaDsId, selectedDb);
+      const res = await perceptionAPI.syncMetadata(metaDsId, syncAll ? undefined : selectedDb, syncAll);
       message.success(res.data?.message || '同步完成');
-      fetchMetaTables(metaDsId, selectedDb);
+      // 同步后刷新表列表
+      if (syncAll) {
+        // 同步所有库后，选第一个有数据的库
+        const tablesRes = await perceptionAPI.listMetaTables(metaDsId);
+        setMetaTables(tablesRes.data?.data || []);
+      } else {
+        fetchMetaTables(metaDsId, selectedDb);
+      }
     } catch (err: any) {
       message.error(err?.response?.data?.detail || '同步失败');
     } finally {
@@ -155,7 +170,7 @@ export default function Perception() {
   const handleAnnotate = async (tableId: number) => {
     setAnnotating(true);
     try {
-      const res = await perceptionAPI.autoAnnotate(tableId, false);
+      const res = await perceptionAPI.autoAnnotate(tableId, false, annotateAgentId);
       message.success(res.data?.message || '注释完成');
       // 刷新详情
       const detailRes = await perceptionAPI.getMetaTable(tableId);
@@ -166,6 +181,17 @@ export default function Perception() {
       setAnnotating(false);
     }
   };
+
+  const fetchAgents = useCallback(async () => {
+    try {
+      const res = await resourcesAPI.listAgents({ skip: 0, limit: 200 });
+      setAgents(res.data?.data || []);
+    } catch {
+      // 忽略
+    }
+  }, []);
+
+  useEffect(() => { fetchAgents(); }, [fetchAgents]);
 
   const handleDbChange = (db: string) => {
     setSelectedDb(db);
@@ -411,13 +437,19 @@ export default function Perception() {
           }
           extra={
             <Space>
-              <Select
-                style={{ width: 200 }}
-                placeholder="选择数据库"
-                value={selectedDb || undefined}
-                onChange={handleDbChange}
-                options={databases.map(db => ({ value: db, label: db }))}
-              />
+              <label style={{ fontSize: 12, color: '#8895b4', cursor: 'pointer' }}>
+                <input type="checkbox" checked={syncAll} onChange={e => setSyncAll(e.target.checked)} style={{ marginRight: 4 }} />
+                同步所有库
+              </label>
+              {!syncAll && (
+                <Select
+                  style={{ width: 180 }}
+                  placeholder="选择数据库"
+                  value={selectedDb || undefined}
+                  onChange={handleDbChange}
+                  options={databases.map(db => ({ value: db, label: db }))}
+                />
+              )}
               <Button icon={<SyncOutlined />} loading={syncing} onClick={handleSyncMeta} style={{ borderRadius: 8 }}>
                 提取元数据
               </Button>
@@ -715,8 +747,19 @@ jdbc:mysql://host:3306/db?user=root&password=xxx`}
         styles={{ body: { padding: 0 } }}
         extra={
           <Space>
+            <Select
+              style={{ width: 160 }}
+              placeholder="标注方式"
+              allowClear
+              value={annotateAgentId}
+              onChange={(v) => setAnnotateAgentId(v)}
+              options={[
+                { value: undefined as any, label: '🏷️ 平台 LLM' },
+                ...agents.map(a => ({ value: a.id, label: `${a.agent_type === 'openclaw' ? '🦞' : a.agent_type === 'opencode' ? '💻' : '🤖'} ${a.name}` })),
+              ]}
+            />
             <Button icon={<RobotOutlined />} loading={annotating} onClick={() => tableDetail && handleAnnotate(tableDetail.id)} style={{ borderRadius: 8 }}>
-              LLM 注释
+              自动注释
             </Button>
             <Button icon={<EyeOutlined />} loading={previewLoading} onClick={() => tableDetail && handlePreview(tableDetail.id)} style={{ borderRadius: 8 }}>
               数据预览
