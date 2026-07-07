@@ -355,13 +355,94 @@ async def auto_configure(
     }
 
 
-# ========== 文档管理 ==========
+# ========== 元数据提取与管理 ==========
 
 @router.post("/datasources/{source_id}/sync")
-async def sync_data_source(source_id: int):
-    """同步数据源元数据."""
-    return {"message": f"syncing data source {source_id}"}
+async def sync_data_source(source_id: int, payload: dict = None, db: Session = Depends(get_db)):
+    """同步数据源元数据 — 提取表结构、字段信息、注释到 MySQL."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    database = payload.get("database") if payload else None
+    result = svc.extract_metadata(source_id, database)
+    return {"code": "SUCCESS", "message": f"同步完成: {result['tables_synced']} 张表, {result['columns_synced']} 个字段", "data": result}
 
+
+@router.get("/datasources/{source_id}/databases")
+async def list_databases(source_id: int, db: Session = Depends(get_db)):
+    """列出数据源上所有可用的数据库."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    dbs = svc.list_databases(source_id)
+    return {"code": "SUCCESS", "data": dbs}
+
+
+@router.get("/datasources/{source_id}/tables")
+async def list_meta_tables(source_id: int, database: str = Query(None), db: Session = Depends(get_db)):
+    """获取数据源的表元数据列表."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    tables = svc.list_tables(source_id, database)
+    return {"code": "SUCCESS", "data": tables, "total": len(tables)}
+
+
+@router.get("/meta/tables/{table_id}")
+async def get_meta_table_detail(table_id: int, db: Session = Depends(get_db)):
+    """获取表元数据详情（含字段列表）."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    data = svc.get_table_detail(table_id)
+    return {"code": "SUCCESS", "data": data}
+
+
+@router.put("/meta/tables/{table_id}")
+async def update_meta_table(table_id: int, payload: dict, db: Session = Depends(get_db)):
+    """更新表业务元数据（人工编辑）."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    data = svc.update_table_meta(table_id, payload)
+    return {"code": "SUCCESS", "message": "更新成功", "data": data}
+
+
+@router.put("/meta/columns/{column_id}")
+async def update_meta_column(column_id: int, payload: dict, db: Session = Depends(get_db)):
+    """更新字段业务元数据（人工编辑）."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    data = svc.update_column_meta(column_id, payload)
+    return {"code": "SUCCESS", "message": "更新成功", "data": data}
+
+
+@router.post("/meta/tables/{table_id}/preview")
+async def preview_table_data(table_id: int, payload: dict = None, db: Session = Depends(get_db)):
+    """实时连接数据源，预览表数据."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    limit = (payload or {}).get("limit", 100)
+    offset = (payload or {}).get("offset", 0)
+    data = svc.preview_data(table_id, limit, offset)
+    return {"code": "SUCCESS", "data": data}
+
+
+@router.post("/meta/tables/{table_id}/annotate")
+async def auto_annotate_table(table_id: int, payload: dict = None, db: Session = Depends(get_db)):
+    """使用 LLM 自动生成表和字段的注释/描述."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    force = (payload or {}).get("force", False)
+    result = await svc.auto_annotate(table_id, force)
+    return {"code": "SUCCESS", "message": result["message"], "data": result}
+
+
+@router.get("/datasources/{source_id}/ontology-candidates")
+async def get_ontology_candidates(source_id: int, db: Session = Depends(get_db)):
+    """获取本体提取候选 — 筛选实体和关系候选."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    data = svc.get_ontology_candidates(source_id)
+    return {"code": "SUCCESS", "data": data}
+
+
+# ========== 文档管理 ==========
 
 @router.post("/documents/upload")
 async def upload_document(file: UploadFile = File(...)):

@@ -2,6 +2,7 @@
 from app.db.models.user_model import User
 from app.db.models.llm_config_model import LLMConfig
 from app.db.models.data_source_model import DataSource
+from app.db.models.metadata_model import MetaTable, MetaColumn
 from app.db.models.instance_model import Instance
 from app.db.models.agent_model import Agent
 from app.db.models.skill_model import Skill
@@ -12,5 +13,6 @@ from app.db.models.requirement_model import Requirement
 from app.db.models.plan_model import Plan
 from app.db.models.task_model import Task
 
-__all__ = ["User", "LLMConfig", "DataSource", "Instance", "Agent", "Skill", "MCPConfig", "AgentRun",
+__all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn",
+           "Instance", "Agent", "Skill", "MCPConfig", "AgentRun",
            "Project", "Requirement", "Plan", "Task"]
