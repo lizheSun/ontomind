@@ -4,6 +4,113 @@
 
 ---
 
+## 2025-07-07
+
+### Agent: 主开发 Agent（感知层元数据提取系统 — 存储 + 浏览 + LLM/Agent 标注 + 流式交互）
+
+### 目标
+1. 对挂载的数据源进行元数据提取（表结构、字段信息、注释）
+2. 元数据按表维度存储到 MySQL，设计可用于本体提取的结构
+3. 实时连接数据源浏览数据
+4. 支持大模型/Agent 自动注释（无注释的字段自动生成）
+5. 标注交互参照 Cursor/CodeBuddy 风格 — 右侧对话面板 + 流式执行
+
+### 设计决策
+
+| 决策点 | 选择 |
+|--------|------|
+| 存储方式 | 表维度存储（meta_tables + meta_columns 两张表） |
+| 元数据提取 | 通过 information_schema.TABLES + .COLUMNS + .KEY_COLUMN_USAGE |
+| 同步策略 | 支持指定库 / 一键同步所有用户库（跳过系统库） |
+| 查询优化 | 批量查 COLUMNS 再按表分组，避免 N+1 |
+| 数据浏览 | 实时连接数据源 SELECT * LIMIT N OFFSET M |
+| 标注方式 | 平台 LLM 或指定 Agent（CLI 模式），可自定义 prompt |
+| 标注交互 | WebSocket 流式，右侧对话面板（参照 Cursor/CodeBuddy） |
+| 本体映射 | entity_candidate + is_entity_identifier + is_relationship_key + related_table |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `backend/app/db/models/metadata_model.py` | MetaTable + MetaColumn ORM 模型 |
+| `backend/app/db/repositories/metadata_repo.py` | MetaTableRepository（upsert）+ MetaColumnRepository |
+| `backend/app/services/metadata_service.py` | 元数据提取/浏览/标注/本体候选 服务 |
+| `backend/app/schemas/metadata_schema.py` | 元数据 Pydantic Schema |
+
+### 修改文件
+
+| 文件 | 变更 |
+|------|------|
+| `backend/app/db/models/__init__.py` | 注册 MetaTable, MetaColumn |
+| `backend/app/api/v1/perception.py` | 新增 10 个端点（sync/databases/tables/detail/preview/annotate + WebSocket 流式标注） |
+| `frontend/src/services/index.ts` | 新增 10 个 API 方法 + WebSocket URL |
+| `frontend/src/pages/perception/index.tsx` | 元数据浏览区 + 表详情双栏 Drawer（左:元数据 右:标注对话面板） |
+
+### 数据库表设计
+
+#### meta_tables — 表级元数据
+
+| 字段 | 说明 |
+|------|------|
+| datasource_id | 关联数据源 |
+| database_name + table_name | 库表定位（联合唯一） |
+| table_type | table / view |
+| table_comment / table_comment_llm | 原始注释 + LLM 生成注释 |
+| business_description / purpose / domain | 业务描述/用途(dim/fact/ods/...)/业务域 |
+| entity_candidate | 本体候选实体标记 |
+| row_count / column_count / storage_size_mb / engine | 技术元数据 |
+
+#### meta_columns — 字段级元数据
+
+| 字段 | 说明 |
+|------|------|
+| column_name / data_type / data_type_full | 字段名和类型 |
+| is_primary_key / is_unique / is_indexed / is_nullable | 约束信息 |
+| column_comment / column_comment_llm | 原始注释 + LLM 注释 |
+| semantic_type | 语义类型(id/name/amount/time/status/...) |
+| is_entity_identifier / is_relationship_key | 本体映射辅助 |
+| related_table / related_column | 外键关联（用于提取关系） |
+
+### API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/datasources/{id}/sync` | 提取元数据（支持 sync_all） |
+| GET | `/datasources/{id}/databases` | 列出所有库 |
+| GET | `/datasources/{id}/tables` | 表元数据列表 |
+| GET | `/meta/tables/{id}` | 表详情（含字段） |
+| PUT | `/meta/tables/{id}` | 编辑表业务元数据 |
+| PUT | `/meta/columns/{id}` | 编辑字段业务元数据 |
+| POST | `/meta/tables/{id}/preview` | 实时数据预览 |
+| POST | `/meta/tables/{id}/annotate` | LLM/Agent 自动注释（HTTP） |
+| **WS** | `/meta/tables/{id}/annotate/stream` | 流式标注（WebSocket） |
+| GET | `/datasources/{id}/ontology-candidates` | 本体候选 |
+
+### 标注交互（Cursor/CodeBuddy 风格）
+
+后端 WebSocket `/meta/tables/{id}/annotate/stream`:
+- asyncio subprocess 逐行读取 Agent CLI stdout
+- 实时推送事件: status/context/prompt/thinking/text/tool_use/tool_result/error/applied/done
+- 支持 Agent CLI 流式（OpenClaw --json / OpenCode --format json）
+- 也支持平台 LLM
+- 自动解析 JSON 结果并应用注释到数据库
+
+前端表详情 Drawer（1200px 双栏）:
+- 左侧（flex 1）: 表元数据 + 字段列表 + 数据预览
+- 右侧（460px）: 智能标注对话面板
+  - Agent 选择器（平台 LLM / OpenClaw / OpenCode）
+  - 事件流区域（实时显示执行过程，带图标颜色区分）
+  - 自定义 prompt 输入框 + 发送/停止按钮
+
+### 验证
+- ✅ TypeScript 编译零错误
+- ✅ 后端路由全部注册
+- ✅ WebSocket 流式标注可用
+- ✅ 元数据提取支持同步所有库
+- ✅ 外键关系自动提取
+
+---
+
 ## 2025-07-02
 
 ### Agent: 主开发 Agent（资源管理增强 — 本地服务器一键注册 + Agent 自动发现 + CLI 流式交互）
