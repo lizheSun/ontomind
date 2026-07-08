@@ -141,6 +141,12 @@ export const perceptionAPI = {
   getOntologyCandidates: (dsId: number) =>
     api.get(`/perception/datasources/${dsId}/ontology-candidates`),
 
+  // 数据画像
+  profileTable: (tableId: number, force = false) =>
+    api.post(`/perception/meta/tables/${tableId}/profile`, { force }),
+  getTableProfile: (tableId: number) =>
+    api.get(`/perception/meta/tables/${tableId}/profile`),
+
   // Documents
   uploadDocument: (file: File) => {
     const formData = new FormData();
@@ -154,11 +160,29 @@ export const perceptionAPI = {
 
 // ===== 认知层 =====
 export const cognitionAPI = {
-  listEntities: () => api.get('/cognition/ontology/entities'),
-  listRelations: () => api.get('/cognition/ontology/relations'),
-  getGraph: () => api.get('/cognition/ontology/graph'),
-  extractOntology: () => api.post('/cognition/ontology/extract'),
+  // 版本管理
+  listVersions: (dsId: number) => api.get('/cognition/ontology/versions', { params: { datasource_id: dsId } }),
+  getVersion: (id: number) => api.get(`/cognition/ontology/versions/${id}`),
+  deleteVersion: (id: number) => api.delete(`/cognition/ontology/versions/${id}`),
+  // 构建
+  build: (payload: any) => api.post('/cognition/ontology/build', payload),
+  buildStreamUrl: (): string => `${WS_BASE_URL}/cognition/ontology/build/stream`,
+  // 内容查询
+  getGraph: (versionId: number) => api.get(`/cognition/ontology/${versionId}/graph`),
+  getEntities: (versionId: number) => api.get(`/cognition/ontology/${versionId}/entities`),
+  getRelationships: (versionId: number) => api.get(`/cognition/ontology/${versionId}/relationships`),
+  getConstraints: (versionId: number) => api.get(`/cognition/ontology/${versionId}/constraints`),
+  updateEntity: (id: number, data: any) => api.put(`/cognition/ontology/entities/${id}`, data),
+  // 导出
+  exportOntology: (versionId: number, fmt = 'turtle') =>
+    api.get(`/cognition/ontology/${versionId}/export`, { params: { fmt } }),
+  // 语义搜索
   semanticSearch: (q: string) => api.get('/cognition/search/semantic', { params: { q } }),
+};
+
+// ===== LLM 配置 =====
+export const llmAPI = {
+  listConfigs: () => api.get('/llm'),
 };
 
 // ===== 决策层 =====

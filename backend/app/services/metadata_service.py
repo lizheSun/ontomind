@@ -1,12 +1,13 @@
-"""元数据服务 — 从数据源提取表/字段元数据，浏览数据，LLM 自动注释."""
+"""元数据服务 — 从数据源提取表/字段元数据，浏览数据，LLM 自动注释，字段数据画像."""
 import json
+import re
 import pymysql
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.db.repositories.metadata_repo import MetaTableRepository, MetaColumnRepository
 from app.db.repositories.data_source_repo import DataSourceRepository
-from app.db.models.metadata_model import MetaTable, MetaColumn
+from app.db.models.metadata_model import MetaTable, MetaColumn, MetaProfile
 from app.core.exceptions import NotFoundException, BusinessException
 
 
@@ -308,6 +309,199 @@ class MetadataService:
             }
         except Exception as e:
             raise BusinessException(f"数据预览失败: {e}", code="PREVIEW_FAILED")
+
+    # ========== 字段数据画像 ==========
+
+    # 采样行数上限，避免对大表全量扫描
+    _PROFILE_SAMPLE_LIMIT = 5000
+    # 判定为枚举的最大去重值数量
+    _ENUM_MAX_DISTINCT = 50
+    # 判定为枚举的去重值占比上限（去重数 / 非空行数）
+    _ENUM_MAX_RATIO = 0.2
+
+    _RE_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    _RE_PHONE = re.compile(r"^(?:\+?86)?1[3-9]\d{9}$")
+    _RE_URL = re.compile(r"^https?://", re.IGNORECASE)
+    _RE_DATE = re.compile(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?)?")
+
+    def _connect_target(self, ds, database: str, timeout: int = 15):
+        """连接数据源中指定库，返回 pymysql 连接（调用方负责关闭）."""
+        try:
+            return pymysql.connect(
+                host=ds.host,
+                port=ds.port or 3306,
+                user=ds.username or "",
+                password=ds.password or "",
+                database=database,
+                charset=ds.charset or "utf8mb4",
+                connect_timeout=timeout,
+            )
+        except Exception as e:
+            raise BusinessException(f"连接数据源失败: {e}", code="CONN_FAILED")
+
+    @staticmethod
+    def _is_empty(v) -> bool:
+        return v is None or (isinstance(v, str) and v.strip() == "")
+
+    def _detect_format(self, col, non_null: list) -> tuple:
+        """根据字段类型与采样值识别格式，返回 (format, confidence)."""
+        ctype = (col.data_type or "").lower()
+        name = (col.column_name or "").lower()
+
+        if col.is_primary_key or name.endswith("_id") or name == "id":
+            return "id", 0.9
+
+        if ctype in ("int", "bigint", "smallint", "tinyint", "mediumint",
+                     "decimal", "float", "double", "numeric", "real"):
+            return "number", 0.95
+
+        if ctype in ("date", "datetime", "timestamp", "time", "year"):
+            return "date", 0.95
+
+        if not non_null:
+            return "text", 0.3
+
+        n = len(non_null)
+        email_hit = sum(1 for v in non_null if isinstance(v, str) and self._RE_EMAIL.match(v))
+        if email_hit / n >= 0.8:
+            return "email", round(email_hit / n, 2)
+
+        phone_hit = sum(1 for v in non_null if isinstance(v, str) and self._RE_PHONE.match(v))
+        if phone_hit / n >= 0.8:
+            return "phone", round(phone_hit / n, 2)
+
+        url_hit = sum(1 for v in non_null if isinstance(v, str) and self._RE_URL.match(v))
+        if url_hit / n >= 0.8:
+            return "url", round(url_hit / n, 2)
+
+        date_hit = sum(1 for v in non_null if isinstance(v, str) and self._RE_DATE.match(v))
+        if date_hit / n >= 0.8:
+            return "date", round(date_hit / n, 2)
+
+        return "text", 0.5
+
+    def profile_data(self, table_id: int, force: bool = False) -> dict:
+        """对表中每个字段抽样画像：空值率、去重数、最值、格式、枚举候选.
+
+        画像结果落库到 meta_profiles，供认知层约束抽取使用。
+        """
+        table = self.table_repo.get_by_id(table_id)
+        if not table:
+            raise NotFoundException(f"元数据表不存在: {table_id}")
+
+        columns = self.col_repo.get_by_table(table_id)
+        if not columns:
+            return {"message": "表无字段，跳过画像", "profiled": 0}
+
+        ds = self.ds_repo.get_by_id(table.datasource_id)
+        if not ds:
+            raise NotFoundException("数据源不存在")
+
+        conn = self._connect_target(ds, table.database_name)
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            cursor.execute(
+                f"SELECT * FROM `{table.table_name}` LIMIT %s",
+                (self._PROFILE_SAMPLE_LIMIT,),
+            )
+            rows = cursor.fetchall()
+        except Exception as e:
+            conn.close()
+            raise BusinessException(f"画像采样失败: {e}", code="PROFILE_FAILED")
+        finally:
+            conn.close()
+
+        total = table.row_count or len(rows)
+        profiled = 0
+
+        for col in columns:
+            # 已存在且非强制则跳过
+            existing = self.db.query(MetaProfile).filter(
+                MetaProfile.meta_column_id == col.id
+            ).first()
+            if existing and not force and existing.profile_status == "done":
+                continue
+
+            col_values = [r.get(col.column_name) for r in rows]
+            non_null = [v for v in col_values if not self._is_empty(v)]
+
+            null_count = len(col_values) - len(non_null)
+            distinct = len(set(non_null))
+            sample = [str(v) for v in non_null[:20]]
+
+            fmt, conf = self._detect_format(col, non_null)
+
+            # 枚举识别：字符串类型、低基数、去重占比低
+            is_enum = False
+            enum_values = None
+            if (fmt == "text" and distinct <= self._ENUM_MAX_DISTINCT
+                    and (len(non_null) == 0 or distinct / len(non_null) <= self._ENUM_MAX_RATIO)):
+                is_enum = True
+                counts = {}
+                for v in non_null:
+                    key = str(v)
+                    counts[key] = counts.get(key, 0) + 1
+                top = sorted(counts.items(), key=lambda x: -x[1])[:20]
+                enum_values = [{"value": k, "count": c} for k, c in top]
+
+            # 最值：数值或日期类型
+            min_v = max_v = None
+            ctype = (col.data_type or "").lower()
+            if ctype in ("int", "bigint", "smallint", "tinyint", "decimal", "float", "double", "numeric", "date", "datetime", "timestamp"):
+                numeric = []
+                for v in non_null:
+                    try:
+                        if isinstance(v, (int, float)):
+                            numeric.append(v)
+                        elif isinstance(v, str):
+                            numeric.append(float(v))
+                    except (ValueError, TypeError):
+                        continue
+                if numeric:
+                    min_v = str(min(numeric))
+                    max_v = str(max(numeric))
+
+            profile = existing or MetaProfile(
+                datasource_id=table.datasource_id,
+                meta_table_id=table.id,
+                meta_column_id=col.id,
+            )
+            profile.row_count = total
+            profile.null_count = null_count
+            profile.null_ratio = round(null_count / total, 4) if total else 0.0
+            profile.distinct_count = distinct
+            profile.min_value = min_v
+            profile.max_value = max_v
+            profile.sample_values = json.dumps(sample, ensure_ascii=False)
+            profile.detected_format = fmt
+            profile.format_confidence = conf
+            profile.is_enum = is_enum
+            profile.enum_values = json.dumps(enum_values, ensure_ascii=False) if enum_values else None
+            profile.profile_status = "done"
+            profile.error = None
+
+            self.db.add(profile)
+            profiled += 1
+
+        self.db.commit()
+        return {
+            "message": f"已画像 {profiled} 个字段",
+            "profiled": profiled,
+            "table_id": table_id,
+        }
+
+    def get_profile(self, table_id: int) -> dict:
+        """获取某表的字段画像结果列表."""
+        table = self.table_repo.get_by_id(table_id)
+        if not table:
+            raise NotFoundException(f"元数据表不存在: {table_id}")
+        profiles = self.db.query(MetaProfile).filter(
+            MetaProfile.meta_table_id == table_id
+        ).order_by(MetaProfile.meta_column_id).all()
+        return {
+            "table_id": table_id,
+            "profiles": [p.to_response_dict() for p in profiles],
+        }
 
     # ========== LLM / Agent 自动注释 ==========
 

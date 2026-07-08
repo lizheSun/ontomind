@@ -409,6 +409,28 @@ async def update_meta_table(table_id: int, payload: dict, db: Session = Depends(
     return {"code": "SUCCESS", "message": "更新成功", "data": data}
 
 
+@router.post("/meta/tables/{table_id}/profile")
+async def profile_table(table_id: int, payload: dict = None, db: Session = Depends(get_db)):
+    """对表中每个字段抽样画像（空值率/枚举/格式/最值），落库供约束抽取使用.
+
+    请求体: { "force": false }
+    """
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    force = (payload or {}).get("force", False)
+    result = svc.profile_data(table_id, force)
+    return {"code": "SUCCESS", "message": result["message"], "data": result}
+
+
+@router.get("/meta/tables/{table_id}/profile")
+async def get_table_profile(table_id: int, db: Session = Depends(get_db)):
+    """获取某表的字段画像结果列表."""
+    from app.services.metadata_service import MetadataService
+    svc = MetadataService(db)
+    data = svc.get_profile(table_id)
+    return {"code": "SUCCESS", "data": data}
+
+
 @router.put("/meta/columns/{column_id}")
 async def update_meta_column(column_id: int, payload: dict, db: Session = Depends(get_db)):
     """更新字段业务元数据（人工编辑）."""

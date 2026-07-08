@@ -3,7 +3,7 @@ import { Card, Button, Table, Tag, Modal, Form, Input, Select, Space, message, S
 import {
   PlusOutlined, UploadOutlined, ApiOutlined, ThunderboltOutlined, ExperimentOutlined,
   EditOutlined, DeleteOutlined, ReloadOutlined, DatabaseOutlined, TableOutlined,
-  EyeOutlined, RobotOutlined, SyncOutlined, FileSearchOutlined,
+  EyeOutlined, RobotOutlined, SyncOutlined, FileSearchOutlined, BarChartOutlined,
 } from '@ant-design/icons';
 import { perceptionAPI, resourcesAPI } from '../../services';
 import type { DataSource, TestConnectionResult, AutoConfigureResult } from '../../types';
@@ -78,6 +78,8 @@ export default function Perception() {
   const [tableDetailLoading, setTableDetailLoading] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [profileData, setProfileData] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [annotating, setAnnotating] = useState(false);
   // Agent 选择（标注用）
   const [agents, setAgents] = useState<any[]>([]);
@@ -169,6 +171,19 @@ export default function Perception() {
       message.error(err?.response?.data?.detail || '数据预览失败');
     } finally {
       setPreviewLoading(false);
+    }
+  };
+
+  const handleProfile = async (tableId: number, force = false) => {
+    setProfileLoading(true);
+    try {
+      await perceptionAPI.profileTable(tableId, force);
+      const res = await perceptionAPI.getTableProfile(tableId);
+      setProfileData(res.data?.data || null);
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || '数据画像失败');
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -786,6 +801,9 @@ jdbc:mysql://host:3306/db?user=root&password=xxx`}
         styles={{ body: { padding: 0, display: 'flex', height: '100%' } }}
         extra={
           <Space>
+            <Button icon={<BarChartOutlined />} loading={profileLoading} onClick={() => tableDetail && handleProfile(tableDetail.id)} style={{ borderRadius: 8 }}>
+              数据画像
+            </Button>
             <Button icon={<EyeOutlined />} loading={previewLoading} onClick={() => tableDetail && handlePreview(tableDetail.id)} style={{ borderRadius: 8 }}>
               数据预览
             </Button>
@@ -851,6 +869,56 @@ jdbc:mysql://host:3306/db?user=root&password=xxx`}
                 size="small"
                 scroll={{ y: 300 }}
               />
+
+              {profileData?.profiles?.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <Typography.Title level={5} style={{ color: '#e8eef5', marginBottom: 12 }}>
+                    数据画像（{profileData.profiles.length} 字段）
+                  </Typography.Title>
+                  <Table
+                    columns={[
+                      {
+                        title: '字段', dataIndex: 'meta_column_id', key: 'col', width: 150,
+                        render: (cid: number) => {
+                          const col = (tableDetail.columns || []).find((c: any) => c.id === cid);
+                          return <span style={{ fontFamily: 'monospace', fontWeight: 500, color: '#e8eef5' }}>{col?.column_name || `#${cid}`}</span>;
+                        },
+                      },
+                      {
+                        title: '格式', dataIndex: 'detected_format', key: 'fmt', width: 80,
+                        render: (f: string) => f ? <Tag style={{ borderRadius: 4, fontSize: 10, background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: 'none' }}>{f}</Tag> : '-',
+                      },
+                      {
+                        title: '枚举', dataIndex: 'is_enum', key: 'enum', width: 56,
+                        render: (b: boolean) => b ? <Tag style={{ borderRadius: 4, fontSize: 10, background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: 'none' }}>枚举</Tag> : <span style={{ color: '#3d4e6b' }}>-</span>,
+                      },
+                      { title: '空值率', dataIndex: 'null_ratio', key: 'nr', width: 70, render: (v: number) => v != null ? <span style={{ color: v > 0.3 ? '#fbbf24' : '#8895b4' }}>{Math.round(v * 100)}%</span> : '-' },
+                      { title: '去重数', dataIndex: 'distinct_count', key: 'dc', width: 70, render: (v: number) => <span style={{ color: '#8895b4' }}>{v ?? '-'}</span> },
+                      {
+                        title: '最值', key: 'range', width: 160, ellipsis: true,
+                        render: (_: any, p: any) => p.min_value != null ? <span style={{ fontSize: 11, color: '#8895b4', fontFamily: 'monospace' }}>{p.min_value} ~ {p.max_value}</span> : '-',
+                      },
+                      {
+                        title: '枚举候选', key: 'ev', ellipsis: true,
+                        render: (_: any, p: any) => p.enum_values ? (
+                          <Space size={4} wrap>
+                            {p.enum_values.slice(0, 5).map((e: any, i: number) => (
+                              <Tag key={i} style={{ borderRadius: 4, fontSize: 10, background: 'rgba(255,255,255,0.06)', color: '#8895b4', border: 'none' }}>
+                                {String(e.value)} ({e.count})
+                              </Tag>
+                            ))}
+                          </Space>
+                        ) : <span style={{ color: '#3d4e6b' }}>—</span>,
+                      },
+                    ]}
+                    dataSource={profileData.profiles}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    scroll={{ y: 240 }}
+                  />
+                </div>
+              )}
 
               {previewData && (
                 <div style={{ marginTop: 20 }}>

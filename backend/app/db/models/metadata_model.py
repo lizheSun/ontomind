@@ -1,5 +1,6 @@
 """元数据模型 — 存储从数据源提取的表/字段元信息，用于本体提取."""
-from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, ForeignKey, Index
+import json
+from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Float, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from app.db.models.base import BaseModel
 
@@ -120,6 +121,81 @@ class MetaColumn(BaseModel):
             "is_relationship_key": bool(self.is_relationship_key),
             "related_table": self.related_table,
             "related_column": self.related_column,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class MetaProfile(BaseModel):
+    """字段数据画像 — 对数据源中某字段抽样统计，识别空值率/唯一性/枚举/格式.
+
+    每个字段一条记录（按 meta_column_id 唯一），由感知层 profile_data 写入，
+    供认知层约束抽取直接使用（枚举 -> 值约束、唯一 -> 函数性、空值率 -> 基数）。
+    """
+
+    __tablename__ = "meta_profiles"
+    __table_args__ = (
+        Index("ix_meta_profiles_col", "meta_column_id", unique=True),
+        Index("ix_meta_profiles_table", "meta_table_id"),
+        Index("ix_meta_profiles_ds", "datasource_id"),
+    )
+
+    datasource_id = Column(Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=False, comment="关联数据源 ID")
+    meta_table_id = Column(Integer, ForeignKey("meta_tables.id", ondelete="CASCADE"), nullable=False, comment="关联表元数据 ID")
+    meta_column_id = Column(Integer, ForeignKey("meta_columns.id", ondelete="CASCADE"), nullable=False, comment="关联字段元数据 ID")
+
+    # 基础统计
+    row_count = Column(Integer, nullable=True, comment="总行数（采样基准）")
+    null_count = Column(Integer, nullable=True, comment="NULL 行数")
+    null_ratio = Column(Float, nullable=True, comment="NULL 占比 0~1")
+    distinct_count = Column(Integer, nullable=True, comment="去重值数量")
+
+    # 值域
+    min_value = Column(Text, nullable=True, comment="最小采样值（数值/日期）")
+    max_value = Column(Text, nullable=True, comment="最大采样值（数值/日期）")
+    sample_values = Column(Text, nullable=True, comment="JSON 数组：前若干采样值")
+
+    # 格式与枚举识别
+    detected_format = Column(String(32), nullable=True, comment="识别格式: email/phone/url/date/id/number/enum/text/other")
+    format_confidence = Column(Float, nullable=True, comment="格式识别置信度 0~1")
+    is_enum = Column(Boolean, default=False, comment="是否低基数字典枚举")
+    enum_values = Column(Text, nullable=True, comment="JSON 数组 [{value,count}]：Top-K 枚举候选")
+
+    # 状态
+    profile_status = Column(String(20), default="pending", comment="画像状态: pending/done/failed")
+    error = Column(Text, nullable=True, comment="画像失败原因")
+
+    def to_response_dict(self) -> dict:
+        enum_vals = None
+        if self.enum_values:
+            try:
+                enum_vals = json.loads(self.enum_values)
+            except (json.JSONDecodeError, ValueError):
+                enum_vals = None
+        samples = None
+        if self.sample_values:
+            try:
+                samples = json.loads(self.sample_values)
+            except (json.JSONDecodeError, ValueError):
+                samples = None
+        return {
+            "id": self.id,
+            "datasource_id": self.datasource_id,
+            "meta_table_id": self.meta_table_id,
+            "meta_column_id": self.meta_column_id,
+            "row_count": self.row_count,
+            "null_count": self.null_count,
+            "null_ratio": self.null_ratio,
+            "distinct_count": self.distinct_count,
+            "min_value": self.min_value,
+            "max_value": self.max_value,
+            "sample_values": samples,
+            "detected_format": self.detected_format,
+            "format_confidence": self.format_confidence,
+            "is_enum": bool(self.is_enum),
+            "enum_values": enum_vals,
+            "profile_status": self.profile_status,
+            "error": self.error,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
