@@ -1,6 +1,8 @@
 """数据平台-数据源服务：CRUD + Fernet + engine cache + 连接测试 + schema introspect。"""
 from __future__ import annotations
 
+import json
+import re
 import time
 from typing import Any
 
@@ -18,6 +20,7 @@ from app.schemas.dp_data_source_schema import (
     DpDataSourceRead,
     DpDataSourceTestResult,
     DpDataSourceUpdate,
+    ParseConfigResult,
 )
 
 
@@ -29,6 +32,126 @@ _DIALECT_URL_PREFIX = {
     "postgresql": "postgresql+psycopg2",
     "sqlite": "sqlite",
 }
+
+
+_PARSE_CONFIG_PROMPT = """你是一个数据源配置解析器。用户会提供原始配置文本（如环境变量、连接串等）或自然语言描述，你需要解析并返回结构化 JSON。
+
+规则：
+1. 自动识别数据源方言（dialect），映射关系：
+   - MySQL 系（MYSQL_*, mysql://, jdbc:mysql, DB_*）→ "mysql"
+   - PostgreSQL 系（PG_*, POSTGRES_*, postgresql://, jdbc:postgresql）→ "postgresql"
+   - SQLite（*.db, *.sqlite, /path/to/*.sqlite3）→ "sqlite"
+   - 若用户明示 "只读" / "read-only" / "readonly" / "read only" → mysql 类改为 "mysql_readonly"
+
+2. 提取字段映射（大小写不敏感）：
+   - HOST/server/endpoint/url/addr → host
+   - PORT → port（转为整数；MySQL 缺省 3306，PostgreSQL 缺省 5432）
+   - USER/username/UID → username
+   - DATABASE/DB/db_name → database
+   - CHARSET/encoding → charset（默认 utf8mb4）
+   - SCHEMA/default_schema → default_schema（仅 postgresql）
+
+3. **禁止解析密码**：无论输入包含什么 PASSWORD/PWD 字段，输出 JSON 中 password 必须为空字符串 ""。用户会在下一步的抽屉表单里手动填写密码。
+
+4. name: 生成简短有意义的名称（如 "MySQL 业务库"、"生产 PG 主库"）
+5. description: 简要描述用途（如 "订单业务库"、"分析型只读副本"）
+6. source_type: 与 dialect 一致的字符串（mysql/postgresql/sqlite）
+7. read_only_flag: 布尔值；若识别到 mysql_readonly / read-only → true；否则也默认为 true（"安全默认"，用户可在表单里改为 false）
+
+8. 只返回纯 JSON，不要 markdown 代码块，不要额外文字。
+
+返回格式示例（MySQL）：
+{"name":"MySQL 业务库","source_type":"mysql","dialect":"mysql","host":"10.1.1.1","port":3306,"username":"readonly","password":"","database":"orders","charset":"utf8mb4","default_schema":null,"description":"订单业务库（只读）","read_only_flag":true}
+
+返回格式示例（PostgreSQL）：
+{"name":"生产 PG 主库","source_type":"postgresql","dialect":"postgresql","host":"pg.internal","port":5432,"username":"analyst","password":"","database":"analytics","charset":"utf8mb4","default_schema":"public","description":"分析主库","read_only_flag":true}
+"""
+
+
+_JSON_EXTRACT_NESTED = re.compile(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", re.DOTALL)
+
+
+def _extract_json(content: str) -> str:
+    """尝试从 LLM 响应里抠出 JSON 对象（处理 markdown 围栏 + 前缀闲聊）。"""
+    stripped = content.strip()
+    if stripped.startswith("```"):
+        m = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", stripped, re.DOTALL | re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+    m = _JSON_EXTRACT_NESTED.search(stripped)
+    if m:
+        return m.group(0)
+    return stripped
+
+
+def _normalize_parsed_dp(parsed: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """对齐别名字段、强制 password=""、校验 dialect。返回 (normalized, warnings)。"""
+    warnings: list[str] = []
+
+    # ---- 别名归一 ----
+    aliases = {
+        "server": "host", "endpoint": "host", "addr": "host", "url": "host",
+        "user": "username", "uid": "username", "user_name": "username",
+        "db": "database", "db_name": "database", "dbname": "database",
+        "encoding": "charset", "character_set": "charset",
+        "type": "source_type", "db_type": "source_type", "sourcetype": "source_type",
+    }
+    normalized: dict[str, Any] = {}
+    for k, v in parsed.items():
+        canon = aliases.get(k, aliases.get(k.lower() if isinstance(k, str) else k, k))
+        normalized[canon] = v
+
+    # ---- Dialect 归一 ----
+    dialect_map = {
+        "mysql": "mysql",
+        "postgres": "postgresql",
+        "postgresql": "postgresql",
+        "sqlite": "sqlite",
+        "sqlite3": "sqlite",
+    }
+    st = str(normalized.get("source_type") or normalized.get("dialect") or "").lower()
+    dialect = normalized.get("dialect")
+    if not dialect:
+        dialect = dialect_map.get(st, "mysql")
+        warnings.append(f"未明确 dialect，从 source_type='{st or 'unknown'}' 推断为 '{dialect}'")
+    if dialect not in ("mysql", "postgresql", "sqlite", "mysql_readonly"):
+        warnings.append(f"未知 dialect '{dialect}'，回退至 mysql")
+        dialect = "mysql"
+    normalized["dialect"] = dialect
+    if not normalized.get("source_type"):
+        # source_type 用不含 _readonly 后缀的基础方言
+        normalized["source_type"] = "mysql" if dialect == "mysql_readonly" else dialect
+
+    # ---- Port 归一 + 缺省 ----
+    port = normalized.get("port")
+    if isinstance(port, str):
+        try:
+            port = int(port.strip())
+        except (ValueError, AttributeError):
+            port = None
+    if port is None:
+        if dialect.startswith("mysql"):
+            port = 3306
+        elif dialect == "postgresql":
+            port = 5432
+    normalized["port"] = port
+
+    # ---- 强制密码为空（Fernet 安全边界） ----
+    if normalized.get("password"):
+        warnings.append("LLM 尝试提取密码字段已被拦截；请在下一步的表单中手动输入密码。")
+    normalized["password"] = ""
+
+    # ---- 缺省字段 ----
+    normalized.setdefault("name", "未命名数据源")
+    normalized.setdefault("charset", "utf8mb4")
+    normalized.setdefault("description", None)
+    normalized.setdefault("read_only_flag", True)
+    normalized.setdefault("default_schema", None)
+    normalized.setdefault("host", None)
+    normalized.setdefault("database", "")
+    normalized.setdefault("username", None)
+
+    return normalized, warnings
 
 
 # ==== 服务 =========================================================
@@ -179,6 +302,61 @@ class DpDataSourceService:
                 elapsed_ms=elapsed,
                 error=str(exc)[:512],
             )
+
+    # --- LLM-driven parse-config ---------------------------------------
+
+    async def parse_config(self, raw_text: str) -> ParseConfigResult:
+        from app.services.llm_config_service import LLMConfigService
+
+        llm_svc = LLMConfigService(self.db)
+
+        try:
+            result = await llm_svc.chat_completion(
+                messages=[
+                    {"role": "system", "content": _PARSE_CONFIG_PROMPT},
+                    {"role": "user", "content": raw_text},
+                ],
+                temperature=0.1,
+                max_tokens=2048,
+            )
+        except Exception as e:  # noqa: BLE001
+            raise BusinessException(
+                code="DP_PARSE_LLM_ERROR",
+                message=f"LLM 调用失败：{e}"[:512],
+                status_code=502,
+            ) from e
+
+        if isinstance(result, dict):
+            content = result.get("content", "") or ""
+            model_used = result.get("model") or "unknown"
+        else:
+            content = str(result)
+            model_used = "unknown"
+
+        try:
+            extracted = _extract_json(content)
+            parsed = json.loads(extracted)
+        except json.JSONDecodeError as e:
+            raise BusinessException(
+                code="DP_PARSE_JSON_ERROR",
+                message=f"LLM 输出无法解析为 JSON: {content[:300]}",
+                status_code=422,
+            ) from e
+
+        if not isinstance(parsed, dict):
+            raise BusinessException(
+                code="DP_PARSE_SHAPE_ERROR",
+                message="LLM 输出不是 JSON 对象",
+                status_code=422,
+            )
+
+        normalized, warnings = _normalize_parsed_dp(parsed)
+
+        return ParseConfigResult(
+            parsed=normalized,
+            model_used=model_used,
+            warnings=warnings,
+        )
 
     # --- schema introspection ------------------------------------------
 

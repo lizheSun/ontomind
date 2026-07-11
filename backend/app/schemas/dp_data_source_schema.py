@@ -78,3 +78,15 @@ class DpDataSourceTestResult(BaseModel):
     elapsed_ms: int
     server_version: Optional[str] = None
     error: Optional[str] = None
+
+
+class ParseConfigRequest(BaseModel):
+    """智能添加 · 自然语言解析请求。"""
+    raw_text: str = Field(..., min_length=1, max_length=10000, description="原始配置文本或自然语言描述")
+
+
+class ParseConfigResult(BaseModel):
+    """智能添加 · LLM 解析结果。password 永远为空，需用户手动填写。"""
+    parsed: dict[str, Any] = Field(..., description="DpDataSourceCreate 形状（password 强制空）")
+    model_used: str = Field(..., description="使用的 LLM 模型")
+    warnings: list[str] = Field(default_factory=list, description="解析警告（例：无法识别 dialect，使用默认值）")
