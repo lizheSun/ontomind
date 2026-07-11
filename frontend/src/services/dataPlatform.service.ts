@@ -3,6 +3,7 @@ import type {
   DpDataSource,
   DpDataSourceCreate,
   DpDataSourceUpdate,
+  DpDialect,
   DpTestResult,
   DpSchemaResponse,
   DpExecuteResponse,
@@ -11,6 +12,28 @@ import type {
   DpChatSession,
   DpChatMessage,
 } from '../types/dataPlatform';
+
+export interface ParseConfigParsed {
+  name: string;
+  source_type: string;
+  dialect: DpDialect;
+  host: string | null;
+  port: number | null;
+  username: string | null;
+  password: string; // always empty (backend enforces)
+  database: string;
+  default_schema: string | null;
+  charset: string;
+  description: string | null;
+  read_only_flag: boolean;
+  extra_params?: Record<string, unknown> | null;
+}
+
+export interface ParseConfigResult {
+  parsed: ParseConfigParsed;
+  model_used: string;
+  warnings: string[];
+}
 
 interface Envelope<T> {
   code: string;
@@ -160,6 +183,23 @@ export const dataPlatformService = {
 
   async deleteSource(id: number): Promise<void> {
     unwrap(await api.delete(`/data-platform/sources/${id}`));
+  },
+
+  async parseConfig(rawText: string): Promise<ParseConfigResult> {
+    const data = unwrap<{
+      parsed: ParseConfigParsed;
+      model_used: string;
+      warnings: string[] | null;
+    }>(
+      await api.post('/data-platform/sources/parse-config', {
+        raw_text: rawText,
+      }),
+    );
+    return {
+      parsed: { ...data.parsed, password: '' }, // double safety
+      model_used: data.model_used,
+      warnings: data.warnings ?? [],
+    };
   },
 
   async testConnection(id: number): Promise<DpTestResult> {
