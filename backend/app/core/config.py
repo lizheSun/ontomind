@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 50
 
-    # === Agent Looper (T34/T35) ===
+    # === Agent Looper (T34/T35/T36) ===
     AGENT_CONFIG_PATH: str = "~/.config/opencode/agents"
     AGENT_LOOPER_TEST_RUNS_TTL_DAYS: int = 30
 

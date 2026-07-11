@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any
+from typing import Any, Optional
 
 from loguru import logger
 from sqlalchemy import URL, create_engine, inspect, text
@@ -305,15 +305,45 @@ class DpDataSourceService:
 
     # --- LLM-driven parse-config ---------------------------------------
 
-    async def parse_config(self, raw_text: str) -> ParseConfigResult:
+    async def parse_config(
+        self,
+        raw_text: str,
+        *,
+        agent_looper_config_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+    ) -> ParseConfigResult:
+        """LLM 解析原始配置文本 → 结构化 JSON。
+
+        默认使用 `_PARSE_CONFIG_PROMPT`。如果调用方指定了 `agent_looper_config_id`，
+        则改用该 Agent 的 `system_prompt` 覆盖默认 prompt。
+        """
         from app.services.llm_config_service import LLMConfigService
 
         llm_svc = LLMConfigService(self.db)
 
+        system_prompt = _PARSE_CONFIG_PROMPT
+        if agent_looper_config_id is not None:
+            from app.services.agent_looper_service import AgentLooperService
+
+            agent_svc = AgentLooperService(self.db)
+            # user_id 为 None 时不校验 owner（内部调用），否则强校验
+            if user_id is not None:
+                _config, _version, config_json = agent_svc.get_current_config_dict(
+                    agent_looper_config_id, user_id,
+                )
+            else:
+                _config, _version, config_json = agent_svc.get_current_config_dict(
+                    agent_looper_config_id,
+                    agent_svc.repo.get_by_id(agent_looper_config_id).owner_user_id,
+                )
+            agent_prompt = (config_json or {}).get("system_prompt")
+            if agent_prompt:
+                system_prompt = agent_prompt
+
         try:
             result = await llm_svc.chat_completion(
                 messages=[
-                    {"role": "system", "content": _PARSE_CONFIG_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": raw_text},
                 ],
                 temperature=0.1,

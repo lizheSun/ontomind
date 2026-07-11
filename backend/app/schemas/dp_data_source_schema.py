@@ -83,6 +83,7 @@ class DpDataSourceTestResult(BaseModel):
 class ParseConfigRequest(BaseModel):
     """智能添加 · 自然语言解析请求。"""
     raw_text: str = Field(..., min_length=1, max_length=10000, description="原始配置文本或自然语言描述")
+    agent_looper_config_id: Optional[int] = Field(None, description="指定解析 Agent（默认=平台 LLM）")
 
 
 class ParseConfigResult(BaseModel):
