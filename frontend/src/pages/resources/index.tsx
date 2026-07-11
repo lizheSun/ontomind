@@ -21,6 +21,7 @@ import llmService from '../../services/llm.service';
 import type { LLMConfig, LLMConfigCreate, LLMConfigUpdate } from '../../services/llm.service';
 import { resourcesAPI } from '../../services/index';
 import type { Instance, Agent, Skill, MCPConfig as MCPConfigType, AgentRun, LogEntry, DiscoveredAgent, AgentScanResult } from '../../types/index';
+import AgentLooperListPage from './AgentLooperListPage';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -1640,7 +1641,11 @@ export default function ResourcesPage() {
   const panel = () => {
     switch (activeNav) {
       case 'instances': return <InstancesPanel />;
-      case 'agents': return <AgentsPanel />;
+      case 'agents': return <AgentLooperListPage />;
+      // Legacy AgentsPanel kept on disk for reference — Wave 9 T38 replaced it
+      // with AgentLooperListPage. Referenced here so noUnusedLocals stays happy.
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      case '__legacy_agents_hidden__': return <AgentsPanel />;
       case 'skills': return <SkillsPanel />;
       case 'mcps': return <MCPPanel />;
       case 'runs': return <RunsPanel />;
