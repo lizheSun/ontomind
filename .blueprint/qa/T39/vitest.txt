@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/sun/CodeBuddy/20260627212423-w9t39/frontend
+
+ ✓ src/pages/resources/__tests__/AgentLooperWizard.test.tsx (3 tests) 472ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  01:33:11
+   Duration  1.73s (transform 69ms, setup 45ms, collect 804ms, tests 472ms, environment 215ms, prepare 37ms)
+
