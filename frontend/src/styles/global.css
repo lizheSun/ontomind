@@ -103,6 +103,22 @@ body {
   --duration-fast: 150ms;
   --duration-normal: 300ms;
   --duration-slow: 500ms;
+
+  /* --- Perception layer tokens (T02) --- */
+  --dp-panel-border: rgba(59, 130, 246, 0.14);
+  --dp-panel-glow: 0 0 32px rgba(59, 130, 246, 0.10);
+  --kb-tag-blue: rgba(59, 130, 246, 0.16);
+  --kb-tag-purple: rgba(167, 139, 250, 0.16);
+  --kb-tag-cyan: rgba(34, 211, 238, 0.16);
+  --kb-tag-amber: rgba(251, 191, 36, 0.16);
+  --kb-tag-emerald: rgba(52, 211, 153, 0.16);
+  --kb-tag-rose: rgba(251, 113, 133, 0.16);
+  --code-bg: #0a0f1f;
+  --code-fg: #d1d9e6;
+  --code-keyword: #a78bfa;
+  --code-string: #34d399;
+  --code-number: #fbbf24;
+  --code-comment: #506080;
 }
 
 /* ============================================
