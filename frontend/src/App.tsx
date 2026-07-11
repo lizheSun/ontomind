@@ -45,6 +45,9 @@ export default function App() {
           borderRadiusLG: 16,
           borderRadiusSM: 6,
           wireframe: false,
+          // Perception-layer additions (T02)
+          controlItemBgActive: 'rgba(59, 130, 246, 0.14)',
+          controlItemBgActiveHover: 'rgba(59, 130, 246, 0.20)',
         },
         components: {
           Layout: {
