@@ -1,0 +1,27 @@
+=== /api/docs ===
+docs 200 (verified via curl -w)
+
+=== curl authenticated list ===
+{"code":"SUCCESS","message":"操作成功","data":[],"total":0}
+
+=== curl no-token (expect 401) ===
+no-token 401
+{"detail":{"code":"UNAUTHORIZED","message":"未提供认证Token"}}
+
+=== OpenAPI check ===
+dp_paths= 13
+tag_present= True
+tags= ['数据平台']
+  /api/v1/data-platform/sources
+  /api/v1/data-platform/sources/{source_id}
+  /api/v1/data-platform/sources/{source_id}/test
+  /api/v1/data-platform/sources/{source_id}/schema
+  /api/v1/data-platform/sources/{source_id}/execute
+  /api/v1/data-platform/sources/{source_id}/execute/stream
+  /api/v1/data-platform/saved-queries
+  /api/v1/data-platform/saved-queries/{saved_id}
+  /api/v1/data-platform/history
+  /api/v1/data-platform/chat/sessions
+  /api/v1/data-platform/chat/sessions/{session_id}
+  /api/v1/data-platform/chat/sessions/{session_id}/messages
+  /api/v1/data-platform/chat/sessions/{session_id}/apply/{message_id}
