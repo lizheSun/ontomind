@@ -7,10 +7,27 @@ from app.db.session import get_db
 from app.schemas.dp_data_source_schema import (
     DpDataSourceCreate,
     DpDataSourceUpdate,
+    ParseConfigRequest,
 )
 from app.services.dp_data_source_service import DpDataSourceService
 
 router = APIRouter()
+
+
+@router.post("/parse-config", response_model=dict, status_code=status.HTTP_200_OK)
+async def parse_source_config(
+    payload: ParseConfigRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """智能添加 · LLM 解析自然语言配置。返回 DpDataSourceCreate 形状（password 强制空）。"""
+    svc = DpDataSourceService(db)
+    result = await svc.parse_config(payload.raw_text)
+    return {
+        "code": "SUCCESS",
+        "message": "解析成功",
+        "data": result.model_dump(mode="json"),
+    }
 
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
