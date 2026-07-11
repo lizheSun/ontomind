@@ -11,6 +11,7 @@ import DecisionIndex from './pages/decision/index';
 import ExecutionIndex from './pages/execution/index';
 import ApplicationIndex from './pages/application/index';
 import ResourcesPage from './pages/resources/index';
+import AgentLooperWizard from './pages/resources/AgentLooperWizard';
 import UsersPage from './pages/users/index';
 import ProjectsPage from './pages/projects/index';
 import DataPlatformIndex from './pages/data-platform';
@@ -110,6 +111,7 @@ export default function App() {
               <Route path="execution" element={<ExecutionIndex />} />
               <Route path="application" element={<ApplicationIndex />} />
               <Route path="resources" element={<ResourcesPage />} />
+              <Route path="resources/agent-looper/new" element={<AgentLooperWizard />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="users" element={<UsersPage />} />
               {/* Wave 5 T20: data platform + knowledge base */}
