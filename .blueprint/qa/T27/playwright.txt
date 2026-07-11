@@ -1,0 +1,19 @@
+
+Running 14 tests using 5 workers
+
+  ✓   3 [chromium] › tests/e2e/kb-sublibs.spec.ts:11:3 › KB sub-lib "数据资产" page loads and shows title (14.4s)
+  ✓   2 [chromium] › tests/e2e/kb-search.spec.ts:3:1 › KB search page shows pre-search empty state (17.2s)
+  ✓   5 [chromium] › tests/e2e/dp-sources-list.spec.ts:3:1 › sources list page shows header + subtitle (18.4s)
+  ✓   6 [chromium] › tests/e2e/kb-sublibs.spec.ts:11:3 › KB sub-lib "代码库" page loads and shows title (13.4s)
+  ✓   8 [chromium] › tests/e2e/dp-sources-list.spec.ts:17:1 › opening the create drawer shows dialect segmented options (13.8s)
+  ✓  10 [chromium] › tests/e2e/kb-upload-download.spec.ts:5:1 › upload markdown doc via API then download round-trip (314ms)
+  ✓   7 [chromium] › tests/e2e/kb-search.spec.ts:8:1 › typing query in URL shows filter chips (全部 + 数据资产) (18.9s)
+  ✓   9 [chromium] › tests/e2e/kb-sublibs.spec.ts:11:3 › KB sub-lib "文档库" page loads and shows title (11.4s)
+  ✓   1 [chromium] › tests/e2e/dp-sql-guard.spec.ts:4:1 › executing DROP TABLE surfaces guard error UI (40.1s)
+  ✓  11 [chromium] › tests/e2e/nav.spec.ts:3:1 › top nav renders 数据平台 + 知识库 and navigates (9.1s)
+  ✓  12 [chromium] › tests/e2e/perception-regression.spec.ts:3:1 › legacy /perception page still loads without crashing (11.5s)
+  ✓  13 [chromium] › tests/e2e/kb-sublibs.spec.ts:11:3 › KB sub-lib "业务经验库" page loads and shows title (9.7s)
+  ✓  14 [chromium] › tests/e2e/nav.spec.ts:16:1 › unauthenticated navigation redirects to /login (8.4s)
+  ✓   4 [chromium] › tests/e2e/dp-source-detail.spec.ts:12:1 › source detail page renders SQL 编辑器 tab when a source exists (54.3s)
+
+  14 passed (54.9s)
