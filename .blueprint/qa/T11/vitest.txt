@@ -1,0 +1,15 @@
+=== vitest ===
+
+ RUN  v2.1.9 /Users/sun/CodeBuddy/20260627212423-w3t11/frontend
+
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > renders header + counters when rows present
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > only renders a small window of rows for 500-row input (virtualization)
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > shows EmptyState when rows are empty
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  21:17:41
+   Duration  1.45s (transform 34ms, setup 49ms, collect 836ms, tests 93ms, environment 242ms, prepare 29ms)
+
+
+=== tsc new errors (should be empty) ===
