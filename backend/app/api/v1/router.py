@@ -22,3 +22,7 @@ from app.api.v1 import data_platform
 api_router.include_router(data_platform.router, prefix="/data-platform", tags=["数据平台"])
 from app.api.v1 import knowledge_base
 api_router.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["知识库"])
+
+# --- Agent Looper (T35) ---
+from app.api.v1 import agent_looper
+api_router.include_router(agent_looper.router, prefix="/agent-looper", tags=["Agent Looper"])
