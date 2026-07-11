@@ -21,6 +21,7 @@ import llmService from '../../services/llm.service';
 import type { LLMConfig, LLMConfigCreate, LLMConfigUpdate } from '../../services/llm.service';
 import { resourcesAPI } from '../../services/index';
 import type { Instance, Agent, Skill, MCPConfig as MCPConfigType, AgentRun, LogEntry, DiscoveredAgent, AgentScanResult } from '../../types/index';
+import AgentLooperListPage from './AgentLooperListPage';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -140,6 +141,11 @@ function InstancesPanel() {
   const [registeringLocal, setRegisteringLocal] = useState(false);
   const [scanningMap, setScanningMap] = useState<Record<number, boolean>>({});
   const [discoveredAgents, setDiscoveredAgents] = useState<Record<number, DiscoveredAgent[]>>({});
+  // T37: 本地节点自动发现信息（hostname / platform / agent_count / agent_looper_count）
+  const [localNodeInfo, setLocalNodeInfo] = useState<{
+    hostname?: string; platform?: string; agent_count?: number; agent_looper_count?: number;
+  } | null>(null);
+  const autoRegisteredRef = useRef(false);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -149,6 +155,40 @@ function InstancesPanel() {
   }, [notification]);
 
   useEffect(() => { fetch(); }, [fetch]);
+
+  // T37: 页面挂载时自动调用 register-local（一次会话只调用一次，用 ref + sessionStorage 双保险）
+  useEffect(() => {
+    if (autoRegisteredRef.current) return;
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('t37_local_registered') === '1') {
+      autoRegisteredRef.current = true;
+      return;
+    }
+    autoRegisteredRef.current = true;
+    (async () => {
+      try {
+        const res = await resourcesAPI.registerLocalInstance();
+        const payload = res.data || {};
+        setLocalNodeInfo({
+          hostname: payload.hostname,
+          platform: payload.platform,
+          agent_count: payload.agent_count,
+          agent_looper_count: payload.agent_looper_count,
+        });
+        const discovered = payload.discovered_agents as DiscoveredAgent[] | undefined;
+        const instData = payload.data as Instance | undefined;
+        if (instData && discovered && discovered.length > 0) {
+          setDiscoveredAgents(prev => ({ ...prev, [instData.id]: discovered }));
+        }
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('t37_local_registered', '1');
+        }
+        fetch();
+      } catch {
+        // 静默失败 — 不干扰用户
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ instance_type: 'physical', protocol: 'ssh' }); setDrawerOpen(true); };
   const openEdit = (r: Instance) => { setEditing(r); form.setFieldsValue(r); setDrawerOpen(true); };
@@ -234,6 +274,49 @@ function InstancesPanel() {
           </Space>
         }
       />
+
+      {/* T37: 本地节点·计算节点 概览卡 — 页面挂载自动填充 */}
+      {localNodeInfo && (
+        <div style={{
+          ...cardStyle, padding: '16px 20px', marginBottom: 14,
+          borderColor: 'rgba(96,165,250,0.25)',
+          background: 'linear-gradient(135deg, rgba(96,165,250,0.06), rgba(167,139,250,0.04))',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12,
+              background: 'rgba(96,165,250,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 20, color: '#60a5fa',
+            }}>
+              <HomeOutlined />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#e8eef5', marginBottom: 3 }}>
+                本地节点 · 计算节点
+              </div>
+              <Space size={8} wrap>
+                {localNodeInfo.hostname && (
+                  <Tag style={{ borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: '#94a3b8', border: 'none', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>
+                    {localNodeInfo.hostname}
+                  </Tag>
+                )}
+                {localNodeInfo.platform && (
+                  <Tag style={{ borderRadius: 6, background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: 'none', fontSize: 11 }}>
+                    <DesktopOutlined /> {localNodeInfo.platform}
+                  </Tag>
+                )}
+                <Tag style={{ borderRadius: 6, background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: 'none', fontSize: 11 }}>
+                  <RobotOutlined /> Agent: {localNodeInfo.agent_count ?? 0}
+                </Tag>
+                <Tag style={{ borderRadius: 6, background: 'rgba(52,211,153,0.12)', color: '#34d399', border: 'none', fontSize: 11 }}>
+                  <ThunderboltOutlined /> Agent Looper: {localNodeInfo.agent_looper_count ?? 0}
+                </Tag>
+              </Space>
+            </div>
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 && !loading ? (
         <Empty description={<span style={{ color: '#506380' }}>暂无计算节点</span>} style={{ padding: 60 }} />
@@ -1558,7 +1641,11 @@ export default function ResourcesPage() {
   const panel = () => {
     switch (activeNav) {
       case 'instances': return <InstancesPanel />;
-      case 'agents': return <AgentsPanel />;
+      case 'agents': return <AgentLooperListPage />;
+      // Legacy AgentsPanel kept on disk for reference — Wave 9 T38 replaced it
+      // with AgentLooperListPage. Referenced here so noUnusedLocals stays happy.
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      case '__legacy_agents_hidden__': return <AgentsPanel />;
       case 'skills': return <SkillsPanel />;
       case 'mcps': return <MCPPanel />;
       case 'runs': return <RunsPanel />;

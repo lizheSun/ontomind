@@ -17,6 +17,14 @@ async def lifespan(app: FastAPI):
     """Application startup / shutdown lifecycle."""
     # Startup: create tables if not exist (dev convenience)
     Base.metadata.create_all(bind=engine)
+    # === Knowledge Base seed (T07) ===
+    from app.db.session import SessionLocal
+    from app.db.seed_kb import seed_kb_libraries
+    _session = SessionLocal()
+    try:
+        seed_kb_libraries(_session)
+    finally:
+        _session.close()
     yield
     # Shutdown: cleanup connections
 

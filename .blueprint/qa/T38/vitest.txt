@@ -1,0 +1,49 @@
+
+ RUN  v2.1.9 /Users/sun/CodeBuddy/20260627212423-w9t38/frontend
+
+stderr | src/pages/resources/__tests__/AgentLooperListPage.test.tsx > AgentLooperListPage > renders empty state with discover + create actions when list is empty
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+    at module.exports (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at window.getComputedStyle (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/jsdom/lib/jsdom/browser/Window.js:895:7)
+    at measureScrollbarSize (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:35:34)
+    at getTargetScrollBarSize (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:87:10)
+    at /Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/table/lib/Table.js:393:59
+    at /Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/hooks/useLayoutEffect.js:19:12
+    at Object.react_stack_bottom_frame (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11) undefined
+
+stderr | src/pages/resources/__tests__/AgentLooperListPage.test.tsx > AgentLooperListPage > renders list rows with name, model and strategy labels
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+    at module.exports (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at window.getComputedStyle (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/jsdom/lib/jsdom/browser/Window.js:895:7)
+    at measureScrollbarSize (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:35:34)
+    at getTargetScrollBarSize (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:87:10)
+    at /Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/table/lib/Table.js:393:59
+    at /Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/hooks/useLayoutEffect.js:19:12
+    at Object.react_stack_bottom_frame (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11) undefined
+
+stderr | src/pages/resources/__tests__/AgentLooperListPage.test.tsx > AgentLooperListPage > renders type pills and published/active tags for each row
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+    at module.exports (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at window.getComputedStyle (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/jsdom/lib/jsdom/browser/Window.js:895:7)
+    at measureScrollbarSize (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:35:34)
+    at getTargetScrollBarSize (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:87:10)
+    at /Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/table/lib/Table.js:393:59
+    at /Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/hooks/useLayoutEffect.js:19:12
+    at Object.react_stack_bottom_frame (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11) undefined
+
+ ✓ src/pages/resources/__tests__/AgentLooperListPage.test.tsx (3 tests) 259ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  01:34:10
+   Duration  1.55s (transform 58ms, setup 49ms, collect 830ms, tests 259ms, environment 207ms, prepare 35ms)
+

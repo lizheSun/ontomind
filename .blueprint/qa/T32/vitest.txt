@@ -1,0 +1,99 @@
+
+ RUN  v2.1.9 /Users/sun/CodeBuddy/20260627212423-w8t32/frontend
+
+stderr | src/pages/data-platform/__tests__/SmartAddModal.test.tsx > SmartAddModal > calls parseConfig on submit and forwards result via onParsed
+Warning: [antd: Modal] `maskClosable` is deprecated. Please use `mask.closable` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+    at module.exports (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at window.getComputedStyle (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/jsdom/lib/jsdom/browser/Window.js:895:7)
+    at measureScrollbarSize (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:35:34)
+    at getTargetScrollBarSize (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:87:10)
+    at /Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/portal/lib/useScrollLocker.js:22:62
+    at /Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/hooks/useLayoutEffect.js:19:12
+    at Object.react_stack_bottom_frame (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11) undefined
+Warning: [antd: Modal] `maskClosable` is deprecated. Please use `mask.closable` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Modal] `maskClosable` is deprecated. Please use `mask.closable` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+Warning: [antd: Modal] `maskClosable` is deprecated. Please use `mask.closable` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/pages/data-platform/__tests__/SmartAddModal.test.tsx > SmartAddModal > calls parseConfig on submit and forwards result via onParsed
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/data-platform/__tests__/SmartAddModal.test.tsx > SmartAddModal > does not call onParsed when parseConfig rejects
+Warning: [antd: Modal] `maskClosable` is deprecated. Please use `mask.closable` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+    at module.exports (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at window.getComputedStyle (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/jsdom/lib/jsdom/browser/Window.js:895:7)
+    at measureScrollbarSize (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:35:34)
+    at getTargetScrollBarSize (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:87:10)
+    at /Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/portal/lib/useScrollLocker.js:22:62
+    at /Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/hooks/useLayoutEffect.js:19:12
+    at Object.react_stack_bottom_frame (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11) undefined
+Warning: [antd: Modal] `maskClosable` is deprecated. Please use `mask.closable` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Modal] `maskClosable` is deprecated. Please use `mask.closable` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+
+ ✓ src/pages/data-platform/__tests__/SmartAddModal.test.tsx > SmartAddModal > calls parseConfig on submit and forwards result via onParsed
+ ✓ src/pages/data-platform/__tests__/SmartAddModal.test.tsx > SmartAddModal > does not call onParsed when parseConfig rejects
+ ✓ src/pages/data-platform/__tests__/SmartAddModal.test.tsx > SmartAddModal > renders the password-safety warning banner
+stderr | src/pages/data-platform/__tests__/SmartAddModal.test.tsx > SmartAddModal > renders the password-safety warning banner
+Warning: [antd: Modal] `maskClosable` is deprecated. Please use `mask.closable` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+    at module.exports (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at window.getComputedStyle (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/jsdom/lib/jsdom/browser/Window.js:895:7)
+    at measureScrollbarSize (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:35:34)
+    at getTargetScrollBarSize (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:87:10)
+    at /Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/portal/lib/useScrollLocker.js:22:62
+    at /Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/@rc-component/util/lib/hooks/useLayoutEffect.js:19:12
+    at Object.react_stack_bottom_frame (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/sun/CodeBuddy/20260627212423-w8t32/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11) undefined
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  00:24:36
+   Duration  1.49s (transform 30ms, setup 54ms, collect 751ms, tests 212ms, environment 233ms, prepare 37ms)
+

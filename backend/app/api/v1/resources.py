@@ -1,7 +1,7 @@
 """资源管理 API — Instance / Agent / Skill / MCP / AgentRun."""
 import json
 import asyncio
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, Header
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -61,36 +61,26 @@ def heartbeat_instance(inst_id: int, db: Session = Depends(get_db)):
     return {"code": "SUCCESS", "message": "心跳已刷新"}
 
 
-@router.post("/instances/register-local")
-def register_local_instance(db: Session = Depends(get_db)):
-    """一键添加本地服务器为计算节点，自动检测主机名/OS/CPU/内存"""
+def _detect_local_host_info() -> dict:
+    """检测本机 hostname / OS / CPU / memory / IP — 供 register-local 复用。"""
     import platform
     import os as _os
     import socket
     import subprocess
 
-    from app.db.models.instance_model import Instance
-
     hostname = platform.node()
-    svc = InstanceService(db)
 
-    # 检查是否已注册
-    existing = db.query(Instance).filter(Instance.name == hostname).first()
-    if existing:
-        return {"code": "SUCCESS", "message": "本地服务器已存在", "data": existing.to_response_dict()}
-
-    # 检测系统信息
     try:
         cpu = _os.cpu_count() or 1
     except Exception:
         cpu = None
 
+    memory_mb: int | None = None
     try:
         mem_bytes = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"]).decode().strip())
         memory_mb = mem_bytes // (1024 * 1024)
     except Exception:
         try:
-            # Linux fallback
             mem_bytes = _os.sysconf("SC_PAGE_SIZE") * _os.sysconf("SC_PHYS_PAGES")
             memory_mb = mem_bytes // (1024 * 1024)
         except Exception:
@@ -102,11 +92,102 @@ def register_local_instance(db: Session = Depends(get_db)):
         os_name = os_map.get(system, system)
     except Exception:
         os_name = None
+        system = None
 
     try:
         ip = socket.gethostbyname(hostname)
     except Exception:
         ip = "127.0.0.1"
+
+    return {
+        "hostname": hostname,
+        "platform": os_name,
+        "platform_raw": system,
+        "cpu_cores": cpu,
+        "memory_mb": memory_mb,
+        "ip": ip,
+    }
+
+
+def _run_agent_looper_discovery(db: Session, user_id: int | None) -> tuple[int, str | None]:
+    """调用 AgentLooperDiscoveryService 扫描 + 入库 — import guard + 全异常兜底。
+
+    Returns:
+        (agent_looper_count, error_message) — 若 service 不可用返回 (0, "...")；
+        任何异常都被吞掉，不会打断 register-local 主流程。
+    """
+    import logging
+    log = logging.getLogger("resources.register_local")
+    try:
+        from app.services.agent_looper_discovery_service import AgentLooperDiscoveryService  # type: ignore
+    except Exception as exc:  # noqa: BLE001 — service 尚未落地或 import 出错都要 graceful
+        log.warning("AgentLooperDiscoveryService 不可用，跳过 agent-looper 扫描: %s", exc)
+        return 0, f"service_unavailable: {exc}"
+    try:
+        service = AgentLooperDiscoveryService()
+        configs = service.discover()
+        stored = service.upsert_discovered(db, configs, user_id)
+        # upsert_discovered 可能返回列表 / 整数 / dict — 统一取 len
+        if isinstance(stored, int):
+            count = stored
+        else:
+            try:
+                count = len(stored)  # type: ignore[arg-type]
+            except Exception:
+                count = len(configs) if configs is not None else 0
+        return int(count), None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("AgentLooperDiscoveryService 执行失败，忽略并继续: %s", exc)
+        return 0, f"discovery_error: {exc}"
+
+
+@router.post("/instances/register-local")
+def register_local_instance(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
+    """一键添加本地服务器为计算节点，自动检测主机名/OS/CPU/内存 +
+    扫描本地 Agent + 扫描 Agent Looper 配置。"""
+    from app.db.models.instance_model import Instance
+
+    # 尝试从 Authorization Header 取 user_id（可选，无 token 时 = None）
+    user_id: int | None = None
+    try:
+        from app.core.security import get_current_user_id_from_token
+        # authorization 通过 kwarg 传入（老签名兼容），如果没有则从 request 头拿
+        if authorization and isinstance(authorization, str):
+            scheme, _, token = authorization.partition(" ")
+            if scheme.lower() == "bearer" and token:
+                user_id = get_current_user_id_from_token(token)
+    except Exception:
+        user_id = None
+
+    info = _detect_local_host_info()
+    hostname = info["hostname"]
+    ip = info["ip"]
+    os_name = info["platform"]
+
+    svc = InstanceService(db)
+
+    # 检查是否已注册 — 幂等：已存在则直接返回，但仍然执行 agent-looper 扫描以刷新 payload
+    existing = db.query(Instance).filter(Instance.name == hostname).first()
+    if existing:
+        # 也跑一次 agent-looper 扫描，让 payload 保持一致（agent 扫描则不重复跑以省时）
+        agent_looper_count, al_error = _run_agent_looper_discovery(db, user_id)
+        payload = {
+            "code": "SUCCESS",
+            "message": "本地服务器已存在",
+            "data": existing.to_response_dict(),
+            "hostname": hostname,
+            "platform": os_name,
+            "agent_count": 0,
+            "agent_looper_count": agent_looper_count,
+            "discovered_agents": [],
+            "total_ports_scanned": 0,
+        }
+        if al_error:
+            payload["agent_looper_error"] = al_error
+        return payload
 
     data = InstanceCreate(
         name=hostname,
@@ -115,13 +196,12 @@ def register_local_instance(db: Session = Depends(get_db)):
         instance_type="physical",
         protocol="ssh",
         os=os_name,
-        cpu_cores=cpu,
-        memory_mb=memory_mb,
+        cpu_cores=info["cpu_cores"],
+        memory_mb=info["memory_mb"],
         description="本地开发服务器（自动注册）",
     )
     result = svc.create(data)
     # 本地服务器注册后直接设为 online（不需要等心跳）
-    from app.db.models.instance_model import Instance
     inst = db.query(Instance).filter(Instance.id == result["id"]).first()
     if inst:
         inst.status = "online"
@@ -133,29 +213,47 @@ def register_local_instance(db: Session = Depends(get_db)):
 
     # 自动扫描本地 Agent
     from app.services.agent_discovery import discover_agents
-    discovery = discover_agents(ip, instance_id=result["id"])
-    agents_data = [
-        {
-            "agent_type": a.agent_type,
-            "label": a.label,
-            "icon": a.icon,
-            "port": a.port,
-            "host": a.host,
-            "health_url": a.health_url,
-            "is_healthy": a.is_healthy,
-            "version": a.version,
-            "process_name": a.process_name,
-            "error": a.error,
-        }
-        for a in discovery.agents
-    ]
-    return {
+    try:
+        discovery = discover_agents(ip, instance_id=result["id"])
+        agents_data = [
+            {
+                "agent_type": a.agent_type,
+                "label": a.label,
+                "icon": a.icon,
+                "port": a.port,
+                "host": a.host,
+                "health_url": a.health_url,
+                "is_healthy": a.is_healthy,
+                "version": a.version,
+                "process_name": a.process_name,
+                "error": a.error,
+            }
+            for a in discovery.agents
+        ]
+        total_ports_scanned = discovery.total_ports_scanned
+    except Exception as exc:  # noqa: BLE001
+        import logging
+        logging.getLogger("resources.register_local").warning("agent discovery 失败: %s", exc)
+        agents_data = []
+        total_ports_scanned = 0
+
+    # T37: 新增 — 自动扫描 Agent Looper 配置（graceful degradation）
+    agent_looper_count, al_error = _run_agent_looper_discovery(db, user_id)
+
+    payload = {
         "code": "SUCCESS",
-        "message": f"本地服务器已添加，发现 {len(agents_data)} 个 Agent",
+        "message": f"本地服务器已添加，发现 {len(agents_data)} 个 Agent，{agent_looper_count} 个 Agent Looper",
         "data": result,
+        "hostname": hostname,
+        "platform": os_name,
+        "agent_count": len(agents_data),
+        "agent_looper_count": agent_looper_count,
         "discovered_agents": agents_data,
-        "total_ports_scanned": discovery.total_ports_scanned,
+        "total_ports_scanned": total_ports_scanned,
     }
+    if al_error:
+        payload["agent_looper_error"] = al_error
+    return payload
 
 
 # ==================== Agent 发现 ====================

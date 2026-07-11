@@ -1,0 +1,15 @@
+=== files ===
+-rw-r--r--  1 sun  staff  423  7月 11 20:48 backend/app/db/models/dp_chat_message_model.py
+-rw-r--r--  1 sun  staff  423  7月 11 20:48 backend/app/db/models/dp_chat_session_model.py
+-rw-r--r--  1 sun  staff  403  7月 11 20:48 backend/app/db/models/dp_data_source_model.py
+-rw-r--r--  1 sun  staff  415  7月 11 20:48 backend/app/db/models/dp_query_history_model.py
+-rw-r--r--  1 sun  staff  418  7月 11 20:48 backend/app/db/models/dp_sql_query_model.py
+-rw-r--r--  1 sun  staff  390  7月 11 20:49 backend/app/db/models/kb_code_repo_model.py
+-rw-r--r--  1 sun  staff  401  7月 11 20:49 backend/app/db/models/kb_data_asset_model.py
+-rw-r--r--  1 sun  staff  389  7月 11 20:49 backend/app/db/models/kb_document_model.py
+-rw-r--r--  1 sun  staff  402  7月 11 20:49 backend/app/db/models/kb_experience_model.py
+-rw-r--r--  1 sun  staff  397  7月 11 20:49 backend/app/db/models/kb_library_model.py
+-rw-r--r--  1 sun  staff  379  7月 11 20:49 backend/app/db/models/kb_tag_model.py
+
+=== import + tablename check ===
+all 11 skeletons import OK; tablenames match

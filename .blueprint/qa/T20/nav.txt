@@ -1,0 +1,6 @@
+=== tsc errors in scope (expect empty) ===
+
+=== vite smoke ===
+home 200
+dp 200
+vite 200

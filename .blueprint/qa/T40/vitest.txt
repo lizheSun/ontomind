@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/sun/CodeBuddy/20260627212423-w9t40/frontend
+
+ ✓ src/components/common/__tests__/AgentPicker.test.tsx > AgentPicker > renders platform LLM option by default
+ ✓ src/components/common/__tests__/AgentPicker.test.tsx > AgentPicker > renders agent looper options when data available
+ ✓ src/components/common/__tests__/AgentPicker.test.tsx > AgentPicker > renders without crash when value=null (platform LLM)
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  01:44:13
+   Duration  1.01s (transform 27ms, setup 26ms, collect 587ms, tests 97ms, environment 115ms, prepare 36ms)
+

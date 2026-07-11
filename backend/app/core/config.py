@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # === 感知层加密（T01 新增） ===
+    FERNET_KEY: Optional[str] = None  # 逗号分隔 = MultiFernet 轮换
+
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
@@ -53,6 +56,10 @@ class Settings(BaseSettings):
     # File Upload
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 50
+
+    # === Agent Looper (T34/T35/T36) ===
+    AGENT_CONFIG_PATH: str = "~/.config/opencode/agents"
+    AGENT_LOOPER_TEST_RUNS_TTL_DAYS: int = 30
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

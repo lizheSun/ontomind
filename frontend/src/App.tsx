@@ -4,14 +4,26 @@ import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
 
 import Dashboard from './pages/dashboard/index';
-import PerceptionIndex from './pages/perception/index';
+import PerceptionLegacyIndex from './pages/perception/index';
+import PerceptionShell from './pages/perception/PerceptionShell';
 import CognitionIndex from './pages/cognition/index';
 import DecisionIndex from './pages/decision/index';
 import ExecutionIndex from './pages/execution/index';
 import ApplicationIndex from './pages/application/index';
 import ResourcesPage from './pages/resources/index';
+import AgentLooperWizard from './pages/resources/AgentLooperWizard';
 import UsersPage from './pages/users/index';
 import ProjectsPage from './pages/projects/index';
+import DataPlatformIndex from './pages/data-platform';
+import SourcesListPage from './pages/data-platform/SourcesListPage';
+import SourceDetailPage from './pages/data-platform/SourceDetailPage';
+import MetadataPage from './pages/data-platform/MetadataPage';
+import KnowledgeBaseIndex from './pages/knowledge-base';
+import DataAssetsPage from './pages/knowledge-base/DataAssetsPage';
+import CodeReposPage from './pages/knowledge-base/CodeReposPage';
+import DocumentsPage from './pages/knowledge-base/DocumentsPage';
+import ExperiencesPage from './pages/knowledge-base/ExperiencesPage';
+import KbSearchPage from './pages/knowledge-base/KbSearchPage';
 
 /** 路由守卫 */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -45,6 +57,9 @@ export default function App() {
           borderRadiusLG: 16,
           borderRadiusSM: 6,
           wireframe: false,
+          // Perception-layer additions (T02)
+          controlItemBgActive: 'rgba(59, 130, 246, 0.14)',
+          controlItemBgActiveHover: 'rgba(59, 130, 246, 0.20)',
         },
         components: {
           Layout: {
@@ -89,14 +104,27 @@ export default function App() {
               }
             >
               <Route index element={<Dashboard />} />
-              <Route path="perception" element={<PerceptionIndex />} />
+              <Route path="perception" element={<PerceptionShell />} />
+              <Route path="perception-legacy" element={<PerceptionLegacyIndex />} />
               <Route path="cognition" element={<CognitionIndex />} />
               <Route path="decision" element={<DecisionIndex />} />
               <Route path="execution" element={<ExecutionIndex />} />
               <Route path="application" element={<ApplicationIndex />} />
               <Route path="resources" element={<ResourcesPage />} />
+              <Route path="resources/agent-looper/new" element={<AgentLooperWizard />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="users" element={<UsersPage />} />
+              {/* Wave 5 T20: data platform + knowledge base */}
+              <Route path="data-platform" element={<DataPlatformIndex />} />
+              <Route path="data-platform/sources" element={<SourcesListPage />} />
+              <Route path="data-platform/sources/:sid" element={<SourceDetailPage />} />
+              <Route path="data-platform/metadata" element={<MetadataPage />} />
+              <Route path="knowledge-base" element={<KnowledgeBaseIndex />} />
+              <Route path="knowledge-base/data-assets" element={<DataAssetsPage />} />
+              <Route path="knowledge-base/code-repos" element={<CodeReposPage />} />
+              <Route path="knowledge-base/documents" element={<DocumentsPage />} />
+              <Route path="knowledge-base/experiences" element={<ExperiencesPage />} />
+              <Route path="knowledge-base/search" element={<KbSearchPage />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

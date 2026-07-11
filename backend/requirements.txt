@@ -38,5 +38,11 @@ rdflib==7.0.0
 # Dev
 pytest==8.3.4
 pytest-asyncio==0.24.0
+pytest-cov==7.1.0
 black==24.10.0
 ruff==0.8.4
+
+# --- SQL guard + streaming (added by T01) ---
+sqlglot==30.12.0
+sqlparse==0.5.5
+sse-starlette==2.4.1

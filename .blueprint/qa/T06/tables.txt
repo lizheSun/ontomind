@@ -1,0 +1,37 @@
+=== SHOW TABLES LIKE 'dp_%' ===
+Tables_in_ontomind (dp_%)
+dp_chat_messages
+dp_chat_sessions
+dp_data_sources
+dp_query_history
+dp_sql_queries
+
+=== SHOW CREATE TABLE dp_data_sources ===
+CREATE TABLE `dp_data_sources` (
+  `name` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '数据源名称',
+  `source_type` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '类型: mysql/postgresql/sqlite/…',
+  `dialect` enum('mysql','postgresql','sqlite','mysql_readonly') COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '方言：SQLAlchemy engine URL 前缀',
+  `host` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '主机 / hostname',
+  `port` int DEFAULT NULL COMMENT '端口',
+  `username` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '用户名',
+  `password_enc` text COLLATE utf8mb4_unicode_ci COMMENT '密码密文（Fernet），永不出库明文',
+  `database` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '数据库名',
+  `default_schema` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '默认 schema（PG 用）',
+  `charset` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'utf8mb4' COMMENT '字符集',
+  `description` text COLLATE utf8mb4_unicode_ci COMMENT '描述',
+  `status` enum('active','inactive','error') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT '状态: active/inactive/error',
+  `owner_user_id` int NOT NULL COMMENT '拥有者 user_id',
+  `created_by_user_id` int NOT NULL COMMENT '创建者 user_id',
+  `read_only_flag` tinyint(1) NOT NULL DEFAULT '1' COMMENT '只读标记（true = 拒绝写）',
+  `extra_params` json DEFAULT NULL COMMENT '额外连接参数 JSON',
+  `id` int NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `created_at` datetime DEFAULT (now()) COMMENT '创建时间',
+  `updated_at` datetime DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`),
+  KEY `owner_user_id` (`owner_user_id`),
+  KEY `created_by_user_id` (`created_by_user_id`),
+  KEY `ix_dp_data_sources_id` (`id`),
+  CONSTRAINT `dp_data_sources_ibfk_1` FOREIGN KEY (`owner_user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `dp_data_sources_ibfk_2` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据平台-数据源（Fernet 加密）'
