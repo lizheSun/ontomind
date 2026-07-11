@@ -1,0 +1,181 @@
+=== Starting int-full-w8 build ===
+8f260fd636d29b04b98c379b30406dd087d9e223
+blueprint/int-full-w8
+
+=== Merging blueprint/25-backend-pytest-coverage ===
+Merge made by the 'ort' strategy.
+ .blueprint/qa/T25/coverage.txt                     |  51 +++
+ backend/requirements.txt                           |   1 +
+ backend/tests/conftest.py                          | 215 ++++++++++++
+ .../data_platform/test_dp_routers_integration.py   | 390 +++++++++++++++++++++
+ .../knowledge_base/test_kb_routers_integration.py  | 235 +++++++++++++
+ .../tests/security/test_endpoints_require_auth.py  |  89 +++++
+ 6 files changed, 981 insertions(+)
+ create mode 100644 .blueprint/qa/T25/coverage.txt
+ create mode 100644 backend/tests/conftest.py
+ create mode 100644 backend/tests/data_platform/test_dp_routers_integration.py
+ create mode 100644 backend/tests/knowledge_base/test_kb_routers_integration.py
+ create mode 100644 backend/tests/security/test_endpoints_require_auth.py
+T25: CLEAN
+
+=== Merging blueprint/26-frontend-vitest ===
+Merge made by the 'ort' strategy.
+ .blueprint/qa/T26/vitest.txt                       | 121 +++++++++++++++++++++
+ .../common/__tests__/SchemaTree.test.tsx           |  53 +++++++++
+ .../__tests__/SourceDetailPage.test.tsx            |  81 ++++++++++++++
+ .../knowledge-base/__tests__/KbSearchPage.test.tsx |  74 +++++++++++++
+ .../__tests__/knowledgeBase.service.test.ts        | 111 +++++++++++++++++++
+ .../src/stores/__tests__/dataPlatformStore.test.ts |  58 ++++++++++
+ .../stores/__tests__/knowledgeBaseStore.test.ts    |  46 ++++++++
+ 7 files changed, 544 insertions(+)
+ create mode 100644 .blueprint/qa/T26/vitest.txt
+ create mode 100644 frontend/src/components/common/__tests__/SchemaTree.test.tsx
+ create mode 100644 frontend/src/pages/data-platform/__tests__/SourceDetailPage.test.tsx
+ create mode 100644 frontend/src/pages/knowledge-base/__tests__/KbSearchPage.test.tsx
+ create mode 100644 frontend/src/services/__tests__/knowledgeBase.service.test.ts
+ create mode 100644 frontend/src/stores/__tests__/dataPlatformStore.test.ts
+ create mode 100644 frontend/src/stores/__tests__/knowledgeBaseStore.test.ts
+T26: CLEAN
+
+=== Merging blueprint/27-playwright-e2e ===
+Merge made by the 'ort' strategy.
+ .blueprint/qa/T27/playwright.txt                 | 19 ++++++++++
+ frontend/playwright.config.ts                    |  9 ++---
+ frontend/tests/e2e/dp-source-detail.spec.ts      | 43 +++++++++++++++++++++++
+ frontend/tests/e2e/dp-sources-list.spec.ts       | 25 ++++++++++++++
+ frontend/tests/e2e/dp-sql-guard.spec.ts          | 43 +++++++++++++++++++++++
+ frontend/tests/e2e/fixtures.ts                   | 29 ++++++++++++++++
+ frontend/tests/e2e/kb-search.spec.ts             | 12 +++++++
+ frontend/tests/e2e/kb-sublibs.spec.ts            | 15 ++++++++
+ frontend/tests/e2e/kb-upload-download.spec.ts    | 44 ++++++++++++++++++++++++
+ frontend/tests/e2e/nav.spec.ts                   | 20 +++++++++++
+ frontend/tests/e2e/perception-regression.spec.ts | 12 +++++++
+ 11 files changed, 267 insertions(+), 4 deletions(-)
+ create mode 100644 .blueprint/qa/T27/playwright.txt
+ create mode 100644 frontend/tests/e2e/dp-source-detail.spec.ts
+ create mode 100644 frontend/tests/e2e/dp-sources-list.spec.ts
+ create mode 100644 frontend/tests/e2e/dp-sql-guard.spec.ts
+ create mode 100644 frontend/tests/e2e/fixtures.ts
+ create mode 100644 frontend/tests/e2e/kb-search.spec.ts
+ create mode 100644 frontend/tests/e2e/kb-sublibs.spec.ts
+ create mode 100644 frontend/tests/e2e/kb-upload-download.spec.ts
+ create mode 100644 frontend/tests/e2e/nav.spec.ts
+ create mode 100644 frontend/tests/e2e/perception-regression.spec.ts
+T27: CLEAN
+
+=== Merging blueprint/28-visual-qa-regression ===
+Merge made by the 'ort' strategy.
+ .blueprint/qa/T28/console.log                      | 152 +++++++++++++++++++++
+ .blueprint/qa/T28/screenshots/dashboard-1280.png   | Bin 0 -> 89230 bytes
+ .blueprint/qa/T28/screenshots/dashboard-375.png    | Bin 0 -> 78562 bytes
+ .blueprint/qa/T28/screenshots/dashboard-768.png    | Bin 0 -> 90244 bytes
+ .blueprint/qa/T28/screenshots/dp-sources-1280.png  | Bin 0 -> 67843 bytes
+ .blueprint/qa/T28/screenshots/dp-sources-375.png   | Bin 0 -> 53378 bytes
+ .blueprint/qa/T28/screenshots/dp-sources-768.png   | Bin 0 -> 62618 bytes
+ .../qa/T28/screenshots/kb-data-assets-1280.png     | Bin 0 -> 54620 bytes
+ .../qa/T28/screenshots/kb-data-assets-375.png      | Bin 0 -> 39923 bytes
+ .../qa/T28/screenshots/kb-data-assets-768.png      | Bin 0 -> 48004 bytes
+ .blueprint/qa/T28/screenshots/kb-search-1280.png   | Bin 0 -> 53017 bytes
+ .blueprint/qa/T28/screenshots/kb-search-375.png    | Bin 0 -> 38359 bytes
+ .blueprint/qa/T28/screenshots/kb-search-768.png    | Bin 0 -> 48099 bytes
+ .../qa/T28/screenshots/perception-legacy-1280.png  | Bin 0 -> 93682 bytes
+ .../qa/T28/screenshots/perception-legacy-375.png   | Bin 0 -> 69117 bytes
+ .../qa/T28/screenshots/perception-legacy-768.png   | Bin 0 -> 82202 bytes
+ .blueprint/qa/T28/summary.md                       | 129 +++++++++++++++++
+ frontend/tests/visual/screenshots.spec.ts          | 107 +++++++++++++++
+ 18 files changed, 388 insertions(+)
+ create mode 100644 .blueprint/qa/T28/console.log
+ create mode 100644 .blueprint/qa/T28/screenshots/dashboard-1280.png
+ create mode 100644 .blueprint/qa/T28/screenshots/dashboard-375.png
+ create mode 100644 .blueprint/qa/T28/screenshots/dashboard-768.png
+ create mode 100644 .blueprint/qa/T28/screenshots/dp-sources-1280.png
+ create mode 100644 .blueprint/qa/T28/screenshots/dp-sources-375.png
+ create mode 100644 .blueprint/qa/T28/screenshots/dp-sources-768.png
+ create mode 100644 .blueprint/qa/T28/screenshots/kb-data-assets-1280.png
+ create mode 100644 .blueprint/qa/T28/screenshots/kb-data-assets-375.png
+ create mode 100644 .blueprint/qa/T28/screenshots/kb-data-assets-768.png
+ create mode 100644 .blueprint/qa/T28/screenshots/kb-search-1280.png
+ create mode 100644 .blueprint/qa/T28/screenshots/kb-search-375.png
+ create mode 100644 .blueprint/qa/T28/screenshots/kb-search-768.png
+ create mode 100644 .blueprint/qa/T28/screenshots/perception-legacy-1280.png
+ create mode 100644 .blueprint/qa/T28/screenshots/perception-legacy-375.png
+ create mode 100644 .blueprint/qa/T28/screenshots/perception-legacy-768.png
+ create mode 100644 .blueprint/qa/T28/summary.md
+ create mode 100644 frontend/tests/visual/screenshots.spec.ts
+T28: CLEAN
+
+=== Merging blueprint/29-perception-shell-menu-cleanup ===
+Merge made by the 'ort' strategy.
+ .blueprint/qa/T29/tsc.txt                         |   0
+ .blueprint/qa/T29/vite-smoke.txt                  |   3 +
+ frontend/src/App.tsx                              |   6 +-
+ frontend/src/components/layout/AppLayout.tsx      |   4 -
+ frontend/src/pages/perception/PerceptionShell.tsx | 159 ++++++++++++++++++++++
+ 5 files changed, 166 insertions(+), 6 deletions(-)
+ create mode 100644 .blueprint/qa/T29/tsc.txt
+ create mode 100644 .blueprint/qa/T29/vite-smoke.txt
+ create mode 100644 frontend/src/pages/perception/PerceptionShell.tsx
+T29: CLEAN
+
+=== Merging blueprint/30-metadata-migration ===
+Auto-merging frontend/src/App.tsx
+Merge made by the 'ort' strategy.
+ .blueprint/qa/T30/tsc.txt                          |    0
+ .blueprint/qa/T30/vite-smoke.txt                   |    2 +
+ frontend/src/App.tsx                               |    2 +
+ frontend/src/pages/data-platform/MetadataPage.tsx  | 1135 ++++++++++++++++++++
+ .../src/pages/data-platform/SourcesListPage.tsx    |   19 +-
+ 5 files changed, 1157 insertions(+), 1 deletion(-)
+ create mode 100644 .blueprint/qa/T30/tsc.txt
+ create mode 100644 .blueprint/qa/T30/vite-smoke.txt
+ create mode 100644 frontend/src/pages/data-platform/MetadataPage.tsx
+T30: CLEAN
+
+=== Merging blueprint/31-parse-config-endpoint ===
+Merge made by the 'ort' strategy.
+ .blueprint/qa/T31/pytest.txt                       |   6 +
+ backend/app/api/v1/data_platform/sources.py        |  17 ++
+ backend/app/schemas/dp_data_source_schema.py       |  12 ++
+ backend/app/services/dp_data_source_service.py     | 178 +++++++++++++++++++++
+ .../tests/data_platform/test_dp_parse_config.py    | 120 ++++++++++++++
+ 5 files changed, 333 insertions(+)
+ create mode 100644 .blueprint/qa/T31/pytest.txt
+ create mode 100644 backend/tests/data_platform/test_dp_parse_config.py
+T31: CLEAN
+
+=== Merging blueprint/32-smart-add-ui ===
+Auto-merging frontend/src/pages/data-platform/SourcesListPage.tsx
+Merge made by the 'ort' strategy.
+ .blueprint/qa/T32/vitest.txt                       |  99 +++++++++++++++
+ .../src/pages/data-platform/SourcesListPage.tsx    |  45 +++++--
+ .../data-platform/__tests__/SmartAddModal.test.tsx |  97 +++++++++++++++
+ .../data-platform/components/SmartAddModal.tsx     | 134 +++++++++++++++++++++
+ .../data-platform/components/SourceFormDrawer.tsx  |  33 ++++-
+ frontend/src/services/dataPlatform.service.ts      |  40 ++++++
+ 6 files changed, 438 insertions(+), 10 deletions(-)
+ create mode 100644 .blueprint/qa/T32/vitest.txt
+ create mode 100644 frontend/src/pages/data-platform/__tests__/SmartAddModal.test.tsx
+ create mode 100644 frontend/src/pages/data-platform/components/SmartAddModal.tsx
+T32: CLEAN
+
+=== Final int-full-w8 log ===
+ec44c0c Merge branch 'blueprint/32-smart-add-ui' into blueprint/int-full-w8
+6dd3cf5 Merge branch 'blueprint/31-parse-config-endpoint' into blueprint/int-full-w8
+f2a418a Merge branch 'blueprint/30-metadata-migration' into blueprint/int-full-w8
+e308e43 Merge branch 'blueprint/29-perception-shell-menu-cleanup' into blueprint/int-full-w8
+2e184af Merge branch 'blueprint/28-visual-qa-regression' into blueprint/int-full-w8
+9e5c785 Merge branch 'blueprint/27-playwright-e2e' into blueprint/int-full-w8
+a733805 Merge branch 'blueprint/26-frontend-vitest' into blueprint/int-full-w8
+3a654df Merge branch 'blueprint/25-backend-pytest-coverage' into blueprint/int-full-w8
+7e50799 ui: smart-add data source (parse-config + SourceFormDrawer prefill)
+0efeaac ui: migrate metadata browse + stream annotate to /data-platform/metadata
+7164db1 dp: parse-config endpoint (LLM-driven natural-language to DpDataSourceCreate)
+3df61aa ui: perception shell (2 cards) + top nav cleanup
+e5aa4c8 tests: Playwright E2E (9 scenarios + regression)
+58d8720 chore: perception-layer wave7 verification (screenshots + summary)
+7762da4 tests: backend pytest coverage (unit + integration + auth gate)
+15ec9c3 tests: frontend vitest (primitives + services + stores + detail page)
+8f260fd Merge branch 'blueprint/int-w6-frontend' into blueprint/int-full-w6
+cebe5aa Merge branch 'blueprint/24-kb-search-page' into blueprint/int-w6-frontend
+57805e7 Merge branch 'blueprint/23-kb-sublib-pages' into blueprint/int-w6-frontend
+bbe4149 Merge branch 'blueprint/22-page-source-detail' into blueprint/int-w6-frontend
