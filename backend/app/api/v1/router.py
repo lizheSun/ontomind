@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import perception, cognition, decision, execution, application, auth, users, llm, resources, projects
+from app.api.v1 import knowledge_base
 
 api_router = APIRouter()
 
@@ -19,3 +20,5 @@ api_router.include_router(application.router, prefix="/application", tags=["应�
 
 from app.api.v1 import data_platform
 api_router.include_router(data_platform.router, prefix="/data-platform", tags=["数据平台"])
+from app.api.v1 import knowledge_base
+api_router.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["知识库"])
