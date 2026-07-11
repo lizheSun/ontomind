@@ -1,0 +1,51 @@
+/Users/sun/CodeBuddy/20260627212423/backend/venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+........................................................................ [ 75%]
+.......................                                                  [100%]
+=============================== warnings summary ===============================
+../../20260627212423/backend/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+tests/data_platform/test_dp_routers_integration.py::test_create_source_returns_201_and_has_password_flag
+  /Users/sun/CodeBuddy/20260627212423/backend/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+tests/data_platform/test_dp_routers_integration.py: 17 warnings
+tests/knowledge_base/test_kb_routers_integration.py: 12 warnings
+  /Users/sun/CodeBuddy/20260627212423-w7t25/backend/app/core/security.py:26: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+tests/data_platform/test_dp_routers_integration.py: 47 warnings
+tests/knowledge_base/test_kb_routers_integration.py: 35 warnings
+  /Users/sun/CodeBuddy/20260627212423/backend/venv/lib/python3.12/site-packages/jose/jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = timegm(datetime.utcnow().utctimetuple())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.12.13-final-0 _______________
+
+Name                                        Stmts   Miss  Cover   Missing
+-------------------------------------------------------------------------
+app/api/v1/data_platform/__init__.py            9      0   100%
+app/api/v1/data_platform/chat.py               45      0   100%
+app/api/v1/data_platform/execute.py            21      0   100%
+app/api/v1/data_platform/history.py            13      0   100%
+app/api/v1/data_platform/saved_queries.py      29      0   100%
+app/api/v1/data_platform/sources.py            43      1    98%   60
+app/api/v1/knowledge_base/__init__.py          11      0   100%
+app/api/v1/knowledge_base/code_repos.py        32      3    91%   36-40
+app/api/v1/knowledge_base/data_assets.py       32      0   100%
+app/api/v1/knowledge_base/documents.py         38      6    84%   27-31, 66, 97-98
+app/api/v1/knowledge_base/experiences.py       32      2    94%   70-71
+app/api/v1/knowledge_base/libraries.py         11      0   100%
+app/api/v1/knowledge_base/search.py            11      0   100%
+app/api/v1/knowledge_base/tags.py              11      0   100%
+app/core/crypto.py                             42     12    71%   42-46, 55, 64, 70-72, 77-78
+app/core/sql_guard.py                          92     20    78%   94, 106, 111, 126, 171-175, 183-191, 196, 216-217
+app/services/dp_chat_service.py               127     13    90%   75-79, 109-111, 130-131, 155, 187, 216
+app/services/dp_data_source_service.py        172     17    90%   104, 116, 143, 155, 161, 163, 167, 188, 208, 258-259, 265, 297-298, 305, 316, 332
+app/services/dp_query_service.py              169     25    85%   53, 67-69, 96-109, 148, 160-161, 207, 210-221, 278, 323, 325, 328
+app/services/kb_service.py                    209     28    87%   88-94, 152, 192-196, 201-206, 248, 254, 291-296, 384, 405, 420, 429, 438
+-------------------------------------------------------------------------
+TOTAL                                        1149    127    89%
+95 passed, 113 warnings in 7.93s
