@@ -16,6 +16,7 @@ import ProjectsPage from './pages/projects/index';
 import DataPlatformIndex from './pages/data-platform';
 import SourcesListPage from './pages/data-platform/SourcesListPage';
 import SourceDetailPage from './pages/data-platform/SourceDetailPage';
+import MetadataPage from './pages/data-platform/MetadataPage';
 import KnowledgeBaseIndex from './pages/knowledge-base';
 import DataAssetsPage from './pages/knowledge-base/DataAssetsPage';
 import CodeReposPage from './pages/knowledge-base/CodeReposPage';
@@ -115,6 +116,7 @@ export default function App() {
               <Route path="data-platform" element={<DataPlatformIndex />} />
               <Route path="data-platform/sources" element={<SourcesListPage />} />
               <Route path="data-platform/sources/:sid" element={<SourceDetailPage />} />
+              <Route path="data-platform/metadata" element={<MetadataPage />} />
               <Route path="knowledge-base" element={<KnowledgeBaseIndex />} />
               <Route path="knowledge-base/data-assets" element={<DataAssetsPage />} />
               <Route path="knowledge-base/code-repos" element={<CodeReposPage />} />
