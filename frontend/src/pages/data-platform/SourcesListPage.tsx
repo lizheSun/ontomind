@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Space, Tag, message } from 'antd';
+import { Button, Radio, Space, Tag, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   PlusOutlined,
@@ -7,6 +7,7 @@ import {
   DatabaseOutlined,
   ThunderboltOutlined,
   ApiOutlined,
+  FileSearchOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -276,6 +277,22 @@ export default function SourcesListPage() {
 
   return (
     <div>
+      <Radio.Group
+        value="sources"
+        onChange={(e) => {
+          const v = e.target.value as 'sources' | 'metadata';
+          if (v === 'sources') navigate('/data-platform/sources');
+          else navigate('/data-platform/metadata');
+        }}
+        style={{ marginBottom: 16 }}
+      >
+        <Radio.Button value="sources">
+          <DatabaseOutlined /> 数据源
+        </Radio.Button>
+        <Radio.Button value="metadata">
+          <FileSearchOutlined /> 元数据
+        </Radio.Button>
+      </Radio.Group>
       <PageHeader
         title="数据平台 · 数据源"
         subtitle="连接、探查、并对话你的数据资产"
