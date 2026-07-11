@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # === 感知层加密（T01 新增） ===
+    FERNET_KEY: Optional[str] = None  # 逗号分隔 = MultiFernet 轮换
+
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
