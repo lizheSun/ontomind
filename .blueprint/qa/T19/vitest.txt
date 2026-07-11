@@ -1,0 +1,12 @@
+
+ RUN  v2.1.9 /Users/sun/CodeBuddy/20260627212423-w5t19/frontend
+
+ ✓ src/services/__tests__/dataPlatform.service.test.ts > dataPlatformService mapper > maps snake_case source to camelCase
+ ✓ src/services/__tests__/dataPlatform.service.test.ts > dataPlatformService mapper > throws on non-SUCCESS envelope
+ ✓ src/services/__tests__/dataPlatform.service.test.ts > dataPlatformService mapper > buildStreamUrl encodes sql query param
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  22:12:08
+   Duration  479ms (transform 28ms, setup 50ms, collect 11ms, tests 1ms, environment 208ms, prepare 37ms)
+
