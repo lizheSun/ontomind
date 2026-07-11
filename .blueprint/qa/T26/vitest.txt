@@ -1,0 +1,121 @@
+
+ RUN  v2.1.9 /Users/sun/CodeBuddy/20260627212423-w7t26/frontend
+
+ ✓ src/services/__tests__/dataPlatform.service.test.ts > dataPlatformService mapper > maps snake_case source to camelCase
+ ✓ src/services/__tests__/dataPlatform.service.test.ts > dataPlatformService mapper > throws on non-SUCCESS envelope
+ ✓ src/services/__tests__/dataPlatform.service.test.ts > dataPlatformService mapper > buildStreamUrl encodes sql query param
+ ✓ src/services/__tests__/knowledgeBase.service.test.ts > knowledgeBaseService > maps library camelCase from snake_case
+ ✓ src/services/__tests__/knowledgeBase.service.test.ts > knowledgeBaseService > search returns 4 buckets with camelCase libraryCode
+ ✓ src/services/__tests__/knowledgeBase.service.test.ts > knowledgeBaseService > throws on non-SUCCESS envelope
+ ✓ src/services/__tests__/knowledgeBase.service.test.ts > knowledgeBaseService > uploadDocument sends FormData to documents endpoint
+ ✓ src/stores/__tests__/dataPlatformStore.test.ts > useDataPlatformStore > fetchSources updates sources array and clears loading
+ ✓ src/stores/__tests__/dataPlatformStore.test.ts > useDataPlatformStore > fetchSchema caches result per source_id
+ ✓ src/stores/__tests__/dataPlatformStore.test.ts > useDataPlatformStore > deleteSource removes source and clears currentSourceId when matched
+ ✓ src/stores/__tests__/knowledgeBaseStore.test.ts > useKnowledgeBaseStore > fetchLibraries populates libraries array
+ ✓ src/stores/__tests__/knowledgeBaseStore.test.ts > useKnowledgeBaseStore > search stores query and grouped result
+ ✓ src/components/common/__tests__/SqlEditor.smoke.test.tsx > SqlEditor (smoke) > mounts without throwing (monaco stubbed by test-setup)
+ ✓ src/components/common/__tests__/SqlEditor.smoke.test.tsx > SqlEditor (smoke) > forwards value + onChange through the mock
+stderr | src/components/common/__tests__/DataTable.test.tsx > DataTable > renders AntD Table when dataSource has rows
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+    at module.exports (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at window.getComputedStyle (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/jsdom/lib/jsdom/browser/Window.js:895:7)
+    at measureScrollbarSize (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:35:34)
+    at getTargetScrollBarSize (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:87:10)
+    at /Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/table/lib/Table.js:393:59
+    at /Users/sun/CodeBuddy/20260627212423/frontend/node_modules/@rc-component/util/lib/hooks/useLayoutEffect.js:19:12
+    at Object.react_stack_bottom_frame (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/sun/CodeBuddy/20260627212423/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11) undefined
+
+ ✓ src/components/common/__tests__/DataTable.test.tsx > DataTable > renders EmptyState when dataSource is empty and not loading
+ ✓ src/components/common/__tests__/DataTable.test.tsx > DataTable > renders AntD Table when dataSource has rows
+ ✓ src/components/common/__tests__/DataTable.test.tsx > DataTable > supports custom emptyTitle
+ ✓ src/components/common/__tests__/SchemaTree.test.tsx > SchemaTree > renders empty state when no data
+ ✓ src/components/common/__tests__/SchemaTree.test.tsx > SchemaTree > renders loading state
+ ✓ src/components/common/__tests__/SchemaTree.test.tsx > SchemaTree > renders database node when data provided
+ ✓ src/components/common/__tests__/SchemaTree.test.tsx > SchemaTree > mounts without crashing when onColumnClick handler is provided
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > renders header + counters when rows present
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > only renders a small window of rows for 500-row input (virtualization)
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > shows EmptyState when rows are empty
+stderr | src/pages/knowledge-base/__tests__/KbSearchPage.test.tsx > KbSearchPage > renders pre-search empty state when no query
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+stderr | src/pages/knowledge-base/__tests__/KbSearchPage.test.tsx > KbSearchPage > triggers search when URL has q= and shows result title
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+ ✓ src/pages/knowledge-base/__tests__/KbSearchPage.test.tsx > KbSearchPage > renders pre-search empty state when no query
+stderr | src/pages/knowledge-base/__tests__/KbSearchPage.test.tsx > KbSearchPage > renders TagPill filter chips including 全部 + 4 library names
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+ ✓ src/pages/knowledge-base/__tests__/KbSearchPage.test.tsx > KbSearchPage > triggers search when URL has q= and shows result title
+ ✓ src/pages/knowledge-base/__tests__/KbSearchPage.test.tsx > KbSearchPage > renders TagPill filter chips including 全部 + 4 library names
+stderr | src/pages/data-platform/__tests__/SourceDetailPage.test.tsx > SourceDetailPage > renders the source name in header after loading
+Warning: [antd: Tabs] `destroyInactiveTabPane` is deprecated. Please use `destroyOnHidden` instead.
+Warning: [antd: Tabs] `destroyInactiveTabPane` is deprecated. Please use `destroyOnHidden` instead.
+
+ ✓ src/pages/data-platform/__tests__/SourceDetailPage.test.tsx > SourceDetailPage > renders the source name in header after loading
+stderr | src/pages/data-platform/__tests__/SourceDetailPage.test.tsx > SourceDetailPage > renders all 4 tab labels
+Warning: [antd: Tabs] `destroyInactiveTabPane` is deprecated. Please use `destroyOnHidden` instead.
+
+ ✓ src/pages/data-platform/__tests__/SourceDetailPage.test.tsx > SourceDetailPage > renders all 4 tab labels
+
+ Test Files  10 passed (10)
+      Tests  29 passed (29)
+   Start at  22:57:51
+   Duration  2.01s (transform 364ms, setup 751ms, collect 5.43s, tests 833ms, environment 3.44s, prepare 527ms)
+
+
+=== COVERAGE ===
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx (3 tests) 171ms
+ ✓ src/pages/knowledge-base/__tests__/KbSearchPage.test.tsx (3 tests) 251ms
+stderr | src/pages/data-platform/__tests__/SourceDetailPage.test.tsx > SourceDetailPage > renders the source name in header after loading
+Warning: [antd: Tabs] `destroyInactiveTabPane` is deprecated. Please use `destroyOnHidden` instead.
+Warning: [antd: Tabs] `destroyInactiveTabPane` is deprecated. Please use `destroyOnHidden` instead.
+
+stderr | src/pages/data-platform/__tests__/SourceDetailPage.test.tsx > SourceDetailPage > renders all 4 tab labels
+Warning: [antd: Tabs] `destroyInactiveTabPane` is deprecated. Please use `destroyOnHidden` instead.
+
+ ✓ src/pages/data-platform/__tests__/SourceDetailPage.test.tsx (2 tests) 281ms
+
+ Test Files  10 passed (10)
+      Tests  29 passed (29)
+   Start at  22:58:00
+   Duration  2.13s (transform 319ms, setup 508ms, collect 4.79s, tests 1.18s, environment 2.77s, prepare 678ms)
+
+ % Coverage report from v8
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-------------------|---------|----------|---------|---------|-------------------
+All files          |   45.24 |    71.31 |   31.42 |   45.24 |                   
+ components/common |   65.45 |    78.37 |      52 |   65.45 |                   
+  ...erConfirm.tsx |   13.33 |      100 |       0 |   13.33 | 18-30             
+  DataTable.tsx    |   97.56 |    55.55 |     100 |   97.56 | 45                
+  EmptyState.tsx   |     100 |       80 |     100 |     100 | 50                
+  GlassPanel.tsx   |   96.42 |    83.33 |     100 |   96.42 | 27                
+  PageHeader.tsx   |     100 |       25 |     100 |     100 | 29-61             
+  ResultGrid.tsx   |   59.16 |       90 |      50 |   59.16 | ...01-111,179-225 
+  SchemaTree.tsx   |    93.1 |       95 |      50 |    93.1 | 78-80,96-98       
+  SectionTitle.tsx |     100 |      100 |     100 |     100 |                   
+  SqlEditor.tsx    |   75.58 |    85.71 |   33.33 |   75.58 | 17-22,57-61,66-79 
+  StatCard.tsx     |      25 |      100 |       0 |      25 | 37-98             
+  TagPill.tsx      |   98.18 |    42.85 |      50 |   98.18 | 46                
+  index.ts         |     100 |      100 |     100 |     100 |                   
+  monaco-setup.ts  |    7.82 |      100 |   33.33 |    7.82 | 27-65,84-160      
+ services          |    22.6 |    56.66 |    19.4 |    22.6 |                   
+  api.ts           |       0 |        0 |       0 |       0 | 1-30              
+  ...rm.service.ts |    28.5 |    77.77 |   16.66 |    28.5 | ...92-297,300-305 
+  index.ts         |       0 |        0 |       0 |       0 | 1-217             
+  ...se.service.ts |   47.39 |    58.82 |   24.24 |   47.39 | ...64-265,270-272 
+  llm.service.ts   |       0 |        0 |       0 |       0 | 1-99              
+  user.service.ts  |       0 |        0 |       0 |       0 | 1-114             
+ stores            |   44.82 |    66.66 |   53.84 |   44.82 |                   
+  appStore.ts      |       0 |        0 |       0 |       0 | 1-13              
+  ...tformStore.ts |   82.35 |       80 |   66.66 |   82.35 | 35-37,41-42,53-56 
+  ...eBaseStore.ts |   78.26 |    66.66 |      60 |   78.26 | ...45,53-55,59-60 
+  userStore.ts     |       0 |        0 |       0 |       0 | 1-103             
+-------------------|---------|----------|---------|---------|-------------------
