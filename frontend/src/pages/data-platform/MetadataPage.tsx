@@ -25,8 +25,8 @@ import {
   SyncOutlined,
   TableOutlined,
 } from '@ant-design/icons';
-import { PageHeader } from '../../components/common';
-import { perceptionAPI, resourcesAPI } from '../../services';
+import { PageHeader, AgentPicker } from '../../components/common';
+import { perceptionAPI } from '../../services';
 import useDataPlatformStore from '../../stores/dataPlatformStore';
 
 // ---------------------------------------------------------------------------
@@ -89,7 +89,6 @@ export default function MetadataPage() {
   const [profileData, setProfileData] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   // Agent 选择（标注用）
-  const [agents, setAgents] = useState<any[]>([]);
   const [annotateAgentId, setAnnotateAgentId] = useState<number | undefined>(undefined);
   // 标注对话流
   const [annotateEvents, setAnnotateEvents] = useState<
@@ -254,19 +253,6 @@ export default function MetadataPage() {
     }
     setAnnotateSending(false);
   };
-
-  const fetchAgents = useCallback(async () => {
-    try {
-      const res = await resourcesAPI.listAgents({ skip: 0, limit: 200 });
-      setAgents(res.data?.data || []);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchAgents();
-  }, [fetchAgents]);
 
   const handleDbChange = (db: string) => {
     setSelectedDb(db);
@@ -957,18 +943,13 @@ export default function MetadataPage() {
                     智能标注
                   </span>
                 </Space>
-                <Select
+                <AgentPicker
+                  value={annotateAgentId}
+                  onChange={(v) => setAnnotateAgentId(v ?? undefined)}
+                  includePlatformLlm
+                  includeLegacyAgents
                   size="small"
                   style={{ width: 160 }}
-                  value={annotateAgentId}
-                  onChange={(v) => setAnnotateAgentId(v)}
-                  options={[
-                    { value: undefined as any, label: '🏷️ 平台 LLM' },
-                    ...agents.map((a) => ({
-                      value: a.id,
-                      label: `${a.agent_type === 'openclaw' ? '🦞' : a.agent_type === 'opencode' ? '💻' : '🤖'} ${a.name}`,
-                    })),
-                  ]}
                 />
               </div>
 
