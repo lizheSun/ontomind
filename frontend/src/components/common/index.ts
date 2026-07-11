@@ -18,3 +18,5 @@ export type {
   SchemaTable,
   SchemaColumn,
 } from './SchemaTree';
+export { DataTable } from './DataTable';
+export type { DataTableProps } from './DataTable';
