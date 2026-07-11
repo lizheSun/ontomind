@@ -12,6 +12,15 @@ import ApplicationIndex from './pages/application/index';
 import ResourcesPage from './pages/resources/index';
 import UsersPage from './pages/users/index';
 import ProjectsPage from './pages/projects/index';
+import DataPlatformIndex from './pages/data-platform';
+import SourcesListPage from './pages/data-platform/SourcesListPage';
+import SourceDetailPage from './pages/data-platform/SourceDetailPage';
+import KnowledgeBaseIndex from './pages/knowledge-base';
+import DataAssetsPage from './pages/knowledge-base/DataAssetsPage';
+import CodeReposPage from './pages/knowledge-base/CodeReposPage';
+import DocumentsPage from './pages/knowledge-base/DocumentsPage';
+import ExperiencesPage from './pages/knowledge-base/ExperiencesPage';
+import KbSearchPage from './pages/knowledge-base/KbSearchPage';
 
 /** 路由守卫 */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -100,6 +109,16 @@ export default function App() {
               <Route path="resources" element={<ResourcesPage />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="users" element={<UsersPage />} />
+              {/* Wave 5 T20: data platform + knowledge base */}
+              <Route path="data-platform" element={<DataPlatformIndex />} />
+              <Route path="data-platform/sources" element={<SourcesListPage />} />
+              <Route path="data-platform/sources/:sid" element={<SourceDetailPage />} />
+              <Route path="knowledge-base" element={<KnowledgeBaseIndex />} />
+              <Route path="knowledge-base/data-assets" element={<DataAssetsPage />} />
+              <Route path="knowledge-base/code-repos" element={<CodeReposPage />} />
+              <Route path="knowledge-base/documents" element={<DocumentsPage />} />
+              <Route path="knowledge-base/experiences" element={<ExperiencesPage />} />
+              <Route path="knowledge-base/search" element={<KbSearchPage />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
