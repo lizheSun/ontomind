@@ -14,11 +14,13 @@ class SessionCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     source_id: int
     model_config_id: Optional[int] = None
+    agent_looper_config_id: Optional[int] = Field(None, description="指定 Agent（优先于 model_config_id）")
 
 
 class SessionUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=128)
     model_config_id: Optional[int] = None
+    agent_looper_config_id: Optional[int] = None
 
 
 class SessionRead(BaseModel):
@@ -27,6 +29,7 @@ class SessionRead(BaseModel):
     source_id: int
     user_id: int
     model_config_id: Optional[int] = None
+    agent_looper_config_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

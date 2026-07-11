@@ -115,9 +115,24 @@ class DpChatService:
         ds_row = self.ds_service.repo.get_by_id(session.source_id)
         dialect_zh = _dialect_display(ds_row.dialect if ds_row else "mysql")
 
-        # 4. Call LLM
+        # 4. Build system prompt (Agent wins over model_config_id).
+        agent_prompt: Optional[str] = None
+        if getattr(session, "agent_looper_config_id", None):
+            try:
+                from app.services.agent_looper_service import AgentLooperService
+
+                agent_svc = AgentLooperService(self.db)
+                _config, _version, config_json = agent_svc.get_current_config_dict(
+                    session.agent_looper_config_id, session.user_id,
+                )
+                agent_prompt = (config_json or {}).get("system_prompt") or None
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"[dp-chat] load agent_looper_config failed: {exc}")
+                agent_prompt = None
+
+        system_content = agent_prompt if agent_prompt else _system_prompt(dialect_zh, schema_summary)
         messages = [
-            {"role": "system", "content": _system_prompt(dialect_zh, schema_summary)},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": content},
         ]
         try:

@@ -32,6 +32,11 @@ from app.db.models.kb_document_model import KbDocument
 from app.db.models.kb_experience_model import KbExperience
 from app.db.models.kb_tag_model import KbTag
 
+# --- Agent Looper (T34) ---
+from app.db.models.agent_looper_config_model import AgentLooperConfig
+from app.db.models.agent_looper_version_model import AgentLooperVersion
+from app.db.models.agent_looper_test_run_model import AgentLooperTestRun
+
 __all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaProfile",
            "OntologyVersion", "OntologyClass", "OntologyProperty",
            "OntologyRelationship", "OntologyConstraint",
@@ -40,4 +45,5 @@ __all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaPr
            "DpDataSource", "DpSqlQuery", "DpQueryHistory",
            "DpChatSession", "DpChatMessage",
            "KbLibrary", "KbDataAsset", "KbCodeRepo",
-           "KbDocument", "KbExperience", "KbTag"]
+           "KbDocument", "KbExperience", "KbTag",
+           "AgentLooperConfig", "AgentLooperVersion", "AgentLooperTestRun"]

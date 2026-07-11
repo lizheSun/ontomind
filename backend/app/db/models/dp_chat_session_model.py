@@ -1,4 +1,4 @@
-"""数据平台-Text2SQL 会话（T06 完整列定义）。"""
+"""数据平台-Text2SQL 会话（T06 完整列定义 + T36 agent_looper_config_id）。"""
 from sqlalchemy import Column, String, Integer, ForeignKey
 from app.db.models.base import BaseModel
 
@@ -20,4 +20,8 @@ class DpChatSession(BaseModel):
     model_config_id = Column(
         Integer, ForeignKey("llm_configs.id"), nullable=True,
         comment="使用的 llm_configs 记录（NULL 走默认）",
+    )
+    agent_looper_config_id = Column(
+        Integer, ForeignKey("agent_looper_configs.id"), nullable=True,
+        comment="指定 Agent（优先于 model_config_id）",
     )
