@@ -1,0 +1,188 @@
+version: 1
+generated_at: "2026-07-10"
+
+company:
+  name_zh: 信优消费金融有限公司
+  name_en: Sim Consumer Finance Co., Ltd.
+  short_zh: 信优消金
+  short_en: SimCF
+  headquarters: 北京
+  branches:
+    - name: 华北分公司
+      city: 北京
+    - name: 华东分公司
+      city: 上海
+    - name: 华南分公司
+      city: 深圳
+    - name: 华中分公司
+      city: 武汉
+    - name: 西南分公司
+      city: 成都
+    - name: 东北分公司
+      city: 沈阳
+
+products:
+  - code: SELF_LOAN
+    name: 信优速贷
+    kind: 自营信贷
+    share: 0.40
+  - code: PLATFORM_LOAN
+    name: 信优合作贷
+    kind: 助贷平台业务
+    share: 0.30
+  - code: JOINT_LOAN
+    name: 信优联合贷
+    kind: 联合贷分润业务
+    share: 0.20
+  - code: GUARANTEE_LOAN
+    name: 信优保贷
+    kind: 担保业务
+    share: 0.10
+
+timeline:
+  data_start: "2025-01-01"
+  data_end: "2025-06-30"
+  today: "2025-07-01"
+
+scale:
+  customers: 10000
+  applications: 18000
+  loans: 8000
+  events: 500000
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: ""
+
+databases:
+  - name: sim_cust_cif
+    system: 客户中心 (CIF)
+    domain: customer
+    tables:
+      - customer
+      - identity
+      - address
+      - contact
+      - kyc_result
+      - customer_tag
+
+  - name: sim_loan_intake
+    system: 进件受理
+    domain: intake
+    tables:
+      - application
+      - application_status_log
+      - doc_upload
+      - credit_report_pull
+      - intake_channel_ref
+
+  - name: sim_risk_decision
+    system: 风险决策
+    domain: risk
+    tables:
+      - rule_set
+      - decision_log
+      - model_score
+      - blacklist
+      - antifraud_event
+      - risk_grade
+      - policy_ref
+
+  - name: sim_credit_core
+    system: 信贷核心
+    domain: credit
+    tables:
+      - credit_limit
+      - loan
+      - loan_ledger
+      - repayment_plan
+      - repayment_actual
+      - overdue_record
+      - product
+      - contract
+      - fee_charge
+      - loan_status_log
+
+  - name: sim_collection
+    system: 催收管理
+    domain: credit
+    tables:
+      - collection_case
+      - collection_action
+      - promise_to_pay
+      - collector
+
+  - name: sim_funding
+    system: 资金/合作方
+    domain: funding
+    tables:
+      - funding_partner
+      - funding_agreement
+      - loan_funding_split
+      - profit_share_record
+      - partner_settle
+      - guarantee_record
+
+  - name: sim_finance
+    system: 财务
+    domain: finance
+    tables:
+      - gl_account
+      - gl_journal
+      - settlement
+      - tax_record
+      - reconcile_log
+      - fee_income
+      - interest_income
+
+  - name: sim_marketing
+    system: 营销
+    domain: marketing
+    tables:
+      - channel
+      - campaign
+      - ad_cost
+      - attribution
+      - promo_code
+      - user_promo_use
+
+  - name: sim_events
+    system: 埋点收集
+    domain: data_platform
+    tables:
+      - app_event
+      - page_view
+      - click_stream
+
+  - name: sim_csm
+    system: 客服
+    domain: ops
+    tables:
+      - ticket
+      - call_record
+      - complaint
+      - ticket_action
+
+  - name: sim_hr_iam
+    system: HR & 权限
+    domain: internal
+    tables:
+      - employee
+      - org_unit
+      - role
+      - user_role
+
+  - name: sim_dp_meta
+    system: 数据平台元数据
+    domain: data_platform
+    tables:
+      - table_meta
+      - etl_job
+      - data_lineage
+
+  - name: sim_dw
+    system: 数据仓库
+    domain: dw
+    tables: []  # Task 03 填充

@@ -1,0 +1,8 @@
+role_code,role_name,description
+R_ADMIN,系统管理员,全权限
+R_RISK_MGR,风险经理,风控决策
+R_COLL,催收员,催收操作
+R_CS,客服,工单处理
+R_FIN,财务,凭证与结算
+R_DATA,数据分析师,查询数仓
+R_PRODUCT,产品经理,产品配置

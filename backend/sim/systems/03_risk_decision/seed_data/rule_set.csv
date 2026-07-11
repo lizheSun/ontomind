@@ -1,0 +1,11 @@
+rule_id,rule_name,rule_type,domain,formula,is_active,version,effective_from,is_test_data
+R001,年龄准入,HARD_REJECT,COMPLIANCE,age < 18 OR age > 60,1,1,2025-01-01,1
+R002,身份证黑名单,HARD_REJECT,ANTIFRAUD,id_number IN blacklist,1,1,2025-01-01,1
+R003,手机号黑名单,HARD_REJECT,ANTIFRAUD,phone IN blacklist,1,1,2025-01-01,1
+R004,多头申请,SOFT_REJECT,CREDIT,apply_count_7d >= 5,1,1,2025-01-01,1
+R005,严重逾期历史,HARD_REJECT,CREDIT,max_overdue_stage >= M3,1,1,2025-01-01,1
+R006,模型分低,SOFT_REJECT,CREDIT,a_score < 500,1,1,2025-01-01,1
+R007,反欺诈拦截,HARD_REJECT,ANTIFRAUD,fraud_score >= 800,1,1,2025-01-01,1
+R008,月收入不足,SOFT_REJECT,CREDIT,monthly_income < 3000,1,1,2025-01-01,1
+R009,KYC 未通过,HARD_REJECT,COMPLIANCE,kyc_status != PASS,1,1,2025-01-01,1
+R010,GPS 异常,WARNING,ANTIFRAUD,gps_change_10min > 100km,1,1,2025-01-01,1

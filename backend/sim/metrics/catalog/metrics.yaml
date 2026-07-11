@@ -1,0 +1,5261 @@
+version: '1.0'
+metrics:
+- id: M0001
+  name_zh: 日活跃用户数
+  name_en: dau
+  aliases:
+  - 日活
+  - DAU
+  - active_users_daily
+  - 日活跃用户数
+  - dau
+  level: 一级
+  domain: user
+  department: 运营部
+  owner: data-ops@simcf.com
+  definition: 当日在 APP 有登录/浏览/操作行为的去重用户数
+  formula: COUNT(DISTINCT customer_id)
+  filters:
+  - is_test_user=0
+  - is_robot=0
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_customer_active_day
+  sql_template: 'SELECT stat_date, COUNT(DISTINCT customer_id) AS dau
+
+    FROM sim_dw.dws_customer_active_day
+
+    WHERE stat_date = ''${date}''
+
+    GROUP BY stat_date'
+  related_metrics:
+  - M0002
+  - M0003
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0002
+  name_zh: 月活跃用户数
+  name_en: mau
+  aliases:
+  - 月活
+  - MAU
+  - 月活跃用户数
+  - mau
+  level: 一级
+  domain: user
+  department: 运营部
+  owner: data-ops@simcf.com
+  definition: 过去 30 天内在 APP 有活跃行为的去重用户数
+  formula: COUNT(DISTINCT customer_id) OVER 30 days
+  filters: []
+  dedup_key: customer_id
+  time_grain: rolling_30d
+  source_tables:
+  - sim_dw.dws_customer_active_day
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) AS mau
+
+    FROM sim_dw.dws_customer_active_day
+
+    WHERE stat_date BETWEEN DATE_SUB(''${date}'', INTERVAL 29 DAY) AND ''${date}'''
+  related_metrics:
+  - M0001
+  - M0003
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0003
+  name_zh: 周活跃用户数
+  name_en: wau
+  aliases:
+  - 周活
+  - WAU
+  - 周活跃用户数
+  - wau
+  level: 二级
+  domain: user
+  department: 运营部
+  owner: data-ops@simcf.com
+  definition: 过去 7 天在 APP 有活跃行为的去重用户数
+  formula: COUNT(DISTINCT customer_id) OVER 7 days
+  filters: []
+  dedup_key: customer_id
+  time_grain: rolling_7d
+  source_tables:
+  - sim_dw.dws_customer_active_day
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) AS wau
+
+    FROM sim_dw.dws_customer_active_day
+
+    WHERE stat_date BETWEEN DATE_SUB(''${date}'', INTERVAL 6 DAY) AND ''${date}'''
+  related_metrics:
+  - M0001
+  - M0002
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0004
+  name_zh: 新客数
+  name_en: new_customer_count
+  aliases:
+  - 新增用户
+  - new_user
+  - 新客数
+  - new_customer_count
+  level: 一级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 当日新注册的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE reg_date = today
+  filters: []
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT reg_date, COUNT(DISTINCT customer_id) AS new_customer_count
+
+    FROM sim_dw.dim_customer
+
+    WHERE reg_date = ''${date}'' AND is_current=1
+
+    GROUP BY reg_date'
+  related_metrics:
+  - M0001
+  - M0005
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0005
+  name_zh: 累计客户数
+  name_en: total_customer_count
+  aliases:
+  - 总客户数
+  - total_users
+  - 累计客户数
+  - total_customer_count
+  level: 一级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 截至某日累计注册的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE reg_date <= today
+  filters:
+  - status != 'CLOSED'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) AS total_customer_count
+
+    FROM sim_dw.dim_customer
+
+    WHERE reg_date <= ''${date}'' AND is_current=1 AND status != ''CLOSED'''
+  related_metrics:
+  - M0004
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0006
+  name_zh: 次日留存率
+  name_en: d1_retention_rate
+  aliases:
+  - d1_retention
+  - 次留
+  - 次日留存率
+  - d1_retention_rate
+  level: 二级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 新注册用户第二天回访率
+  formula: d1_returned / d0_registered
+  filters: []
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  - sim_dw.dws_customer_active_day
+  sql_template: "SELECT c.reg_date,\n       COUNT(DISTINCT a.customer_id) / COUNT(DISTINCT\
+    \ c.customer_id) AS d1_retention\nFROM sim_dw.dim_customer c\nLEFT JOIN sim_dw.dws_customer_active_day\
+    \ a\n    ON a.customer_id=c.customer_id AND a.stat_date=DATE_ADD(c.reg_date,INTERVAL\
+    \ 1 DAY)\nWHERE c.reg_date = '${date}' AND c.is_current=1\nGROUP BY c.reg_date"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0007
+  name_zh: 7 日留存率
+  name_en: d7_retention_rate
+  aliases:
+  - d7_retention
+  - 7日留存
+  - 7 日留存率
+  - d7_retention_rate
+  level: 二级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 新注册用户第 8 天回访率
+  formula: d7_returned / d0_registered
+  filters: []
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  - sim_dw.dws_customer_active_day
+  sql_template: "SELECT c.reg_date,\n       COUNT(DISTINCT a.customer_id) / COUNT(DISTINCT\
+    \ c.customer_id) AS d7_retention\nFROM sim_dw.dim_customer c\nLEFT JOIN sim_dw.dws_customer_active_day\
+    \ a\n    ON a.customer_id=c.customer_id AND a.stat_date=DATE_ADD(c.reg_date,INTERVAL\
+    \ 7 DAY)\nWHERE c.reg_date = '${date}' AND c.is_current=1\nGROUP BY c.reg_date"
+  related_metrics:
+  - M0006
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0008
+  name_zh: 客户平均年龄
+  name_en: avg_customer_age
+  aliases:
+  - mean_age
+  - 客户平均年龄
+  - avg_customer_age
+  level: 二级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 全部活跃客户的年龄均值
+  formula: AVG(age)
+  filters:
+  - status='ACTIVE'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT AVG(age) AS avg_age FROM sim_dw.dim_customer WHERE is_current=1
+    AND status='ACTIVE'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0009
+  name_zh: 18-25 岁客户数
+  name_en: customer_count_18_25
+  aliases:
+  - 18-25客户
+  - 18-25 岁客户数
+  - customer_count_18_25
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 年龄段 18-25 岁的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE age_group=X
+  filters:
+  - age_group='18-25'
+  - status='ACTIVE'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE age_group=''18-25'' AND is_current=1 AND status=''ACTIVE'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0010
+  name_zh: 26-35 岁客户数
+  name_en: customer_count_26_35
+  aliases:
+  - 26-35客户
+  - 26-35 岁客户数
+  - customer_count_26_35
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 年龄段 26-35 岁的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE age_group=X
+  filters:
+  - age_group='26-35'
+  - status='ACTIVE'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE age_group=''26-35'' AND is_current=1 AND status=''ACTIVE'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0011
+  name_zh: 36-45 岁客户数
+  name_en: customer_count_36_45
+  aliases:
+  - 36-45客户
+  - 36-45 岁客户数
+  - customer_count_36_45
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 年龄段 36-45 岁的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE age_group=X
+  filters:
+  - age_group='36-45'
+  - status='ACTIVE'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE age_group=''36-45'' AND is_current=1 AND status=''ACTIVE'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0012
+  name_zh: 46-55 岁客户数
+  name_en: customer_count_46_55
+  aliases:
+  - 46-55客户
+  - 46-55 岁客户数
+  - customer_count_46_55
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 年龄段 46-55 岁的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE age_group=X
+  filters:
+  - age_group='46-55'
+  - status='ACTIVE'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE age_group=''46-55'' AND is_current=1 AND status=''ACTIVE'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0013
+  name_zh: 55+ 岁客户数
+  name_en: customer_count_55_plus
+  aliases:
+  - 55+客户
+  - 55+ 岁客户数
+  - customer_count_55_plus
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 年龄段 55+ 岁的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE age_group=X
+  filters:
+  - age_group='55+'
+  - status='ACTIVE'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE age_group=''55+'' AND is_current=1 AND status=''ACTIVE'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0014
+  name_zh: 初中学历客户数
+  name_en: customer_count_edu_初中
+  aliases:
+  - 初中客户
+  - 初中学历客户数
+  - customer_count_edu_初中
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 学历=初中 的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE education=X
+  filters:
+  - education='初中'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE education=''初中'' AND is_current=1'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0015
+  name_zh: 高中学历客户数
+  name_en: customer_count_edu_高中
+  aliases:
+  - 高中客户
+  - 高中学历客户数
+  - customer_count_edu_高中
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 学历=高中 的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE education=X
+  filters:
+  - education='高中'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE education=''高中'' AND is_current=1'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0016
+  name_zh: 大专学历客户数
+  name_en: customer_count_edu_大专
+  aliases:
+  - 大专客户
+  - 大专学历客户数
+  - customer_count_edu_大专
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 学历=大专 的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE education=X
+  filters:
+  - education='大专'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE education=''大专'' AND is_current=1'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0017
+  name_zh: 本科学历客户数
+  name_en: customer_count_edu_本科
+  aliases:
+  - 本科客户
+  - 本科学历客户数
+  - customer_count_edu_本科
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 学历=本科 的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE education=X
+  filters:
+  - education='本科'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE education=''本科'' AND is_current=1'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0018
+  name_zh: 硕士学历客户数
+  name_en: customer_count_edu_硕士
+  aliases:
+  - 硕士客户
+  - 硕士学历客户数
+  - customer_count_edu_硕士
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 学历=硕士 的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE education=X
+  filters:
+  - education='硕士'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE education=''硕士'' AND is_current=1'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0019
+  name_zh: 博士学历客户数
+  name_en: customer_count_edu_博士
+  aliases:
+  - 博士客户
+  - 博士学历客户数
+  - customer_count_edu_博士
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 学历=博士 的活跃客户数
+  formula: COUNT(DISTINCT customer_id) WHERE education=X
+  filters:
+  - education='博士'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer
+
+    WHERE education=''博士'' AND is_current=1'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0020
+  name_zh: 男性客户占比
+  name_en: male_ratio
+  aliases:
+  - male_share
+  - 男性客户占比
+  - male_ratio
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 男性客户 / 全部客户
+  formula: male / total
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: 'SELECT SUM(gender_code=1)/COUNT(*) AS male_ratio
+
+    FROM sim_dw.dim_customer WHERE is_current=1'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0021
+  name_zh: 授信申请量
+  name_en: apply_count
+  aliases:
+  - 申请数
+  - apply_cnt
+  - 授信申请量
+  - apply_count
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日提交的授信申请单数
+  formula: COUNT(*)
+  filters: []
+  dedup_key: application_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_application
+  sql_template: 'SELECT apply_date, COUNT(*) AS apply_count
+
+    FROM sim_dw.dwd_credit_application
+
+    WHERE apply_date=''${date}'' GROUP BY apply_date'
+  related_metrics:
+  - M0044
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0022
+  name_zh: 授信通过量
+  name_en: approve_count
+  aliases:
+  - approved_cnt
+  - 授信通过量
+  - approve_count
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日通过的申请数
+  formula: COUNT(*) WHERE decision='APPROVE'
+  filters:
+  - status='APPROVED'
+  dedup_key: application_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_application
+  sql_template: 'SELECT apply_date, COUNT(*) AS approve_count
+
+    FROM sim_dw.dwd_credit_application
+
+    WHERE apply_date=''${date}'' AND status=''APPROVED'' GROUP BY apply_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0023
+  name_zh: 授信通过率
+  name_en: approval_rate
+  aliases:
+  - approve_rate
+  - 过审率
+  - 授信通过率
+  - approval_rate
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日通过量 / 当日申请量
+  formula: approve_count / apply_count
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_application
+  sql_template: "SELECT apply_date,\n       SUM(status='APPROVED')/COUNT(*) AS approval_rate\n\
+    FROM sim_dw.dwd_credit_application\nWHERE apply_date='${date}' GROUP BY apply_date"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0024
+  name_zh: 拒绝率
+  name_en: reject_rate
+  aliases:
+  - 拒绝率
+  - reject_rate
+  level: 二级
+  domain: credit
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 被拒绝的申请占比
+  formula: reject_count / apply_count
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_application
+  sql_template: 'SELECT apply_date, SUM(status=''REJECTED'')/COUNT(*) AS reject_rate
+
+    FROM sim_dw.dwd_credit_application
+
+    WHERE apply_date=''${date}'' GROUP BY apply_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0025
+  name_zh: 放款笔数
+  name_en: loan_count
+  aliases:
+  - loan_cnt
+  - 放款订单数
+  - 放款笔数
+  - loan_count
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日新增放款的借据数
+  formula: COUNT(loan_id)
+  filters: []
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, COUNT(*) AS loan_count
+
+    FROM sim_dw.dwd_credit_loan
+
+    WHERE disburse_date=''${date}'' GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0026
+  name_zh: 放款金额
+  name_en: disburse_amount
+  aliases:
+  - 放款额
+  - GMV
+  - loan_amount
+  - 放款金额
+  - disburse_amount
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日新增放款的本金总额
+  formula: SUM(principal)
+  filters: []
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, SUM(principal) AS disburse_amount
+
+    FROM sim_dw.dwd_credit_loan
+
+    WHERE disburse_date=''${date}'' GROUP BY disburse_date'
+  related_metrics:
+  - M0044
+  - M0046
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0027
+  name_zh: 户均放款金额
+  name_en: avg_loan_amount
+  aliases:
+  - avg_disburse
+  - 户均放款金额
+  - avg_loan_amount
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款金额 / 客户数
+  formula: SUM(principal) / COUNT(DISTINCT customer_id)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, SUM(principal)/COUNT(DISTINCT customer_id)
+    AS avg_amount
+
+    FROM sim_dw.dwd_credit_loan
+
+    WHERE disburse_date=''${date}'' GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0028
+  name_zh: 笔均放款金额
+  name_en: avg_loan_principal
+  aliases:
+  - avg_per_loan
+  - 笔均放款金额
+  - avg_loan_principal
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款金额 / 借据数
+  formula: SUM(principal) / COUNT(*)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, AVG(principal) AS avg_principal
+
+    FROM sim_dw.dwd_credit_loan
+
+    WHERE disburse_date=''${date}'' GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0029
+  name_zh: 在贷客户数
+  name_en: outstanding_customers
+  aliases:
+  - 有贷客户数
+  - 在贷客户数
+  - outstanding_customers
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 截至某日仍有未结清借据的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE status='NORMAL' or 'OVERDUE'
+  filters:
+  - status IN ('NORMAL','OVERDUE')
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT COUNT(DISTINCT customer_id) AS outstanding_customers
+
+    FROM sim_dw.dwd_credit_loan
+
+    WHERE status IN (''NORMAL'',''OVERDUE'') AND disburse_date<=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0030
+  name_zh: 在贷余额
+  name_en: outstanding_balance
+  aliases:
+  - 贷款余额
+  - credit_balance
+  - 在贷余额
+  - outstanding_balance
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 所有活跃借据的剩余本金合计
+  formula: SUM(remaining_principal)
+  filters:
+  - status IN ('NORMAL','OVERDUE')
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: "-- 简化：以放款金额扣减已还本金\nSELECT\n  SUM(l.principal) - IFNULL((\n    SELECT\
+    \ SUM(principal_paid) FROM sim_dw.dwd_credit_repayment r\n    WHERE r.loan_id=l.loan_id\
+    \ AND r.pay_date <= '${date}'\n  ), 0) AS outstanding_balance\nFROM sim_dw.dwd_credit_loan\
+    \ l\nWHERE l.status IN ('NORMAL','OVERDUE') AND l.disburse_date <= '${date}'"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0031
+  name_zh: 30 天支用率
+  name_en: draw_rate_30d
+  aliases:
+  - 支用率
+  - utilization_30d
+  - 30 天支用率
+  - draw_rate_30d
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 授信后 30 天内产生放款的客户占比
+  formula: drawn_30d / approved
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_credit_core.credit_limit
+  - sim_credit_core.loan
+  sql_template: "SELECT DATE_FORMAT(cl.created_at,'%Y%m') AS month,\n       COUNT(DISTINCT\
+    \ l.customer_id)/COUNT(DISTINCT cl.customer_id) AS draw_rate\nFROM sim_credit_core.credit_limit\
+    \ cl\nLEFT JOIN sim_credit_core.loan l ON l.customer_id=cl.customer_id\n AND l.disburse_time\
+    \ BETWEEN cl.created_at AND DATE_ADD(cl.created_at,INTERVAL 30 DAY)\nGROUP BY\
+    \ DATE_FORMAT(cl.created_at,'%Y%m')"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0032
+  name_zh: 信优速贷放款金额
+  name_en: disburse_amount_self_loan
+  aliases:
+  - 信优速贷放款
+  - SELF_LOAN_amount
+  - 信优速贷放款金额
+  - disburse_amount_self_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日 信优速贷 产品的放款金额
+  formula: SUM(principal) WHERE product_code='SELF_LOAN'
+  filters:
+  - product_code='SELF_LOAN'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, SUM(principal) FROM sim_dw.dwd_credit_loan
+
+    WHERE product_code=''SELF_LOAN'' AND disburse_date=''${date}''
+
+    GROUP BY disburse_date'
+  related_metrics:
+  - M0046
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0033
+  name_zh: 信优速贷放款笔数
+  name_en: loan_count_self_loan
+  aliases:
+  - 信优速贷放款笔数
+  - loan_count_self_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日 信优速贷 产品的放款笔数
+  formula: COUNT(*) WHERE product_code='SELF_LOAN'
+  filters:
+  - product_code='SELF_LOAN'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, COUNT(*) FROM sim_dw.dwd_credit_loan
+
+    WHERE product_code=''SELF_LOAN'' AND disburse_date=''${date}''
+
+    GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0034
+  name_zh: 信优速贷通过率
+  name_en: approval_rate_self_loan
+  aliases:
+  - 信优速贷过审率
+  - 信优速贷通过率
+  - approval_rate_self_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 信优速贷 产品的通过率
+  formula: approve_count / apply_count
+  filters:
+  - product_code='SELF_LOAN'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_application
+  sql_template: 'SELECT apply_date, SUM(status=''APPROVED'')/COUNT(*) approval_rate
+
+    FROM sim_dw.dwd_credit_application
+
+    WHERE product_code=''SELF_LOAN'' AND apply_date=''${date}''
+
+    GROUP BY apply_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0035
+  name_zh: 信优合作贷放款金额
+  name_en: disburse_amount_platform_loan
+  aliases:
+  - 信优合作贷放款
+  - PLATFORM_LOAN_amount
+  - 信优合作贷放款金额
+  - disburse_amount_platform_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日 信优合作贷 产品的放款金额
+  formula: SUM(principal) WHERE product_code='PLATFORM_LOAN'
+  filters:
+  - product_code='PLATFORM_LOAN'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, SUM(principal) FROM sim_dw.dwd_credit_loan
+
+    WHERE product_code=''PLATFORM_LOAN'' AND disburse_date=''${date}''
+
+    GROUP BY disburse_date'
+  related_metrics:
+  - M0046
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0036
+  name_zh: 信优合作贷放款笔数
+  name_en: loan_count_platform_loan
+  aliases:
+  - 信优合作贷放款笔数
+  - loan_count_platform_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日 信优合作贷 产品的放款笔数
+  formula: COUNT(*) WHERE product_code='PLATFORM_LOAN'
+  filters:
+  - product_code='PLATFORM_LOAN'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, COUNT(*) FROM sim_dw.dwd_credit_loan
+
+    WHERE product_code=''PLATFORM_LOAN'' AND disburse_date=''${date}''
+
+    GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0037
+  name_zh: 信优合作贷通过率
+  name_en: approval_rate_platform_loan
+  aliases:
+  - 信优合作贷过审率
+  - 信优合作贷通过率
+  - approval_rate_platform_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 信优合作贷 产品的通过率
+  formula: approve_count / apply_count
+  filters:
+  - product_code='PLATFORM_LOAN'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_application
+  sql_template: 'SELECT apply_date, SUM(status=''APPROVED'')/COUNT(*) approval_rate
+
+    FROM sim_dw.dwd_credit_application
+
+    WHERE product_code=''PLATFORM_LOAN'' AND apply_date=''${date}''
+
+    GROUP BY apply_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0038
+  name_zh: 信优联合贷放款金额
+  name_en: disburse_amount_joint_loan
+  aliases:
+  - 信优联合贷放款
+  - JOINT_LOAN_amount
+  - 信优联合贷放款金额
+  - disburse_amount_joint_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日 信优联合贷 产品的放款金额
+  formula: SUM(principal) WHERE product_code='JOINT_LOAN'
+  filters:
+  - product_code='JOINT_LOAN'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, SUM(principal) FROM sim_dw.dwd_credit_loan
+
+    WHERE product_code=''JOINT_LOAN'' AND disburse_date=''${date}''
+
+    GROUP BY disburse_date'
+  related_metrics:
+  - M0046
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0039
+  name_zh: 信优联合贷放款笔数
+  name_en: loan_count_joint_loan
+  aliases:
+  - 信优联合贷放款笔数
+  - loan_count_joint_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日 信优联合贷 产品的放款笔数
+  formula: COUNT(*) WHERE product_code='JOINT_LOAN'
+  filters:
+  - product_code='JOINT_LOAN'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, COUNT(*) FROM sim_dw.dwd_credit_loan
+
+    WHERE product_code=''JOINT_LOAN'' AND disburse_date=''${date}''
+
+    GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0040
+  name_zh: 信优联合贷通过率
+  name_en: approval_rate_joint_loan
+  aliases:
+  - 信优联合贷过审率
+  - 信优联合贷通过率
+  - approval_rate_joint_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 信优联合贷 产品的通过率
+  formula: approve_count / apply_count
+  filters:
+  - product_code='JOINT_LOAN'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_application
+  sql_template: 'SELECT apply_date, SUM(status=''APPROVED'')/COUNT(*) approval_rate
+
+    FROM sim_dw.dwd_credit_application
+
+    WHERE product_code=''JOINT_LOAN'' AND apply_date=''${date}''
+
+    GROUP BY apply_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0041
+  name_zh: 信优保贷放款金额
+  name_en: disburse_amount_guarantee_loan
+  aliases:
+  - 信优保贷放款
+  - GUARANTEE_LOAN_amount
+  - 信优保贷放款金额
+  - disburse_amount_guarantee_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日 信优保贷 产品的放款金额
+  formula: SUM(principal) WHERE product_code='GUARANTEE_LOAN'
+  filters:
+  - product_code='GUARANTEE_LOAN'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, SUM(principal) FROM sim_dw.dwd_credit_loan
+
+    WHERE product_code=''GUARANTEE_LOAN'' AND disburse_date=''${date}''
+
+    GROUP BY disburse_date'
+  related_metrics:
+  - M0046
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0042
+  name_zh: 信优保贷放款笔数
+  name_en: loan_count_guarantee_loan
+  aliases:
+  - 信优保贷放款笔数
+  - loan_count_guarantee_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日 信优保贷 产品的放款笔数
+  formula: COUNT(*) WHERE product_code='GUARANTEE_LOAN'
+  filters:
+  - product_code='GUARANTEE_LOAN'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, COUNT(*) FROM sim_dw.dwd_credit_loan
+
+    WHERE product_code=''GUARANTEE_LOAN'' AND disburse_date=''${date}''
+
+    GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0043
+  name_zh: 信优保贷通过率
+  name_en: approval_rate_guarantee_loan
+  aliases:
+  - 信优保贷过审率
+  - 信优保贷通过率
+  - approval_rate_guarantee_loan
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 信优保贷 产品的通过率
+  formula: approve_count / apply_count
+  filters:
+  - product_code='GUARANTEE_LOAN'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_application
+  sql_template: 'SELECT apply_date, SUM(status=''APPROVED'')/COUNT(*) approval_rate
+
+    FROM sim_dw.dwd_credit_application
+
+    WHERE product_code=''GUARANTEE_LOAN'' AND apply_date=''${date}''
+
+    GROUP BY apply_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0044
+  name_zh: APR 加权平均
+  name_en: wavg_apr
+  aliases:
+  - 加权年化利率
+  - APR 加权平均
+  - wavg_apr
+  level: 二级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 以本金为权重的平均 APR
+  formula: SUM(principal*apr) / SUM(principal)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, SUM(principal*apr)/SUM(principal) AS wavg_apr
+
+    FROM sim_dw.dwd_credit_loan
+
+    WHERE disburse_date=''${date}'' GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0045
+  name_zh: 平均期限
+  name_en: avg_term_months
+  aliases:
+  - mean_term
+  - 平均期限
+  - avg_term_months
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款借据的平均期限
+  formula: AVG(term_months)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: 'SELECT disburse_date, AVG(term_months) FROM sim_dw.dwd_credit_loan
+
+    WHERE disburse_date=''${date}'' GROUP BY disburse_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0046
+  name_zh: 累计还款金额
+  name_en: total_repayment_amount
+  aliases:
+  - 还款额
+  - 累计还款金额
+  - total_repayment_amount
+  level: 一级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日还款流水金额合计
+  formula: SUM(pay_amount)
+  filters: []
+  dedup_key: repay_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_repayment
+  sql_template: 'SELECT pay_date, SUM(pay_amount) FROM sim_dw.dwd_credit_repayment
+
+    WHERE pay_date=''${date}'' GROUP BY pay_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0047
+  name_zh: 提前结清笔数
+  name_en: early_clear_count
+  aliases:
+  - early_clear
+  - 提前结清笔数
+  - early_clear_count
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日提前结清的借据数
+  formula: COUNT(loan_id) WHERE status='EARLY_CLEAR' OR pay_channel='EARLY'
+  filters:
+  - status='SETTLED'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_credit_core.loan_status_log
+  sql_template: 'SELECT DATE(changed_at), COUNT(DISTINCT loan_id)
+
+    FROM sim_credit_core.loan_status_log
+
+    WHERE remark=''提前结清'' AND DATE(changed_at)=''${date}''
+
+    GROUP BY DATE(changed_at)'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0048
+  name_zh: 利息收入
+  name_en: interest_income
+  aliases:
+  - 利息
+  - 利息收益
+  - 利息收入
+  - interest_income
+  level: 一级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 当日计提的利息收入
+  formula: SUM(amount) WHERE account_code='6001' AND direction='CR'
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, interest_income FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0049
+  name_zh: 手续费收入
+  name_en: fee_income
+  aliases:
+  - fee
+  - 服务费
+  - 手续费收入
+  - fee_income
+  level: 一级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 当日计提的手续费/服务费收入
+  formula: SUM(amount) WHERE account_code='6002' AND direction='CR'
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, fee_income FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0050
+  name_zh: 总收入
+  name_en: total_income
+  aliases:
+  - 总营业收入
+  - gross_income
+  - 总收入
+  - total_income
+  level: 一级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 利息收入 + 手续费收入
+  formula: interest_income + fee_income
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics:
+  - M0068
+  - M0069
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0051
+  name_zh: 资金成本
+  name_en: cost_of_fund
+  aliases:
+  - 资金成本额
+  - 资金成本
+  - cost_of_fund
+  level: 二级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 支付给合作方的分润金额
+  formula: SUM(partner_income)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: 'SELECT stat_month, SUM(partner_income) FROM sim_dw.dws_funding_partner_month
+
+    WHERE stat_month=''${month}'' GROUP BY stat_month'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0052
+  name_zh: 平均资金成本率
+  name_en: avg_cost_of_fund_rate
+  aliases:
+  - 资金成本率
+  - 平均资金成本率
+  - avg_cost_of_fund_rate
+  level: 二级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 资金成本 / 平均在贷余额（年化）
+  formula: cost_of_fund / avg_outstanding * 12
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: 'SELECT stat_month, SUM(partner_income)/NULLIF(SUM(funded_amount),0)*12
+    AS cost_rate
+
+    FROM sim_dw.dws_funding_partner_month
+
+    WHERE stat_month=''${month}'' GROUP BY stat_month'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0053
+  name_zh: 拨备覆盖率
+  name_en: provision_coverage_ratio
+  aliases:
+  - 拨备率
+  - 拨备覆盖率
+  - provision_coverage_ratio
+  level: 一级
+  domain: finance
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 贷款损失准备 / 不良贷款余额
+  formula: provision / npl
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: "-- 简化：假设拨备 = 3% 在贷余额\nSELECT 0.03 * SUM(l.principal) / NULLIF(SUM(o.overdue_amount),0)\
+    \ AS provision_ratio\nFROM sim_dw.dwd_credit_loan l\nLEFT JOIN sim_dw.dwd_credit_overdue\
+    \ o\n  ON o.loan_id=l.loan_id AND o.stage IN ('M3','M3+')\nWHERE l.disburse_date\
+    \ <= '${date}'"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0054
+  name_zh: 净息差
+  name_en: net_interest_margin
+  aliases:
+  - net_interest_margin
+  - 净息差
+  level: 一级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 净息差（示范定义）
+  formula: 利息收入 / 平均生息资产
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0055
+  name_zh: 净利润
+  name_en: net_profit
+  aliases:
+  - net_profit
+  - 净利润
+  level: 一级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 净利润（示范定义）
+  formula: 总收入-总支出-税
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0056
+  name_zh: 营业支出
+  name_en: operating_expense
+  aliases:
+  - operating_expense
+  - 营业支出
+  level: 二级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 营业支出（示范定义）
+  formula: sum of expenses
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0057
+  name_zh: 营销费用
+  name_en: marketing_cost
+  aliases:
+  - marketing_cost
+  - 营销费用
+  level: 二级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 营销费用（示范定义）
+  formula: sum(5002)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0058
+  name_zh: 人力成本
+  name_en: hr_cost
+  aliases:
+  - hr_cost
+  - 人力成本
+  level: 二级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 人力成本（示范定义）
+  formula: sum(5003)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0059
+  name_zh: 催收成本
+  name_en: collection_cost
+  aliases:
+  - collection_cost
+  - 催收成本
+  level: 二级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 催收成本（示范定义）
+  formula: sum(5004)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0060
+  name_zh: 坏账损失
+  name_en: bad_debt_loss
+  aliases:
+  - bad_debt_loss
+  - 坏账损失
+  level: 一级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 坏账损失（示范定义）
+  formula: sum(5005)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0061
+  name_zh: 资产回报率
+  name_en: roa
+  aliases:
+  - roa
+  - 资产回报率
+  level: 一级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 资产回报率（示范定义）
+  formula: 净利润/总资产
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0062
+  name_zh: 净资产回报率
+  name_en: roe
+  aliases:
+  - roe
+  - 净资产回报率
+  level: 二级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 净资产回报率（示范定义）
+  formula: 净利润/净资产
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0063
+  name_zh: 缴税金额
+  name_en: tax_amount
+  aliases:
+  - tax_amount
+  - 缴税金额
+  level: 二级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 缴税金额（示范定义）
+  formula: sum(tax_record.tax_amount)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0064
+  name_zh: 增值税
+  name_en: vat_amount
+  aliases:
+  - vat_amount
+  - 增值税
+  level: 三级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 增值税（示范定义）
+  formula: sum(tax where kind=VAT)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0065
+  name_zh: 所得税
+  name_en: income_tax_amount
+  aliases:
+  - income_tax_amount
+  - 所得税
+  level: 三级
+  domain: finance
+  department: 财务部
+  owner: finance@simcf.com
+  definition: 所得税（示范定义）
+  formula: sum(tax where kind=INCOME_TAX)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  sql_template: 'SELECT stat_date, total_income  -- 示范 SQL，实际计算需接入 GL
+
+    FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0066
+  name_zh: M1 逾期率
+  name_en: overdue_rate_m1
+  aliases:
+  - M1_rate
+  - 首逾率
+  - M1 逾期率
+  - overdue_rate_m1
+  level: 一级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: M1 及以上逾期借据数 / 总借据数
+  formula: m1+_loan_count / total_loan_count
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  - sim_dw.dwd_credit_overdue
+  sql_template: "SELECT\n  COUNT(DISTINCT o.loan_id) / (SELECT COUNT(*) FROM sim_dw.dwd_credit_loan\
+    \ WHERE disburse_date<='${date}')\n  AS overdue_rate_m1\nFROM sim_dw.dwd_credit_overdue\
+    \ o\nWHERE o.stage IN ('M1','M2','M3','M3+')"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0067
+  name_zh: M3 逾期率
+  name_en: overdue_rate_m3
+  aliases:
+  - M3_rate
+  - 严重逾期率
+  - M3 逾期率
+  - overdue_rate_m3
+  level: 一级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: M3 及以上逾期借据数 / 总借据数
+  formula: m3+_loan_count / total_loan_count
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  - sim_dw.dwd_credit_overdue
+  sql_template: "SELECT\n  COUNT(DISTINCT o.loan_id) / (SELECT COUNT(*) FROM sim_dw.dwd_credit_loan\
+    \ WHERE disburse_date<='${date}')\n  AS overdue_rate_m3\nFROM sim_dw.dwd_credit_overdue\
+    \ o\nWHERE o.stage IN ('M3','M3+')"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0068
+  name_zh: M2 逾期率
+  name_en: overdue_rate_m2
+  aliases:
+  - M2_rate
+  - M2 逾期率
+  - overdue_rate_m2
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: M2 及以上逾期占比
+  formula: m2+_loan_count / total
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: "SELECT\n  COUNT(DISTINCT o.loan_id) / (SELECT COUNT(*) FROM sim_dw.dwd_credit_loan\
+    \ WHERE disburse_date<='${date}')\n  AS overdue_rate_m2\nFROM sim_dw.dwd_credit_overdue\
+    \ o\nWHERE o.stage IN ('M2','M3','M3+')"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0069
+  name_zh: 首期逾期率
+  name_en: first_overdue_rate
+  aliases:
+  - 首逾
+  - 首期逾期率
+  - first_overdue_rate
+  level: 一级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 第一期出现逾期的借据占比
+  formula: first_period_overdue / total_loans
+  filters:
+  - period_no=1
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: 'SELECT COUNT(DISTINCT loan_id) FROM sim_dw.dwd_credit_overdue
+
+    WHERE period_no=1 AND overdue_start_date <= ''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0070
+  name_zh: 逾期金额
+  name_en: overdue_amount
+  aliases:
+  - overdue_balance
+  - 逾期金额
+  - overdue_amount
+  level: 一级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 所有活跃逾期的应还未还本金合计
+  formula: SUM(overdue_amount) WHERE end_date IS NULL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: 'SELECT SUM(overdue_amount) FROM sim_dw.dwd_credit_overdue
+
+    WHERE overdue_end_date IS NULL AND overdue_start_date <= ''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0071
+  name_zh: A 级客户数
+  name_en: grade_a_customer_count
+  aliases:
+  - grade_A
+  - A 级客户数
+  - grade_a_customer_count
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 风险等级=A 的当前客户数
+  formula: COUNT(DISTINCT customer_id) WHERE grade='A'
+  filters:
+  - grade='A'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_risk_grade_day
+  sql_template: 'SELECT stat_date, customer_count FROM sim_dw.dws_risk_grade_day
+
+    WHERE grade=''A'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0072
+  name_zh: B 级客户数
+  name_en: grade_b_customer_count
+  aliases:
+  - grade_B
+  - B 级客户数
+  - grade_b_customer_count
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 风险等级=B 的当前客户数
+  formula: COUNT(DISTINCT customer_id) WHERE grade='B'
+  filters:
+  - grade='B'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_risk_grade_day
+  sql_template: 'SELECT stat_date, customer_count FROM sim_dw.dws_risk_grade_day
+
+    WHERE grade=''B'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0073
+  name_zh: C 级客户数
+  name_en: grade_c_customer_count
+  aliases:
+  - grade_C
+  - C 级客户数
+  - grade_c_customer_count
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 风险等级=C 的当前客户数
+  formula: COUNT(DISTINCT customer_id) WHERE grade='C'
+  filters:
+  - grade='C'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_risk_grade_day
+  sql_template: 'SELECT stat_date, customer_count FROM sim_dw.dws_risk_grade_day
+
+    WHERE grade=''C'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0074
+  name_zh: D 级客户数
+  name_en: grade_d_customer_count
+  aliases:
+  - grade_D
+  - D 级客户数
+  - grade_d_customer_count
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 风险等级=D 的当前客户数
+  formula: COUNT(DISTINCT customer_id) WHERE grade='D'
+  filters:
+  - grade='D'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_risk_grade_day
+  sql_template: 'SELECT stat_date, customer_count FROM sim_dw.dws_risk_grade_day
+
+    WHERE grade=''D'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0075
+  name_zh: E 级客户数
+  name_en: grade_e_customer_count
+  aliases:
+  - grade_E
+  - E 级客户数
+  - grade_e_customer_count
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 风险等级=E 的当前客户数
+  formula: COUNT(DISTINCT customer_id) WHERE grade='E'
+  filters:
+  - grade='E'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_risk_grade_day
+  sql_template: 'SELECT stat_date, customer_count FROM sim_dw.dws_risk_grade_day
+
+    WHERE grade=''E'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0076
+  name_zh: 反欺诈拦截数
+  name_en: antifraud_hit_count
+  aliases:
+  - fraud_intercept
+  - 反欺诈拦截数
+  - antifraud_hit_count
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 当日反欺诈规则拦截的申请数
+  formula: COUNT(*) WHERE action_taken='BLOCK'
+  filters:
+  - action_taken='BLOCK'
+  dedup_key: event_id
+  time_grain: day
+  source_tables:
+  - sim_risk_decision.antifraud_event
+  sql_template: 'SELECT DATE(detected_at), COUNT(*) FROM sim_risk_decision.antifraud_event
+
+    WHERE action_taken=''BLOCK'' AND DATE(detected_at)=''${date}''
+
+    GROUP BY DATE(detected_at)'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0077
+  name_zh: 反欺诈事件数
+  name_en: antifraud_event_count
+  aliases:
+  - fraud_event
+  - 反欺诈事件数
+  - antifraud_event_count
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 当日触发的所有反欺诈事件
+  formula: COUNT(*)
+  filters: []
+  dedup_key: event_id
+  time_grain: day
+  source_tables:
+  - sim_risk_decision.antifraud_event
+  sql_template: 'SELECT DATE(detected_at), COUNT(*) FROM sim_risk_decision.antifraud_event
+
+    WHERE DATE(detected_at)=''${date}'' GROUP BY DATE(detected_at)'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0078
+  name_zh: 黑名单命中数
+  name_en: blacklist_hit_count
+  aliases:
+  - blacklist_hit
+  - 黑名单命中数
+  - blacklist_hit_count
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 决策日志中命中黑名单的次数
+  formula: COUNT(*) WHERE reject_reasons LIKE '%R002%' OR '%R003%'
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_risk_decision.decision_log
+  sql_template: "SELECT DATE(decided_at), COUNT(*) FROM sim_risk_decision.decision_log\n\
+    WHERE (reject_reasons LIKE '%R002%' OR reject_reasons LIKE '%R003%')\n  AND DATE(decided_at)='${date}'\
+    \ GROUP BY DATE(decided_at)"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0079
+  name_zh: Vintage MOB3 逾期率
+  name_en: vintage_mob3_overdue_rate
+  aliases:
+  - vintage_3
+  - Vintage MOB3 逾期率
+  - vintage_mob3_overdue_rate
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 放款后 3 个月的逾期率（按放款月分组）
+  formula: overdue_in_mob3 / total_loans_in_vintage
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  - sim_dw.dwd_credit_overdue
+  sql_template: "SELECT DATE_FORMAT(l.disburse_date,'%Y-%m') vintage,\n       COUNT(DISTINCT\
+    \ o.loan_id)/COUNT(DISTINCT l.loan_id) rate_mob3\nFROM sim_dw.dwd_credit_loan\
+    \ l\nLEFT JOIN sim_dw.dwd_credit_overdue o\n  ON o.loan_id=l.loan_id\n AND o.overdue_start_date\
+    \ <= DATE_ADD(l.disburse_date,INTERVAL 90 DAY)\nGROUP BY DATE_FORMAT(l.disburse_date,'%Y-%m')"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0080
+  name_zh: 模型分均值
+  name_en: model_score_avg
+  aliases:
+  - 模型分均值
+  - model_score_avg
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 模型分均值（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0081
+  name_zh: 模型 KS
+  name_en: model_ks
+  aliases:
+  - 模型 KS
+  - model_ks
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 模型 KS（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0082
+  name_zh: 模型 PSI
+  name_en: model_psi
+  aliases:
+  - 模型 PSI
+  - model_psi
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 模型 PSI（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0083
+  name_zh: 坏客户率
+  name_en: bad_customer_rate
+  aliases:
+  - 坏客户率
+  - bad_customer_rate
+  level: 一级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 坏客户率（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0084
+  name_zh: M1 催回率
+  name_en: recovery_rate_m1
+  aliases:
+  - M1 催回率
+  - recovery_rate_m1
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: M1 催回率（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0085
+  name_zh: M2 催回率
+  name_en: recovery_rate_m2
+  aliases:
+  - M2 催回率
+  - recovery_rate_m2
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: M2 催回率（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0086
+  name_zh: M3 催回率
+  name_en: recovery_rate_m3
+  aliases:
+  - M3 催回率
+  - recovery_rate_m3
+  level: 二级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: M3 催回率（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0087
+  name_zh: 催收案件数
+  name_en: collection_case_count
+  aliases:
+  - 催收案件数
+  - collection_case_count
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 催收案件数（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0088
+  name_zh: 催收动作数
+  name_en: collection_action_count
+  aliases:
+  - 催收动作数
+  - collection_action_count
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 催收动作数（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0089
+  name_zh: 承诺兑现率
+  name_en: ptp_fulfillment_rate
+  aliases:
+  - 承诺兑现率
+  - ptp_fulfillment_rate
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 承诺兑现率（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0090
+  name_zh: 拒绝原因 TOP1
+  name_en: rejection_reason_top1
+  aliases:
+  - 拒绝原因 TOP1
+  - rejection_reason_top1
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 拒绝原因 TOP1（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0091
+  name_zh: 共享设备数
+  name_en: device_share_count
+  aliases:
+  - 共享设备数
+  - device_share_count
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 共享设备数（详见风险管理办法）
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_overdue
+  sql_template: SELECT 1 AS stub_metric
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0092
+  name_zh: 获客成本 CPA
+  name_en: cpa
+  aliases:
+  - cost_per_acquisition
+  - 获客成本
+  - 获客成本 CPA
+  - cpa
+  level: 一级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 总营销花费 / 新客数
+  formula: SUM(ad_cost) / new_customers
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, SUM(ad_cost)/NULLIF(SUM(new_reg),0) AS cpa
+
+    FROM sim_dw.dws_marketing_channel_day
+
+    WHERE stat_date=''${date}'' GROUP BY stat_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0093
+  name_zh: 渠道 ROI
+  name_en: channel_roi
+  aliases:
+  - roi
+  - 渠道 ROI
+  - channel_roi
+  level: 一级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: (放款额 * 毛利率 - 投放成本) / 投放成本
+  formula: (loan_amount*0.15 - ad_cost) / ad_cost
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_marketing_roi_daily
+  sql_template: 'SELECT stat_date, channel_code, roi FROM sim_dw.ads_marketing_roi_daily
+
+    WHERE stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0094
+  name_zh: 广告曝光量
+  name_en: impression
+  aliases:
+  - 曝光
+  - impressions
+  - 广告曝光量
+  - impression
+  level: 二级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 当日广告曝光总次数
+  formula: SUM(impression)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, SUM(impression) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE stat_date=''${date}'' GROUP BY stat_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0095
+  name_zh: 点击量
+  name_en: click_count
+  aliases:
+  - click
+  - 点击量
+  - click_count
+  level: 二级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 当日广告点击总次数
+  formula: SUM(click)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, SUM(click) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE stat_date=''${date}'' GROUP BY stat_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0096
+  name_zh: 点击率 CTR
+  name_en: ctr
+  aliases:
+  - click_through_rate
+  - 点击率 CTR
+  - ctr
+  level: 二级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 点击量 / 曝光量
+  formula: SUM(click)/SUM(impression)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, SUM(click)/NULLIF(SUM(impression),0) AS ctr
+
+    FROM sim_dw.dws_marketing_channel_day
+
+    WHERE stat_date=''${date}'' GROUP BY stat_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0097
+  name_zh: 转化率 CVR
+  name_en: cvr
+  aliases:
+  - conversion_rate
+  - 转化率 CVR
+  - cvr
+  level: 二级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 新客数 / 点击量
+  formula: new_reg / click
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, SUM(new_reg)/NULLIF(SUM(click),0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE stat_date=''${date}'' GROUP BY stat_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0098
+  name_zh: 客户生命周期价值 LTV
+  name_en: ltv
+  aliases:
+  - lifetime_value
+  - 客户生命周期价值 LTV
+  - ltv
+  level: 一级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 客户在生命周期内产生的净收入
+  formula: avg_income - avg_cost
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_finance_income_day
+  - sim_dw.dim_customer
+  sql_template: 'SELECT AVG(total_income) FROM sim_dw.dws_finance_income_day
+
+    WHERE stat_date >= DATE_SUB(''${date}'', INTERVAL 30 DAY)'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0099
+  name_zh: APP_ORG 渠道 CPA
+  name_en: cpa_app_org
+  aliases:
+  - APP_ORG_cpa
+  - APP_ORG 渠道 CPA
+  - cpa_app_org
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 APP_ORG 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='APP_ORG'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''APP_ORG'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0100
+  name_zh: BAIDU_SEM 渠道 CPA
+  name_en: cpa_baidu_sem
+  aliases:
+  - BAIDU_SEM_cpa
+  - BAIDU_SEM 渠道 CPA
+  - cpa_baidu_sem
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 BAIDU_SEM 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='BAIDU_SEM'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''BAIDU_SEM'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0101
+  name_zh: TENCENT_AD 渠道 CPA
+  name_en: cpa_tencent_ad
+  aliases:
+  - TENCENT_AD_cpa
+  - TENCENT_AD 渠道 CPA
+  - cpa_tencent_ad
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 TENCENT_AD 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='TENCENT_AD'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''TENCENT_AD'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0102
+  name_zh: BYTEDANCE_AD 渠道 CPA
+  name_en: cpa_bytedance_ad
+  aliases:
+  - BYTEDANCE_AD_cpa
+  - BYTEDANCE_AD 渠道 CPA
+  - cpa_bytedance_ad
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 BYTEDANCE_AD 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='BYTEDANCE_AD'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''BYTEDANCE_AD'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0103
+  name_zh: KUAISHOU_AD 渠道 CPA
+  name_en: cpa_kuaishou_ad
+  aliases:
+  - KUAISHOU_AD_cpa
+  - KUAISHOU_AD 渠道 CPA
+  - cpa_kuaishou_ad
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 KUAISHOU_AD 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='KUAISHOU_AD'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''KUAISHOU_AD'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0104
+  name_zh: REFERRAL 渠道 CPA
+  name_en: cpa_referral
+  aliases:
+  - REFERRAL_cpa
+  - REFERRAL 渠道 CPA
+  - cpa_referral
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 REFERRAL 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='REFERRAL'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''REFERRAL'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0105
+  name_zh: PARTNER_BANK1 渠道 CPA
+  name_en: cpa_partner_bank1
+  aliases:
+  - PARTNER_BANK1_cpa
+  - PARTNER_BANK1 渠道 CPA
+  - cpa_partner_bank1
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 PARTNER_BANK1 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='PARTNER_BANK1'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''PARTNER_BANK1'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0106
+  name_zh: PARTNER_MALL 渠道 CPA
+  name_en: cpa_partner_mall
+  aliases:
+  - PARTNER_MALL_cpa
+  - PARTNER_MALL 渠道 CPA
+  - cpa_partner_mall
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 PARTNER_MALL 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='PARTNER_MALL'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''PARTNER_MALL'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0107
+  name_zh: H5_PROMO 渠道 CPA
+  name_en: cpa_h5_promo
+  aliases:
+  - H5_PROMO_cpa
+  - H5_PROMO 渠道 CPA
+  - cpa_h5_promo
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 H5_PROMO 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='H5_PROMO'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''H5_PROMO'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0108
+  name_zh: WECHAT_MP 渠道 CPA
+  name_en: cpa_wechat_mp
+  aliases:
+  - WECHAT_MP_cpa
+  - WECHAT_MP 渠道 CPA
+  - cpa_wechat_mp
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 渠道 WECHAT_MP 的获客成本
+  formula: ad_cost/new_reg
+  filters:
+  - channel_code='WECHAT_MP'
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: 'SELECT stat_date, ad_cost/NULLIF(new_reg,0) FROM sim_dw.dws_marketing_channel_day
+
+    WHERE channel_code=''WECHAT_MP'' AND stat_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0109
+  name_zh: 优惠码使用数
+  name_en: promo_code_usage_count
+  aliases:
+  - 优惠码使用数
+  - promo_code_usage_count
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 优惠码使用数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0110
+  name_zh: 优惠转化金额
+  name_en: promo_conversion_amount
+  aliases:
+  - 优惠转化金额
+  - promo_conversion_amount
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 优惠转化金额
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0111
+  name_zh: 末次触点归因数
+  name_en: attribution_last_touch
+  aliases:
+  - 末次触点归因数
+  - attribution_last_touch
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 末次触点归因数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0112
+  name_zh: 首次触点归因数
+  name_en: attribution_first_touch
+  aliases:
+  - 首次触点归因数
+  - attribution_first_touch
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 首次触点归因数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0113
+  name_zh: 平均出价
+  name_en: bid_cost_avg
+  aliases:
+  - 平均出价
+  - bid_cost_avg
+  level: 三级
+  domain: marketing
+  department: 营销部
+  owner: marketing@simcf.com
+  definition: 平均出价
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dws_marketing_channel_day
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0114
+  name_zh: 客服工单量
+  name_en: ticket_count
+  aliases:
+  - ticket_cnt
+  - 客服工单量
+  - ticket_count
+  level: 二级
+  domain: operation
+  department: 客服中心
+  owner: csm@simcf.com
+  definition: 当日新建工单总数
+  formula: COUNT(*)
+  filters: []
+  dedup_key: ticket_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_csm_ticket
+  sql_template: 'SELECT created_date, COUNT(*) FROM sim_dw.dwd_csm_ticket
+
+    WHERE created_date=''${date}'' GROUP BY created_date'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0115
+  name_zh: 投诉率
+  name_en: complaint_rate
+  aliases:
+  - 投诉占比
+  - 投诉率
+  - complaint_rate
+  level: 一级
+  domain: operation
+  department: 客服中心
+  owner: csm@simcf.com
+  definition: 投诉工单 / 当日活跃客户
+  formula: complaint / active_users
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_csm_ticket
+  - sim_dw.dws_customer_active_day
+  sql_template: "SELECT t.created_date,\n       SUM(t.is_complaint) / (SELECT COUNT(*)\
+    \ FROM sim_dw.dws_customer_active_day WHERE stat_date=t.created_date)\n      \
+    \ AS complaint_rate\nFROM sim_dw.dwd_csm_ticket t\nWHERE t.created_date='${date}'\
+    \ GROUP BY t.created_date"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0116
+  name_zh: 客服接通率
+  name_en: csm_answer_rate
+  aliases:
+  - 接通率
+  - 客服接通率
+  - csm_answer_rate
+  level: 二级
+  domain: operation
+  department: 客服中心
+  owner: csm@simcf.com
+  definition: 接通电话数 / 呼入电话数
+  formula: answered / total_calls
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.call_record
+  sql_template: "SELECT DATE(call_time),\n       SUM(duration_sec>0)/COUNT(*) AS answer_rate\n\
+    FROM sim_csm.call_record\nWHERE DATE(call_time)='${date}' GROUP BY DATE(call_time)"
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0117
+  name_zh: 客服平均满意度
+  name_en: csm_csat_avg
+  aliases:
+  - csat
+  - 客服平均满意度
+  - csm_csat_avg
+  level: 二级
+  domain: operation
+  department: 客服中心
+  owner: csm@simcf.com
+  definition: 当日客服通话的平均满意度评分
+  formula: AVG(csat_score)
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.call_record
+  sql_template: 'SELECT DATE(call_time), AVG(csat_score) FROM sim_csm.call_record
+
+    WHERE DATE(call_time)=''${date}'' AND csat_score IS NOT NULL
+
+    GROUP BY DATE(call_time)'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0118
+  name_zh: 员工总数
+  name_en: emp_headcount
+  aliases:
+  - 员工总数
+  - emp_headcount
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 员工总数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0119
+  name_zh: 员工人均产能
+  name_en: emp_productivity
+  aliases:
+  - 员工人均产能
+  - emp_productivity
+  level: 一级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 员工人均产能
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0120
+  name_zh: 单位客户成本
+  name_en: cost_per_customer
+  aliases:
+  - 单位客户成本
+  - cost_per_customer
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 单位客户成本
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0121
+  name_zh: 单笔放款成本
+  name_en: cost_per_loan
+  aliases:
+  - 单笔放款成本
+  - cost_per_loan
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 单笔放款成本
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0122
+  name_zh: 分公司业绩
+  name_en: branch_performance
+  aliases:
+  - 分公司业绩
+  - branch_performance
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司业绩
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0123
+  name_zh: 工单平均处理时长
+  name_en: ticket_avg_resolution_hours
+  aliases:
+  - 工单平均处理时长
+  - ticket_avg_resolution_hours
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 工单平均处理时长
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0124
+  name_zh: 投诉升级率
+  name_en: complaint_escalation_rate
+  aliases:
+  - 投诉升级率
+  - complaint_escalation_rate
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 投诉升级率
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0125
+  name_zh: APP 每日安装
+  name_en: app_daily_activation
+  aliases:
+  - APP 每日安装
+  - app_daily_activation
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: APP 每日安装
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0126
+  name_zh: APP 卸载率
+  name_en: uninstall_rate
+  aliases:
+  - APP 卸载率
+  - uninstall_rate
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: APP 卸载率
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0127
+  name_zh: 页面浏览量
+  name_en: page_view_count
+  aliases:
+  - 页面浏览量
+  - page_view_count
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 页面浏览量
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0128
+  name_zh: 点击到申请转化
+  name_en: click_through_apply
+  aliases:
+  - 点击到申请转化
+  - click_through_apply
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 点击到申请转化
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0129
+  name_zh: 申请到放款转化
+  name_en: apply_to_loan_rate
+  aliases:
+  - 申请到放款转化
+  - apply_to_loan_rate
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 申请到放款转化
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0130
+  name_zh: 客服工时
+  name_en: cust_service_hours
+  aliases:
+  - 客服工时
+  - cust_service_hours
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 客服工时
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0131
+  name_zh: 首次响应时长
+  name_en: first_response_time_avg
+  aliases:
+  - 首次响应时长
+  - first_response_time_avg
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 首次响应时长
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0132
+  name_zh: NPS 净推荐值
+  name_en: nps_score
+  aliases:
+  - NPS 净推荐值
+  - nps_score
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: NPS 净推荐值
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.ads_operation_daily
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0133
+  name_zh: 合作方分润总额
+  name_en: total_partner_income
+  aliases:
+  - 合作方分润
+  - 合作方分润总额
+  - total_partner_income
+  level: 一级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 所有合作方本月分润合计
+  formula: SUM(partner_income)
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: 'SELECT stat_month, SUM(partner_income) FROM sim_dw.dws_funding_partner_month
+
+    WHERE stat_month=''${month}'' GROUP BY stat_month'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0134
+  name_zh: 自留分润
+  name_en: self_income_share
+  aliases:
+  - 自留部分
+  - 自留分润
+  - self_income_share
+  level: 一级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 本月保留在公司的分润部分
+  formula: SUM(self_income)
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: 'SELECT stat_month, SUM(self_income) FROM sim_dw.dws_funding_partner_month
+
+    WHERE stat_month=''${month}'' GROUP BY stat_month'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0135
+  name_zh: 合作方数量
+  name_en: partner_count
+  aliases:
+  - 合作方
+  - 合作方数量
+  - partner_count
+  level: 二级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 当前活跃的资金合作方数量
+  formula: COUNT(DISTINCT partner_code)
+  filters:
+  - status='ACTIVE'
+  dedup_key: partner_code
+  time_grain: day
+  source_tables:
+  - sim_funding.funding_partner
+  sql_template: SELECT COUNT(*) FROM sim_funding.funding_partner WHERE status='ACTIVE'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0136
+  name_zh: 合作方出资金额
+  name_en: partner_funded_amount
+  aliases:
+  - 资金方出资
+  - 合作方出资金额
+  - partner_funded_amount
+  level: 二级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 所有合作方本月出资合计
+  formula: SUM(funded_amount)
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: 'SELECT stat_month, SUM(funded_amount) FROM sim_dw.dws_funding_partner_month
+
+    WHERE stat_month=''${month}'' GROUP BY stat_month'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0137
+  name_zh: 担保代偿笔数
+  name_en: guarantee_claim_count
+  aliases:
+  - 担保代偿笔数
+  - guarantee_claim_count
+  level: 二级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 担保代偿笔数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0138
+  name_zh: 担保代偿金额
+  name_en: guarantee_claim_amount
+  aliases:
+  - 担保代偿金额
+  - guarantee_claim_amount
+  level: 二级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 担保代偿金额
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0139
+  name_zh: 合作方分润 by partner
+  name_en: partner_income_by_partner
+  aliases:
+  - 合作方分润 by partner
+  - partner_income_by_partner
+  level: 二级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 合作方分润 by partner
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0140
+  name_zh: 资金来源集中度
+  name_en: fund_source_concentration
+  aliases:
+  - 资金来源集中度
+  - fund_source_concentration
+  level: 三级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 资金来源集中度
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0141
+  name_zh: 有效协议数
+  name_en: agreement_active_count
+  aliases:
+  - 有效协议数
+  - agreement_active_count
+  level: 三级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 有效协议数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0142
+  name_zh: 平均出资比例
+  name_en: avg_funding_ratio
+  aliases:
+  - 平均出资比例
+  - avg_funding_ratio
+  level: 三级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 平均出资比例
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0143
+  name_zh: 合作方资金成本
+  name_en: cost_of_fund_by_partner
+  aliases:
+  - 合作方资金成本
+  - cost_of_fund_by_partner
+  level: 二级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 合作方资金成本
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0144
+  name_zh: 结算延迟天数
+  name_en: settle_delay_days
+  aliases:
+  - 结算延迟天数
+  - settle_delay_days
+  level: 三级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 结算延迟天数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0145
+  name_zh: 结算成功率
+  name_en: settle_success_rate
+  aliases:
+  - 结算成功率
+  - settle_success_rate
+  level: 二级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 结算成功率
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0146
+  name_zh: 争议数
+  name_en: dispute_count
+  aliases:
+  - 争议数
+  - dispute_count
+  level: 三级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 争议数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0147
+  name_zh: 担保比例
+  name_en: guarantee_rate
+  aliases:
+  - 担保比例
+  - guarantee_rate
+  level: 三级
+  domain: funding
+  department: 联合贷分润业务部
+  owner: funding@simcf.com
+  definition: 担保比例
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: month
+  source_tables:
+  - sim_dw.dws_funding_partner_month
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0148
+  name_zh: 重大投诉数
+  name_en: critical_complaint_count
+  aliases:
+  - 高优投诉
+  - 重大投诉数
+  - critical_complaint_count
+  level: 一级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 上报监管或升级的投诉数
+  formula: COUNT(*) WHERE escalated=1 OR reported_regulator=1
+  filters:
+  - escalated=1 OR reported_regulator=1
+  dedup_key: complaint_id
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: 'SELECT DATE(filed_at), COUNT(*) FROM sim_csm.complaint
+
+    WHERE (escalated=1 OR reported_regulator=1) AND DATE(filed_at)=''${date}''
+
+    GROUP BY DATE(filed_at)'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0149
+  name_zh: 监管报送及时率
+  name_en: regulatory_filing_on_time_rate
+  aliases:
+  - 监管报送及时率
+  - regulatory_filing_on_time_rate
+  level: 一级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 监管报送及时率
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0150
+  name_zh: 数据质量得分
+  name_en: data_quality_score
+  aliases:
+  - 数据质量得分
+  - data_quality_score
+  level: 一级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 数据质量得分
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0151
+  name_zh: 隐私事件数
+  name_en: privacy_incident_count
+  aliases:
+  - 隐私事件数
+  - privacy_incident_count
+  level: 一级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 隐私事件数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0152
+  name_zh: 审计发现问题数
+  name_en: audit_finding_count
+  aliases:
+  - 审计发现问题数
+  - audit_finding_count
+  level: 二级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 审计发现问题数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0153
+  name_zh: 数据违规访问次数
+  name_en: data_access_violation_count
+  aliases:
+  - 数据违规访问次数
+  - data_access_violation_count
+  level: 二级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 数据违规访问次数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0154
+  name_zh: KYC 通过率
+  name_en: kyc_pass_rate
+  aliases:
+  - KYC 通过率
+  - kyc_pass_rate
+  level: 一级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: KYC 通过率
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0155
+  name_zh: 反洗钱预警数
+  name_en: aml_alert_count
+  aliases:
+  - 反洗钱预警数
+  - aml_alert_count
+  level: 二级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 反洗钱预警数
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0156
+  name_zh: 监管处罚金额
+  name_en: regulatory_penalty_amount
+  aliases:
+  - 监管处罚金额
+  - regulatory_penalty_amount
+  level: 一级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 监管处罚金额
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: true
+- id: M0157
+  name_zh: 客户授权同意率
+  name_en: customer_consent_rate
+  aliases:
+  - 客户授权同意率
+  - customer_consent_rate
+  level: 三级
+  domain: compliance
+  department: 法务合规部
+  owner: legal@simcf.com
+  definition: 客户授权同意率
+  formula: 见 SQL
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_csm.complaint
+  sql_template: SELECT 1 AS stub
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0158
+  name_zh: 广东省客户数
+  name_en: customer_count_广东
+  aliases:
+  - 广东客户
+  - 广东省客户数
+  - customer_count_广东
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=广东 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='广东'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='广东' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0159
+  name_zh: 广东省放款金额
+  name_en: disburse_amount_广东
+  aliases:
+  - 广东放款
+  - 广东省放款金额
+  - disburse_amount_广东
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=广东 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='广东'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='广东'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0160
+  name_zh: 江苏省客户数
+  name_en: customer_count_江苏
+  aliases:
+  - 江苏客户
+  - 江苏省客户数
+  - customer_count_江苏
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=江苏 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='江苏'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='江苏' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0161
+  name_zh: 江苏省放款金额
+  name_en: disburse_amount_江苏
+  aliases:
+  - 江苏放款
+  - 江苏省放款金额
+  - disburse_amount_江苏
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=江苏 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='江苏'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='江苏'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0162
+  name_zh: 山东省客户数
+  name_en: customer_count_山东
+  aliases:
+  - 山东客户
+  - 山东省客户数
+  - customer_count_山东
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=山东 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='山东'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='山东' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0163
+  name_zh: 山东省放款金额
+  name_en: disburse_amount_山东
+  aliases:
+  - 山东放款
+  - 山东省放款金额
+  - disburse_amount_山东
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=山东 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='山东'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='山东'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0164
+  name_zh: 浙江省客户数
+  name_en: customer_count_浙江
+  aliases:
+  - 浙江客户
+  - 浙江省客户数
+  - customer_count_浙江
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=浙江 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='浙江'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='浙江' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0165
+  name_zh: 浙江省放款金额
+  name_en: disburse_amount_浙江
+  aliases:
+  - 浙江放款
+  - 浙江省放款金额
+  - disburse_amount_浙江
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=浙江 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='浙江'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='浙江'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0166
+  name_zh: 河南省客户数
+  name_en: customer_count_河南
+  aliases:
+  - 河南客户
+  - 河南省客户数
+  - customer_count_河南
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=河南 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='河南'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='河南' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0167
+  name_zh: 河南省放款金额
+  name_en: disburse_amount_河南
+  aliases:
+  - 河南放款
+  - 河南省放款金额
+  - disburse_amount_河南
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=河南 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='河南'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='河南'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0168
+  name_zh: 四川省客户数
+  name_en: customer_count_四川
+  aliases:
+  - 四川客户
+  - 四川省客户数
+  - customer_count_四川
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=四川 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='四川'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='四川' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0169
+  name_zh: 四川省放款金额
+  name_en: disburse_amount_四川
+  aliases:
+  - 四川放款
+  - 四川省放款金额
+  - disburse_amount_四川
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=四川 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='四川'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='四川'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0170
+  name_zh: 湖北省客户数
+  name_en: customer_count_湖北
+  aliases:
+  - 湖北客户
+  - 湖北省客户数
+  - customer_count_湖北
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=湖北 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='湖北'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='湖北' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0171
+  name_zh: 湖北省放款金额
+  name_en: disburse_amount_湖北
+  aliases:
+  - 湖北放款
+  - 湖北省放款金额
+  - disburse_amount_湖北
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=湖北 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='湖北'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='湖北'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0172
+  name_zh: 北京省客户数
+  name_en: customer_count_北京
+  aliases:
+  - 北京客户
+  - 北京省客户数
+  - customer_count_北京
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=北京 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='北京'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='北京' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0173
+  name_zh: 北京省放款金额
+  name_en: disburse_amount_北京
+  aliases:
+  - 北京放款
+  - 北京省放款金额
+  - disburse_amount_北京
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=北京 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='北京'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='北京'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0174
+  name_zh: 上海省客户数
+  name_en: customer_count_上海
+  aliases:
+  - 上海客户
+  - 上海省客户数
+  - customer_count_上海
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=上海 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='上海'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='上海' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0175
+  name_zh: 上海省放款金额
+  name_en: disburse_amount_上海
+  aliases:
+  - 上海放款
+  - 上海省放款金额
+  - disburse_amount_上海
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=上海 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='上海'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='上海'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0176
+  name_zh: 福建省客户数
+  name_en: customer_count_福建
+  aliases:
+  - 福建客户
+  - 福建省客户数
+  - customer_count_福建
+  level: 三级
+  domain: user
+  department: 运营部
+  owner: growth@simcf.com
+  definition: 户籍省份=福建 的客户数
+  formula: COUNT(DISTINCT customer_id) WHERE province=X
+  filters:
+  - province='福建'
+  dedup_key: customer_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dim_customer
+  sql_template: SELECT COUNT(DISTINCT customer_id) FROM sim_dw.dim_customer WHERE
+    province='福建' AND is_current=1
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0177
+  name_zh: 福建省放款金额
+  name_en: disburse_amount_福建
+  aliases:
+  - 福建放款
+  - 福建省放款金额
+  - disburse_amount_福建
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 户籍=福建 的客户放款额
+  formula: SUM(principal)
+  filters:
+  - customer_province='福建'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE customer_province='福建'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0178
+  name_zh: A 级客户放款金额
+  name_en: disburse_amount_grade_a
+  aliases:
+  - A_disburse
+  - A 级客户放款金额
+  - disburse_amount_grade_a
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 当前风险等级=A 的客户放款额
+  formula: SUM(principal) WHERE grade=X
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  - sim_risk_decision.risk_grade
+  sql_template: 'SELECT SUM(l.principal) FROM sim_dw.dwd_credit_loan l
+
+    JOIN sim_risk_decision.risk_grade g ON g.customer_id=l.customer_id AND g.grade=''A''
+
+    WHERE l.disburse_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0179
+  name_zh: B 级客户放款金额
+  name_en: disburse_amount_grade_b
+  aliases:
+  - B_disburse
+  - B 级客户放款金额
+  - disburse_amount_grade_b
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 当前风险等级=B 的客户放款额
+  formula: SUM(principal) WHERE grade=X
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  - sim_risk_decision.risk_grade
+  sql_template: 'SELECT SUM(l.principal) FROM sim_dw.dwd_credit_loan l
+
+    JOIN sim_risk_decision.risk_grade g ON g.customer_id=l.customer_id AND g.grade=''B''
+
+    WHERE l.disburse_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0180
+  name_zh: C 级客户放款金额
+  name_en: disburse_amount_grade_c
+  aliases:
+  - C_disburse
+  - C 级客户放款金额
+  - disburse_amount_grade_c
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 当前风险等级=C 的客户放款额
+  formula: SUM(principal) WHERE grade=X
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  - sim_risk_decision.risk_grade
+  sql_template: 'SELECT SUM(l.principal) FROM sim_dw.dwd_credit_loan l
+
+    JOIN sim_risk_decision.risk_grade g ON g.customer_id=l.customer_id AND g.grade=''C''
+
+    WHERE l.disburse_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0181
+  name_zh: D 级客户放款金额
+  name_en: disburse_amount_grade_d
+  aliases:
+  - D_disburse
+  - D 级客户放款金额
+  - disburse_amount_grade_d
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 当前风险等级=D 的客户放款额
+  formula: SUM(principal) WHERE grade=X
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  - sim_risk_decision.risk_grade
+  sql_template: 'SELECT SUM(l.principal) FROM sim_dw.dwd_credit_loan l
+
+    JOIN sim_risk_decision.risk_grade g ON g.customer_id=l.customer_id AND g.grade=''D''
+
+    WHERE l.disburse_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0182
+  name_zh: E 级客户放款金额
+  name_en: disburse_amount_grade_e
+  aliases:
+  - E_disburse
+  - E 级客户放款金额
+  - disburse_amount_grade_e
+  level: 三级
+  domain: risk
+  department: 风险管理部
+  owner: risk@simcf.com
+  definition: 当前风险等级=E 的客户放款额
+  formula: SUM(principal) WHERE grade=X
+  filters: []
+  dedup_key: null
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  - sim_risk_decision.risk_grade
+  sql_template: 'SELECT SUM(l.principal) FROM sim_dw.dwd_credit_loan l
+
+    JOIN sim_risk_decision.risk_grade g ON g.customer_id=l.customer_id AND g.grade=''E''
+
+    WHERE l.disburse_date=''${date}'''
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0183
+  name_zh: 3 期借据数
+  name_en: loan_count_term_3
+  aliases:
+  - 3m_loans
+  - 3 期借据数
+  - loan_count_term_3
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款中，期限=3 个月的借据数
+  formula: COUNT(*) WHERE term_months=3
+  filters:
+  - term_months=3
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE term_months=3 AND
+    disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0184
+  name_zh: 6 期借据数
+  name_en: loan_count_term_6
+  aliases:
+  - 6m_loans
+  - 6 期借据数
+  - loan_count_term_6
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款中，期限=6 个月的借据数
+  formula: COUNT(*) WHERE term_months=6
+  filters:
+  - term_months=6
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE term_months=6 AND
+    disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0185
+  name_zh: 12 期借据数
+  name_en: loan_count_term_12
+  aliases:
+  - 12m_loans
+  - 12 期借据数
+  - loan_count_term_12
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款中，期限=12 个月的借据数
+  formula: COUNT(*) WHERE term_months=12
+  filters:
+  - term_months=12
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE term_months=12 AND
+    disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0186
+  name_zh: 18 期借据数
+  name_en: loan_count_term_18
+  aliases:
+  - 18m_loans
+  - 18 期借据数
+  - loan_count_term_18
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款中，期限=18 个月的借据数
+  formula: COUNT(*) WHERE term_months=18
+  filters:
+  - term_months=18
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE term_months=18 AND
+    disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0187
+  name_zh: 24 期借据数
+  name_en: loan_count_term_24
+  aliases:
+  - 24m_loans
+  - 24 期借据数
+  - loan_count_term_24
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款中，期限=24 个月的借据数
+  formula: COUNT(*) WHERE term_months=24
+  filters:
+  - term_months=24
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE term_months=24 AND
+    disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0188
+  name_zh: 36 期借据数
+  name_en: loan_count_term_36
+  aliases:
+  - 36m_loans
+  - 36 期借据数
+  - loan_count_term_36
+  level: 三级
+  domain: credit
+  department: 自营信贷产品部
+  owner: credit@simcf.com
+  definition: 当日放款中，期限=36 个月的借据数
+  formula: COUNT(*) WHERE term_months=36
+  filters:
+  - term_months=36
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE term_months=36 AND
+    disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0189
+  name_zh: 北京分公司放款金额
+  name_en: branch_disburse_b_bj
+  aliases:
+  - 北京放款
+  - 北京分公司放款金额
+  - branch_disburse_b_bj
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 北京 当日放款额
+  formula: SUM(principal) WHERE branch_code=X
+  filters:
+  - branch_code='B_BJ'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_BJ'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0190
+  name_zh: 北京分公司放款笔数
+  name_en: branch_loans_b_bj
+  aliases:
+  - 北京放款笔数
+  - 北京分公司放款笔数
+  - branch_loans_b_bj
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 北京 当日放款笔数
+  formula: COUNT(*) WHERE branch_code=X
+  filters:
+  - branch_code='B_BJ'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_BJ'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0191
+  name_zh: 上海分公司放款金额
+  name_en: branch_disburse_b_sh
+  aliases:
+  - 上海放款
+  - 上海分公司放款金额
+  - branch_disburse_b_sh
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 上海 当日放款额
+  formula: SUM(principal) WHERE branch_code=X
+  filters:
+  - branch_code='B_SH'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_SH'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0192
+  name_zh: 上海分公司放款笔数
+  name_en: branch_loans_b_sh
+  aliases:
+  - 上海放款笔数
+  - 上海分公司放款笔数
+  - branch_loans_b_sh
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 上海 当日放款笔数
+  formula: COUNT(*) WHERE branch_code=X
+  filters:
+  - branch_code='B_SH'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_SH'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0193
+  name_zh: 深圳分公司放款金额
+  name_en: branch_disburse_b_sz
+  aliases:
+  - 深圳放款
+  - 深圳分公司放款金额
+  - branch_disburse_b_sz
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 深圳 当日放款额
+  formula: SUM(principal) WHERE branch_code=X
+  filters:
+  - branch_code='B_SZ'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_SZ'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0194
+  name_zh: 深圳分公司放款笔数
+  name_en: branch_loans_b_sz
+  aliases:
+  - 深圳放款笔数
+  - 深圳分公司放款笔数
+  - branch_loans_b_sz
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 深圳 当日放款笔数
+  formula: COUNT(*) WHERE branch_code=X
+  filters:
+  - branch_code='B_SZ'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_SZ'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0195
+  name_zh: 武汉分公司放款金额
+  name_en: branch_disburse_b_wh
+  aliases:
+  - 武汉放款
+  - 武汉分公司放款金额
+  - branch_disburse_b_wh
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 武汉 当日放款额
+  formula: SUM(principal) WHERE branch_code=X
+  filters:
+  - branch_code='B_WH'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_WH'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0196
+  name_zh: 武汉分公司放款笔数
+  name_en: branch_loans_b_wh
+  aliases:
+  - 武汉放款笔数
+  - 武汉分公司放款笔数
+  - branch_loans_b_wh
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 武汉 当日放款笔数
+  formula: COUNT(*) WHERE branch_code=X
+  filters:
+  - branch_code='B_WH'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_WH'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0197
+  name_zh: 成都分公司放款金额
+  name_en: branch_disburse_b_cd
+  aliases:
+  - 成都放款
+  - 成都分公司放款金额
+  - branch_disburse_b_cd
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 成都 当日放款额
+  formula: SUM(principal) WHERE branch_code=X
+  filters:
+  - branch_code='B_CD'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_CD'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0198
+  name_zh: 成都分公司放款笔数
+  name_en: branch_loans_b_cd
+  aliases:
+  - 成都放款笔数
+  - 成都分公司放款笔数
+  - branch_loans_b_cd
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 成都 当日放款笔数
+  formula: COUNT(*) WHERE branch_code=X
+  filters:
+  - branch_code='B_CD'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_CD'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0199
+  name_zh: 沈阳分公司放款金额
+  name_en: branch_disburse_b_sy
+  aliases:
+  - 沈阳放款
+  - 沈阳分公司放款金额
+  - branch_disburse_b_sy
+  level: 二级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 沈阳 当日放款额
+  formula: SUM(principal) WHERE branch_code=X
+  filters:
+  - branch_code='B_SY'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT SUM(principal) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_SY'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false
+- id: M0200
+  name_zh: 沈阳分公司放款笔数
+  name_en: branch_loans_b_sy
+  aliases:
+  - 沈阳放款笔数
+  - 沈阳分公司放款笔数
+  - branch_loans_b_sy
+  level: 三级
+  domain: operation
+  department: 运营部
+  owner: ops@simcf.com
+  definition: 分公司 沈阳 当日放款笔数
+  formula: COUNT(*) WHERE branch_code=X
+  filters:
+  - branch_code='B_SY'
+  dedup_key: loan_id
+  time_grain: day
+  source_tables:
+  - sim_dw.dwd_credit_loan
+  sql_template: SELECT COUNT(*) FROM sim_dw.dwd_credit_loan WHERE branch_code='B_SY'
+    AND disburse_date='${date}'
+  related_metrics: []
+  version: '1.0'
+  effective_from: '2025-01-01'
+  status: ACTIVE
+  is_regulatory: false

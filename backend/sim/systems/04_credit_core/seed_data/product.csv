@@ -1,0 +1,5 @@
+product_code,product_name,product_kind,min_amount,max_amount,term_options,apr_default,fee_rate,is_active,effective_from
+SELF_LOAN,信优速贷,自营信贷,1000,50000,"3,6,12,18,24",0.18,0.02,1,2025-01-01
+PLATFORM_LOAN,信优合作贷,助贷平台,2000,80000,"6,12,18,24,36",0.16,0.01,1,2025-01-01
+JOINT_LOAN,信优联合贷,联合贷分润,3000,100000,"6,12,24,36",0.15,0.005,1,2025-01-01
+GUARANTEE_LOAN,信优保贷,担保业务,5000,150000,"12,24,36",0.2,0.03,1,2025-01-01

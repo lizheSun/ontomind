@@ -1,0 +1,14 @@
+account_code,account_name,account_kind,parent_code,is_active
+1001,库存现金,ASSET,\N,1
+1002,银行存款,ASSET,\N,1
+1301,应收贷款,ASSET,\N,1
+1302,应收利息,ASSET,\N,1
+2001,应付账款,LIABILITY,\N,1
+2011,应付合作方分润,LIABILITY,\N,1
+6001,利息收入,INCOME,\N,1
+6002,手续费收入,INCOME,\N,1
+5001,资金成本,EXPENSE,\N,1
+5002,营销费用,EXPENSE,\N,1
+5003,人力成本,EXPENSE,\N,1
+5004,催收成本,EXPENSE,\N,1
+5005,坏账损失,EXPENSE,\N,1

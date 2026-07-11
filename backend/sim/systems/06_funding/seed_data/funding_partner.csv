@@ -1,0 +1,7 @@
+partner_code,partner_name,partner_type,contact_person,contact_phone,onboarded_at,status,is_test_data
+BANK_A,阳光银行,BANK,乐丹丹,13885168081,2024-01-01,ACTIVE,1
+BANK_B,华融银行,BANK,刘娟,13833600058,2024-01-01,ACTIVE,1
+BANK_C,农商银行,BANK,陈鑫,13853796262,2024-01-01,ACTIVE,1
+BANK_D,城市商业银行,BANK,张琳,13869957904,2024-01-01,ACTIVE,1
+TRUST_A,中信资金信托,TRUST,赵静,13832043381,2024-01-01,ACTIVE,1
+GTE_A,融信担保有限公司,GUARANTEE,刘岩,13896391664,2024-01-01,ACTIVE,1

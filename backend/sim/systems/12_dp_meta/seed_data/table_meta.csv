@@ -1,0 +1,66 @@
+database_name,table_name,table_comment,business_domain,owner_emp_no,is_dw,layer,created_at
+sim_cust_cif,customer,客户中心 (CIF)-customer,customer,E00232,0,\N,2024-12-01 00:00:00
+sim_cust_cif,identity,客户中心 (CIF)-identity,customer,E00237,0,\N,2024-12-01 00:00:00
+sim_cust_cif,address,客户中心 (CIF)-address,customer,E00310,0,\N,2024-12-01 00:00:00
+sim_cust_cif,contact,客户中心 (CIF)-contact,customer,E00281,0,\N,2024-12-01 00:00:00
+sim_cust_cif,kyc_result,客户中心 (CIF)-kyc_result,customer,E00414,0,\N,2024-12-01 00:00:00
+sim_cust_cif,customer_tag,客户中心 (CIF)-customer_tag,customer,E00408,0,\N,2024-12-01 00:00:00
+sim_loan_intake,application,进件受理-application,intake,E00075,0,\N,2024-12-01 00:00:00
+sim_loan_intake,application_status_log,进件受理-application_status_log,intake,E00340,0,\N,2024-12-01 00:00:00
+sim_loan_intake,doc_upload,进件受理-doc_upload,intake,E00222,0,\N,2024-12-01 00:00:00
+sim_loan_intake,credit_report_pull,进件受理-credit_report_pull,intake,E00283,0,\N,2024-12-01 00:00:00
+sim_loan_intake,intake_channel_ref,进件受理-intake_channel_ref,intake,E00611,0,\N,2024-12-01 00:00:00
+sim_risk_decision,rule_set,风险决策-rule_set,risk,E00613,0,\N,2024-12-01 00:00:00
+sim_risk_decision,decision_log,风险决策-decision_log,risk,E00034,0,\N,2024-12-01 00:00:00
+sim_risk_decision,model_score,风险决策-model_score,risk,E00508,0,\N,2024-12-01 00:00:00
+sim_risk_decision,blacklist,风险决策-blacklist,risk,E00145,0,\N,2024-12-01 00:00:00
+sim_risk_decision,antifraud_event,风险决策-antifraud_event,risk,E00537,0,\N,2024-12-01 00:00:00
+sim_risk_decision,risk_grade,风险决策-risk_grade,risk,E00147,0,\N,2024-12-01 00:00:00
+sim_risk_decision,policy_ref,风险决策-policy_ref,risk,E00215,0,\N,2024-12-01 00:00:00
+sim_credit_core,credit_limit,信贷核心-credit_limit,credit,E00352,0,\N,2024-12-01 00:00:00
+sim_credit_core,loan,信贷核心-loan,credit,E00264,0,\N,2024-12-01 00:00:00
+sim_credit_core,loan_ledger,信贷核心-loan_ledger,credit,E00435,0,\N,2024-12-01 00:00:00
+sim_credit_core,repayment_plan,信贷核心-repayment_plan,credit,E00395,0,\N,2024-12-01 00:00:00
+sim_credit_core,repayment_actual,信贷核心-repayment_actual,credit,E00251,0,\N,2024-12-01 00:00:00
+sim_credit_core,overdue_record,信贷核心-overdue_record,credit,E00226,0,\N,2024-12-01 00:00:00
+sim_credit_core,product,信贷核心-product,credit,E00373,0,\N,2024-12-01 00:00:00
+sim_credit_core,contract,信贷核心-contract,credit,E00567,0,\N,2024-12-01 00:00:00
+sim_credit_core,fee_charge,信贷核心-fee_charge,credit,E00068,0,\N,2024-12-01 00:00:00
+sim_credit_core,loan_status_log,信贷核心-loan_status_log,credit,E00644,0,\N,2024-12-01 00:00:00
+sim_collection,collection_case,催收管理-collection_case,credit,E00217,0,\N,2024-12-01 00:00:00
+sim_collection,collection_action,催收管理-collection_action,credit,E00293,0,\N,2024-12-01 00:00:00
+sim_collection,promise_to_pay,催收管理-promise_to_pay,credit,E00540,0,\N,2024-12-01 00:00:00
+sim_collection,collector,催收管理-collector,credit,E00577,0,\N,2024-12-01 00:00:00
+sim_funding,funding_partner,资金/合作方-funding_partner,funding,E00001,0,\N,2024-12-01 00:00:00
+sim_funding,funding_agreement,资金/合作方-funding_agreement,funding,E00072,0,\N,2024-12-01 00:00:00
+sim_funding,loan_funding_split,资金/合作方-loan_funding_split,funding,E00023,0,\N,2024-12-01 00:00:00
+sim_funding,profit_share_record,资金/合作方-profit_share_record,funding,E00432,0,\N,2024-12-01 00:00:00
+sim_funding,partner_settle,资金/合作方-partner_settle,funding,E00131,0,\N,2024-12-01 00:00:00
+sim_funding,guarantee_record,资金/合作方-guarantee_record,funding,E00566,0,\N,2024-12-01 00:00:00
+sim_finance,gl_account,财务-gl_account,finance,E00576,0,\N,2024-12-01 00:00:00
+sim_finance,gl_journal,财务-gl_journal,finance,E00104,0,\N,2024-12-01 00:00:00
+sim_finance,settlement,财务-settlement,finance,E00027,0,\N,2024-12-01 00:00:00
+sim_finance,tax_record,财务-tax_record,finance,E00011,0,\N,2024-12-01 00:00:00
+sim_finance,reconcile_log,财务-reconcile_log,finance,E00242,0,\N,2024-12-01 00:00:00
+sim_finance,fee_income,财务-fee_income,finance,E00646,0,\N,2024-12-01 00:00:00
+sim_finance,interest_income,财务-interest_income,finance,E00266,0,\N,2024-12-01 00:00:00
+sim_marketing,channel,营销-channel,marketing,E00068,0,\N,2024-12-01 00:00:00
+sim_marketing,campaign,营销-campaign,marketing,E00571,0,\N,2024-12-01 00:00:00
+sim_marketing,ad_cost,营销-ad_cost,marketing,E00036,0,\N,2024-12-01 00:00:00
+sim_marketing,attribution,营销-attribution,marketing,E00034,0,\N,2024-12-01 00:00:00
+sim_marketing,promo_code,营销-promo_code,marketing,E00412,0,\N,2024-12-01 00:00:00
+sim_marketing,user_promo_use,营销-user_promo_use,marketing,E00033,0,\N,2024-12-01 00:00:00
+sim_events,app_event,埋点收集-app_event,data_platform,E00496,0,\N,2024-12-01 00:00:00
+sim_events,page_view,埋点收集-page_view,data_platform,E00206,0,\N,2024-12-01 00:00:00
+sim_events,click_stream,埋点收集-click_stream,data_platform,E00443,0,\N,2024-12-01 00:00:00
+sim_csm,ticket,客服-ticket,ops,E00514,0,\N,2024-12-01 00:00:00
+sim_csm,call_record,客服-call_record,ops,E00569,0,\N,2024-12-01 00:00:00
+sim_csm,complaint,客服-complaint,ops,E00464,0,\N,2024-12-01 00:00:00
+sim_csm,ticket_action,客服-ticket_action,ops,E00092,0,\N,2024-12-01 00:00:00
+sim_hr_iam,employee,HR & 权限-employee,internal,E00107,0,\N,2024-12-01 00:00:00
+sim_hr_iam,org_unit,HR & 权限-org_unit,internal,E00500,0,\N,2024-12-01 00:00:00
+sim_hr_iam,role,HR & 权限-role,internal,E00189,0,\N,2024-12-01 00:00:00
+sim_hr_iam,user_role,HR & 权限-user_role,internal,E00518,0,\N,2024-12-01 00:00:00
+sim_dp_meta,table_meta,数据平台元数据-table_meta,data_platform,E00246,0,\N,2024-12-01 00:00:00
+sim_dp_meta,etl_job,数据平台元数据-etl_job,data_platform,E00325,0,\N,2024-12-01 00:00:00
+sim_dp_meta,data_lineage,数据平台元数据-data_lineage,data_platform,E00077,0,\N,2024-12-01 00:00:00
