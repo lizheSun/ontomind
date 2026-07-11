@@ -20,3 +20,5 @@ export type {
 } from './SchemaTree';
 export { DataTable } from './DataTable';
 export type { DataTableProps } from './DataTable';
+export { default as AgentPicker } from './AgentPicker';
+export type { AgentPickerProps } from './AgentPicker';
