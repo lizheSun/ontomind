@@ -21,4 +21,13 @@ __all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaPr
            "OntologyVersion", "OntologyClass", "OntologyProperty",
            "OntologyRelationship", "OntologyConstraint",
            "Instance", "Agent", "Skill", "MCPConfig", "AgentRun",
-           "Project", "Requirement", "Plan", "Task"]
+           "Project", "Requirement", "Plan", "Task",
+           "DpDataSource", "DpSqlQuery", "DpQueryHistory",
+           "DpChatSession", "DpChatMessage"]
+
+# --- Data Platform (T06) ---
+from app.db.models.dp_data_source_model import DpDataSource
+from app.db.models.dp_sql_query_model import DpSqlQuery
+from app.db.models.dp_query_history_model import DpQueryHistory
+from app.db.models.dp_chat_session_model import DpChatSession
+from app.db.models.dp_chat_message_model import DpChatMessage
