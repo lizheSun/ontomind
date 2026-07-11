@@ -1,0 +1,15 @@
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Tables_in_ontomind (kb_%)
+kb_code_repos
+kb_data_assets
+kb_documents
+kb_experiences
+kb_libraries
+kb_tags
+---
+mysql: [Warning] Using a password on the command line interface can be insecure.
+id	code	name_zh	icon	sort_order
+1	data_asset	数据资产	DatabaseOutlined	1
+2	code_repo	代码库	GithubOutlined	2
+3	document	文档库	FileTextOutlined	3
+4	experience	业务经验库	BulbOutlined	4
