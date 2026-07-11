@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Drawer,
   Form,
   Input,
@@ -10,6 +11,7 @@ import {
   Button,
   message,
 } from 'antd';
+import { CheckCircleOutlined } from '@ant-design/icons';
 import type { AxiosError } from 'axios';
 import type {
   DpDataSource,
@@ -82,6 +84,7 @@ export interface SourceFormDrawerProps {
   open: boolean;
   mode: Mode;
   initial?: DpDataSource | null;
+  initialValues?: Partial<DpDataSourceCreate>;
   onClose: () => void;
   onSaved?: (row?: DpDataSource) => void;
 }
@@ -90,6 +93,7 @@ export default function SourceFormDrawer({
   open,
   mode,
   initial,
+  initialValues,
   onClose,
   onSaved,
 }: SourceFormDrawerProps) {
@@ -121,7 +125,7 @@ export default function SourceFormDrawer({
         read_only_flag: initial.readOnlyFlag,
       });
     } else {
-      const seg: SegmentedType = 'MySQL';
+      const seg: SegmentedType = dialectToSegmented(initialValues?.dialect);
       setSegmentedType(seg);
       form.resetFields();
       form.setFieldsValue({
@@ -130,8 +134,23 @@ export default function SourceFormDrawer({
         charset: 'utf8mb4',
         read_only_flag: true,
       });
+      if (initialValues) {
+        // AI-prefill (from SmartAddModal). Force password blank regardless.
+        form.setFieldsValue({
+          name: initialValues.name ?? undefined,
+          host: initialValues.host ?? undefined,
+          port: initialValues.port ?? DIALECT_META[seg].defaultPort ?? undefined,
+          username: initialValues.username ?? undefined,
+          password: '',
+          database: initialValues.database ?? undefined,
+          default_schema: initialValues.default_schema ?? undefined,
+          charset: initialValues.charset ?? 'utf8mb4',
+          description: initialValues.description ?? undefined,
+          read_only_flag: initialValues.read_only_flag ?? true,
+        });
+      }
     }
-  }, [open, mode, initial, form]);
+  }, [open, mode, initial, initialValues, form]);
 
   const handleTypeChange = (val: SegmentedType) => {
     setSegmentedType(val);
@@ -243,6 +262,16 @@ export default function SourceFormDrawer({
         </Space>
       }
     >
+      {mode === 'create' && initialValues && (
+        <Alert
+          type="success"
+          message="AI 已预填部分字段，请补充密码并检查其他字段"
+          icon={<CheckCircleOutlined />}
+          showIcon
+          banner
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Form
         form={form}
         layout="vertical"

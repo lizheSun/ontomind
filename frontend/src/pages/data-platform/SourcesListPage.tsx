@@ -20,8 +20,9 @@ import {
 } from '../../components/common';
 import useDataPlatformStore from '../../stores/dataPlatformStore';
 import { dataPlatformService } from '../../services/dataPlatform.service';
-import type { DpDataSource, DpStatus } from '../../types/dataPlatform';
+import type { DpDataSource, DpDataSourceCreate, DpStatus } from '../../types/dataPlatform';
 import SourceFormDrawer from './components/SourceFormDrawer';
+import SmartAddModal from './components/SmartAddModal';
 
 const STATUS_STYLE: Record<
   DpStatus,
@@ -70,6 +71,10 @@ export default function SourcesListPage() {
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
   const [editing, setEditing] = useState<DpDataSource | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
+  const [smartAddOpen, setSmartAddOpen] = useState(false);
+  const [drawerInitial, setDrawerInitial] = useState<
+    Partial<DpDataSourceCreate> | undefined
+  >(undefined);
 
   useEffect(() => {
     if (sources.length === 0 && !loading) {
@@ -82,18 +87,21 @@ export default function SourcesListPage() {
   const openCreate = useCallback(() => {
     setDrawerMode('create');
     setEditing(null);
+    setDrawerInitial(undefined);
     setDrawerOpen(true);
   }, []);
 
   const openEdit = useCallback((row: DpDataSource) => {
     setDrawerMode('edit');
     setEditing(row);
+    setDrawerInitial(undefined);
     setDrawerOpen(true);
   }, []);
 
   const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
     setEditing(null);
+    setDrawerInitial(undefined);
   }, []);
 
   const handleTest = useCallback(async (row: DpDataSource) => {
@@ -297,13 +305,21 @@ export default function SourcesListPage() {
         title="数据平台 · 数据源"
         subtitle="连接、探查、并对话你的数据资产"
         extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={openCreate}
-          >
-            新建数据源
-          </Button>
+          <Space>
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={() => setSmartAddOpen(true)}
+            >
+              智能添加
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreate}
+            >
+              新建数据源
+            </Button>
+          </Space>
         }
       />
 
@@ -369,7 +385,20 @@ export default function SourcesListPage() {
         open={drawerOpen}
         mode={drawerMode}
         initial={editing}
+        initialValues={drawerInitial}
         onClose={closeDrawer}
+      />
+
+      <SmartAddModal
+        open={smartAddOpen}
+        onCancel={() => setSmartAddOpen(false)}
+        onParsed={(result) => {
+          setSmartAddOpen(false);
+          setEditing(null);
+          setDrawerMode('create');
+          setDrawerInitial(result.parsed);
+          setDrawerOpen(true);
+        }}
       />
     </div>
   );
