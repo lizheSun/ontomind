@@ -5,3 +5,6 @@ export { EmptyState } from './EmptyState';
 export { SectionTitle } from './SectionTitle';
 export { TagPill } from './TagPill';
 export { DangerConfirm } from './DangerConfirm';
+export { SqlEditor } from './SqlEditor';
+export type { SqlEditorProps } from './SqlEditor';
+export type { SchemaHint, SupportedDialect } from './monaco-setup';
