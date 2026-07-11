@@ -1,0 +1,152 @@
+# T28 console.log — captured 2026-07-11T15:09:42.287Z
+
+## dp-sources @ 375
+- console.error: 13
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/data-platform/sources' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+
+## dp-sources @ 768
+- console.error: 13
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/data-platform/sources' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+
+## dp-sources @ 1280
+- console.error: 13
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/data-platform/sources' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+
+## kb-data-assets @ 375
+- console.error: 16
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/libraries' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/data-assets' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Warning: [antd: message] Static function can not consume context like dynamic theme. Please use 'App' component instead.
+
+## kb-data-assets @ 768
+- console.error: 16
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/libraries' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/data-assets' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Warning: [antd: message] Static function can not consume context like dynamic theme. Please use 'App' component instead.
+
+## kb-data-assets @ 1280
+- console.error: 16
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/libraries' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/data-assets' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Warning: [antd: message] Static function can not consume context like dynamic theme. Please use 'App' component instead.
+
+## kb-search @ 375
+- console.error: 11
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/search?q=test' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+
+## kb-search @ 768
+- console.error: 11
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/search?q=test' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+
+## kb-search @ 1280
+- console.error: 11
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/knowledge-base/search?q=test' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+
+## perception-legacy @ 375
+- console.error: 16
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/resources/agents?skip=0&limit=200' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/perception/datasources' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Warning: [antd: message] Static function can not consume context like dynamic theme. Please use 'App' component instead.
+
+## perception-legacy @ 768
+- console.error: 16
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/resources/agents?skip=0&limit=200' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/perception/datasources' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Warning: [antd: message] Static function can not consume context like dynamic theme. Please use 'App' component instead.
+
+## perception-legacy @ 1280
+- console.error: 16
+- pageerror: 0
+### console.error samples
+- Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/resources/agents?skip=0&limit=200' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/resources/agents?skip=0&limit=200' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+
+## dashboard @ 375
+- console.error: 6
+- pageerror: 0
+### console.error samples
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to font at 'https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Request header field x-backend is not allowed by Access-Control-Allow-Headers in preflight response.
+
+## dashboard @ 768
+- console.error: 6
+- pageerror: 0
+### console.error samples
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to font at 'https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Request header field x-backend is not allowed by Access-Control-Allow-Headers in preflight response.
+
+## dashboard @ 1280
+- console.error: 6
+- pageerror: 0
+### console.error samples
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to XMLHttpRequest at 'http://127.0.0.1:8005/api/v1/auth/me' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Failed to load resource: net::ERR_FAILED
+- Access to font at 'https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2' from origin 'http://127.0.0.1:5180' has been blocked by CORS policy: Request header field x-backend is not allowed by Access-Control-Allow-Headers in preflight response.
+
