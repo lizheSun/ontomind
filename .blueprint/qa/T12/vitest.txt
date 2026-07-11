@@ -1,0 +1,28 @@
+=== vitest ===
+
+ RUN  v2.1.9 /Users/sun/CodeBuddy/20260627212423-w3t12/frontend
+
+stderr | src/components/common/__tests__/DataTable.test.tsx > DataTable > renders AntD Table when dataSource has rows
+Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
+    at module.exports (/Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at window.getComputedStyle (/Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/jsdom/lib/jsdom/browser/Window.js:895:7)
+    at measureScrollbarSize (/Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:35:34)
+    at getTargetScrollBarSize (/Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/@rc-component/util/lib/getScrollBarSize.js:87:10)
+    at /Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/@rc-component/table/lib/Table.js:393:59
+    at /Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/@rc-component/util/lib/hooks/useLayoutEffect.js:19:12
+    at Object.react_stack_bottom_frame (/Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+    at commitHookPassiveMountEffects (/Users/sun/CodeBuddy/20260627212423-w3t12/frontend/node_modules/react-dom/cjs/react-dom-client.development.js:13336:11) undefined
+
+ ✓ src/components/common/__tests__/DataTable.test.tsx > DataTable > renders EmptyState when dataSource is empty and not loading
+ ✓ src/components/common/__tests__/DataTable.test.tsx > DataTable > renders AntD Table when dataSource has rows
+ ✓ src/components/common/__tests__/DataTable.test.tsx > DataTable > supports custom emptyTitle
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  21:18:54
+   Duration  1.08s (transform 31ms, setup 47ms, collect 472ms, tests 134ms, environment 220ms, prepare 44ms)
+
+
+=== tsc new errors (should be empty) ===

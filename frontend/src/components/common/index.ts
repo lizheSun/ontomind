@@ -8,3 +8,5 @@ export { DangerConfirm } from './DangerConfirm';
 export { SqlEditor } from './SqlEditor';
 export type { SqlEditorProps } from './SqlEditor';
 export type { SchemaHint, SupportedDialect } from './monaco-setup';
+export { DataTable } from './DataTable';
+export type { DataTableProps } from './DataTable';
