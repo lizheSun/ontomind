@@ -4,7 +4,8 @@ import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
 
 import Dashboard from './pages/dashboard/index';
-import PerceptionIndex from './pages/perception/index';
+import PerceptionLegacyIndex from './pages/perception/index';
+import PerceptionShell from './pages/perception/PerceptionShell';
 import CognitionIndex from './pages/cognition/index';
 import DecisionIndex from './pages/decision/index';
 import ExecutionIndex from './pages/execution/index';
@@ -101,7 +102,8 @@ export default function App() {
               }
             >
               <Route index element={<Dashboard />} />
-              <Route path="perception" element={<PerceptionIndex />} />
+              <Route path="perception" element={<PerceptionShell />} />
+              <Route path="perception-legacy" element={<PerceptionLegacyIndex />} />
               <Route path="cognition" element={<CognitionIndex />} />
               <Route path="decision" element={<DecisionIndex />} />
               <Route path="execution" element={<ExecutionIndex />} />

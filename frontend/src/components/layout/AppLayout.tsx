@@ -14,8 +14,6 @@ import {
   LogoutOutlined,
   TeamOutlined,
   ProjectOutlined,
-  DatabaseOutlined,
-  BookOutlined,
 } from '@ant-design/icons';
 import useUserStore from '../../stores/userStore';
 
@@ -26,8 +24,6 @@ type MenuItem = Required<MenuProps>['items'][number];
 const topMenuItems: MenuItem[] = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
   { key: '/perception', icon: <ApiOutlined />, label: '感知层' },
-  { key: '/data-platform', icon: <DatabaseOutlined />, label: '数据平台' },
-  { key: '/knowledge-base', icon: <BookOutlined />, label: '知识库' },
   { key: '/cognition', icon: <NodeIndexOutlined />, label: '认知层' },
   { key: '/decision', icon: <ThunderboltOutlined />, label: '决策层' },
   { key: '/execution', icon: <SendOutlined />, label: '执行层' },
