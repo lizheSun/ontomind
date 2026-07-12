@@ -29,3 +29,10 @@ export type {
   AgentEmbedInboundMessage,
   AgentEmbedOutboundMessage,
 } from './AgentEmbedRunner';
+export {
+  ZenGodToggle,
+  useUIMode,
+  useProgressiveDisclosure,
+  setUIMode,
+} from './ZenGodToggle';
+export type { UIMode, ZenGodToggleProps } from './ZenGodToggle';
