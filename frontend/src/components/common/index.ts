@@ -29,3 +29,11 @@ export type {
   AgentEmbedInboundMessage,
   AgentEmbedOutboundMessage,
 } from './AgentEmbedRunner';
+export { default as AgentChatPanel } from './AgentChatPanel';
+export type {
+  AgentChatPanelProps,
+  AgentChatMessage,
+  AgentChatPart,
+  AgentChatRole,
+  AgentToolPartStatus,
+} from './AgentChatPanel';
