@@ -38,3 +38,11 @@ export {
   setUIMode,
 } from './ZenGodToggle';
 export type { UIMode, ZenGodToggleProps } from './ZenGodToggle';
+export { default as AgentChatPanel } from './AgentChatPanel';
+export type {
+  AgentChatPanelProps,
+  AgentChatMessage,
+  AgentChatPart,
+  AgentChatRole,
+  AgentToolPartStatus,
+} from './AgentChatPanel';
