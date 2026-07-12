@@ -612,8 +612,10 @@
 - `docs/agent-platform/HANDOFF-2026-07-12.md`（**跨机必读**）
 
 ### 数据库
-- 新表：`credentials`、`audit_logs`、`agent_versions`、`agent_deployments`、`agent_sessions`、`agent_messages`、`agent_run_steps`、`agent_run_events`、`agent_approvals`、`node_connections`、`discovery_runs`、`discovery_items` 等
-- 改表：`agents`、`agent_runs`、`compute_nodes` 等（见交接文档 §3）
+- **库**：一般不新建 schema/database，仍用同一 MySQL 库做 **CREATE TABLE + ALTER**
+- **新表**：`credentials`、`audit_logs`、`agent_versions`、`agent_deployments`、`agent_sessions`、`agent_messages`、`agent_run_steps`、`agent_run_events`（SSE 真源）、`agent_tool_approvals`、`eval_suites`、`eval_cases`、`node_connections`、`discovery_runs`、`discovery_items`
+- **改表**：`agents`（owner/current_version）、`agent_runs`（status→VARCHAR + session/strategy/input/output/state_version…）、`compute_nodes`（address/environment/heartbeat…）
+- **字段级明细**：见 [`docs/agent-platform/HANDOFF-2026-07-12.md`](docs/agent-platform/HANDOFF-2026-07-12.md) §3
 
 ### 验证
 - `pytest tests/agent_platform/` → 10 passed
