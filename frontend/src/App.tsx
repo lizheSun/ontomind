@@ -1,7 +1,9 @@
 import { ConfigProvider, theme, App as AntApp } from 'antd';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
+import { ZenGodToggle } from './components/common';
 import Login from './pages/Login';
+import { CmdKOmnibar } from './components/common';
 
 import Dashboard from './pages/dashboard/index';
 import PerceptionLegacyIndex from './pages/perception/index';
@@ -12,6 +14,11 @@ import ExecutionIndex from './pages/execution/index';
 import ApplicationIndex from './pages/application/index';
 import ResourcesPage from './pages/resources/index';
 import AgentLooperWizard from './pages/resources/AgentLooperWizard';
+import ComputeNodeDetailPage from './pages/resources/ComputeNodeDetailPage';
+import AgentContainerDetailPage from './pages/resources/AgentContainerDetailPage';
+import AgentDetailPage from './pages/resources/AgentDetailPage';
+import SkillDetailPage from './pages/resources/SkillDetailPage';
+import MCPDetailPage from './pages/resources/MCPDetailPage';
 import UsersPage from './pages/users/index';
 import ProjectsPage from './pages/projects/index';
 import DataPlatformIndex from './pages/data-platform';
@@ -91,7 +98,9 @@ export default function App() {
       }}
     >
       <AntApp>
+        <ZenGodToggle />
         <BrowserRouter>
+          <CmdKOmnibar />
           <Routes>
             <Route path="/login" element={<Login />} />
 
@@ -112,6 +121,13 @@ export default function App() {
               <Route path="application" element={<ApplicationIndex />} />
               <Route path="resources" element={<ResourcesPage />} />
               <Route path="resources/agent-looper/new" element={<AgentLooperWizard />} />
+              <Route path="resources/compute-nodes/:id" element={<ComputeNodeDetailPage />} />
+              <Route path="resources/agent-containers/:id" element={<AgentContainerDetailPage />} />
+              <Route path="resources/agent-looper/:id" element={<AgentDetailPage />} />
+              <Route path="resources/agent/new" element={<AgentDetailPage />} />
+              <Route path="resources/agent/:id" element={<AgentDetailPage />} />
+              <Route path="resources/skills/:id" element={<SkillDetailPage />} />
+              <Route path="resources/mcps/:id" element={<MCPDetailPage />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="users" element={<UsersPage />} />
               {/* Wave 5 T20: data platform + knowledge base */}

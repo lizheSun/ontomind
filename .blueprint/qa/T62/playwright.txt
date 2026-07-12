@@ -1,0 +1,78 @@
+
+Running 29 tests using 5 workers
+
+  ✓   2 [chromium] › tests/e2e/dp-smart-add.spec.ts:4:3 › smart-add data source › 智能添加 button opens modal with warning banner (4.6s)
+  ✓   5 [chromium] › tests/e2e/dp-sources-list.spec.ts:3:1 › sources list page shows header + subtitle (5.7s)
+  ✓   4 [chromium] › tests/e2e/dp-metadata.spec.ts:4:3 › data-platform metadata page › metadata page loads and shows sub-nav (5.8s)
+  ✓   3 [chromium] › tests/e2e/dp-source-detail.spec.ts:12:1 › source detail page renders SQL 编辑器 tab when a source exists (8.8s)
+  ✓   1 [chromium] › tests/e2e/dp-sql-guard.spec.ts:4:1 › executing DROP TABLE surfaces guard error UI (11.0s)
+  ✓   7 [chromium] › tests/e2e/dp-sources-list.spec.ts:17:1 › opening the create drawer shows dialect segmented options (5.8s)
+  ✓   6 [chromium] › tests/e2e/dp-smart-add.spec.ts:12:3 › smart-add data source › parse call routes through /parse-config and reaches drawer or surfaces LLM error (7.5s)
+  ✓  11 [chromium] › tests/e2e/kb-upload-download.spec.ts:5:1 › upload markdown doc via API then download round-trip (843ms)
+  ✓   8 [chromium] › tests/e2e/dp-metadata.spec.ts:14:3 › data-platform metadata page › sub-nav switches from metadata to sources (7.8s)
+  ✓   9 [chromium] › tests/e2e/kb-search.spec.ts:3:1 › KB search page shows pre-search empty state (5.1s)
+  ✓  10 [chromium] › tests/e2e/kb-sublibs.spec.ts:11:3 › KB sub-lib "数据资产" page loads and shows title (5.0s)
+  ✓  13 [chromium] › tests/e2e/perception-regression.spec.ts:3:1 › legacy /perception page still loads without crashing (5.8s)
+  ✓  15 [chromium] › tests/e2e/kb-search.spec.ts:8:1 › typing query in URL shows filter chips (全部 + 数据资产) (5.3s)
+  ✓  14 [chromium] › tests/e2e/perception-shell.spec.ts:4:3 › perception shell › shell renders 2 cards and navigates to each sub-module (5.9s)
+  ✓  16 [chromium] › tests/e2e/kb-sublibs.spec.ts:11:3 › KB sub-lib "代码库" page loads and shows title (4.6s)
+  ✓  17 [chromium] › tests/e2e/w10-agent-looper.spec.ts:15:3 › w10 agent-looper › wizard renders 4 steps and Next requires a name (5.1s)
+  ✓  18 [chromium] › tests/e2e/w10-resources.spec.ts:12:3 › w10 resources page › renders header, 7 stat labels, and all 5 layer sections (5.6s)
+  ✓  19 [chromium] › tests/e2e/perception-shell.spec.ts:23:3 › perception shell › /perception-legacy redirects to /perception (5.5s)
+  ✘  12 [chromium] › tests/e2e/nav.spec.ts:3:1 › top nav renders 数据平台 + 知识库 and navigates (13.4s)
+  ✓  20 [chromium] › tests/e2e/kb-sublibs.spec.ts:11:3 › KB sub-lib "文档库" page loads and shows title (5.4s)
+  ✓  21 [chromium] › tests/e2e/w10-agent-looper.spec.ts:36:3 › w10 agent-looper › wizard step navigation forward and back preserves state (5.1s)
+  ✓  22 [chromium] › tests/e2e/w10-resources.spec.ts:51:3 › w10 resources page › auto-discover button is present and clickable (4.9s)
+  ✓  23 [chromium] › tests/e2e/perception-shell.spec.ts:30:3 › perception shell › top nav has 9 items (no 数据平台/知识库 at top level) (4.9s)
+  ✓  24 [chromium] › tests/e2e/kb-sublibs.spec.ts:11:3 › KB sub-lib "业务经验库" page loads and shows title (5.6s)
+  ✓  25 [chromium] › tests/e2e/nav.spec.ts:16:1 › unauthenticated navigation redirects to /login (5.3s)
+  ✓  26 [chromium] › tests/e2e/w10-agent-looper.spec.ts:56:3 › w10 agent-looper › wizard reaches step 4 with a "运行测试" button (4.8s)
+  ✓  27 [chromium] › tests/e2e/w10-resources.spec.ts:60:3 › w10 resources page › collapse state persists in localStorage (4.6s)
+  ✓  28 [chromium] › tests/e2e/w10-ux.spec.ts:13:3 › w10 UX › Cmd+K opens the omnibar and Esc closes it (4.8s)
+  ✓  29 [chromium] › tests/e2e/w10-ux.spec.ts:37:3 › w10 UX › Zen/God toggle flips <html data-ui-mode> and persists (5.0s)
+
+
+  1) [chromium] › tests/e2e/nav.spec.ts:3:1 › top nav renders 数据平台 + 知识库 and navigates ─────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('数据平台').first()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText('数据平台').first()
+
+
+      4 |   await authed.goto('/');
+      5 |   // Wait for shell / menu items to render
+    > 6 |   await expect(authed.getByText('数据平台').first()).toBeVisible({ timeout: 10_000 });
+        |                                                  ^
+      7 |   await expect(authed.getByText('知识库').first()).toBeVisible();
+      8 |   // Click 数据平台 → land on /data-platform/sources (index redirect)
+      9 |   await authed.getByText('数据平台').first().click();
+        at /Users/sun/CodeBuddy/20260627212423-w10t62/frontend/tests/e2e/nav.spec.ts:6:50
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/nav-top-nav-renders-数据平台-知识库-and-navigates-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/nav-top-nav-renders-数据平台-知识库-and-navigates-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/nav-top-nav-renders-数据平台-知识库-and-navigates-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/nav-top-nav-renders-数据平台-知识库-and-navigates-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/nav-top-nav-renders-数据平台-知识库-and-navigates-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › tests/e2e/nav.spec.ts:3:1 › top nav renders 数据平台 + 知识库 and navigates ──────────────
+  28 passed (40.3s)

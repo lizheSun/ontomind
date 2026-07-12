@@ -1,11 +1,22 @@
-"""资源管理 API — Instance / Agent / Skill / MCP / AgentRun."""
+"""资源管理 API — ComputeNode(Instance) / Agent / Skill / MCP / AgentRun.
+
+T45 naming migration:
+    - `/api/v1/resources/instances`      → `/api/v1/resources/compute-nodes`   (308 redirect)
+    - `/api/v1/resources/mcp-configs`    → `/api/v1/resources/mcps`            (308 redirect, mcps is canonical)
+    - `/api/v1/agent-looper/configs`     → `/api/v1/resources/agents`          (308 redirect, wired below)
+
+308 (Permanent Redirect) is used instead of 301 to preserve the HTTP method
+and body — a GET stays a GET, a POST stays a POST. Old paths remain for at
+least 3 months to give downstream clients time to migrate.
+"""
 import json
 import asyncio
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, Header
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, HTTPException, Header
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services.instance_service import InstanceService
+from app.services.instance_service import ComputeNodeService, InstanceService
 from app.services.agent_service import AgentService
 from app.services.skill_service import SkillService
 from app.services.mcp_service import MCPService
@@ -19,46 +30,98 @@ from app.schemas.agent_run_schema import AgentRunCreate, AgentRunUpdate
 
 router = APIRouter()
 
-# ==================== Instance 计算节点 ====================
+
+def _redirect_308(new_path: str, request: Request) -> RedirectResponse:
+    """Build a 308 Permanent Redirect to `new_path`, preserving querystring.
+
+    308 keeps the request method + body intact, which is what we want for a
+    rename that must not break POST/PUT/DELETE calls.
+    """
+    qs = request.url.query
+    target = f"{new_path}?{qs}" if qs else new_path
+    return RedirectResponse(url=target, status_code=308)
+
+# ==================== ComputeNode (计算节点; formerly Instance) ====================
+#
+# Canonical routes live under `/compute-nodes`. Legacy `/instances/*` paths
+# are preserved as 308 Permanent Redirects (see the redirect stubs at the
+# bottom of this section).
 
 
-@router.get("/instances")
-def list_instances(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.get("/compute-nodes")
+def list_compute_nodes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     return {"code": "SUCCESS", "data": svc.list(skip, limit)}
 
 
-@router.post("/instances")
-def create_instance(data: InstanceCreate, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.post("/compute-nodes")
+def create_compute_node(data: InstanceCreate, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     return {"code": "SUCCESS", "message": "创建成功", "data": svc.create(data)}
 
 
-@router.get("/instances/{inst_id}")
-def get_instance(inst_id: int, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.get("/compute-nodes/{inst_id}")
+def get_compute_node(inst_id: int, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     return {"code": "SUCCESS", "data": svc.get(inst_id)}
 
 
-@router.put("/instances/{inst_id}")
-def update_instance(inst_id: int, data: InstanceUpdate, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.put("/compute-nodes/{inst_id}")
+def update_compute_node(inst_id: int, data: InstanceUpdate, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     return {"code": "SUCCESS", "message": "更新成功", "data": svc.update(inst_id, data)}
 
 
-@router.delete("/instances/{inst_id}")
-def delete_instance(inst_id: int, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.delete("/compute-nodes/{inst_id}")
+def delete_compute_node(inst_id: int, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     svc.delete(inst_id)
     return {"code": "SUCCESS", "message": "删除成功"}
 
 
-@router.post("/instances/{inst_id}/heartbeat")
-def heartbeat_instance(inst_id: int, db: Session = Depends(get_db)):
+@router.post("/compute-nodes/{inst_id}/heartbeat")
+def heartbeat_compute_node(inst_id: int, db: Session = Depends(get_db)):
     """手动标记心跳"""
     from app.db.repositories.instance_repo import InstanceRepository
     InstanceRepository(db).update_heartbeat(inst_id)
     return {"code": "SUCCESS", "message": "心跳已刷新"}
+
+
+# --- Legacy /instances/* → 308 redirect to /compute-nodes/* -----------------
+# TestClient follows redirects by default, so existing callers keep working.
+# Kept for ≥3 months per T45 deprecation policy.
+
+
+@router.get("/instances")
+def _legacy_list_instances(request: Request):
+    return _redirect_308("/api/v1/resources/compute-nodes", request)
+
+
+@router.post("/instances")
+def _legacy_create_instance(request: Request):
+    return _redirect_308("/api/v1/resources/compute-nodes", request)
+
+
+@router.get("/instances/{inst_id}")
+def _legacy_get_instance(inst_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/compute-nodes/{inst_id}", request)
+
+
+@router.put("/instances/{inst_id}")
+def _legacy_update_instance(inst_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/compute-nodes/{inst_id}", request)
+
+
+@router.delete("/instances/{inst_id}")
+def _legacy_delete_instance(inst_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/compute-nodes/{inst_id}", request)
+
+
+@router.post("/instances/{inst_id}/heartbeat")
+def _legacy_heartbeat_instance(inst_id: int, request: Request):
+    return _redirect_308(
+        f"/api/v1/resources/compute-nodes/{inst_id}/heartbeat", request
+    )
 
 
 def _detect_local_host_info() -> dict:
@@ -109,6 +172,56 @@ def _detect_local_host_info() -> dict:
     }
 
 
+def _run_opencode_config_discovery(db: Session) -> tuple[int, int, str | None]:
+    """调用 OpencodeConfigDiscoveryService (T46) 扫描 opencode.json + skills 目录.
+
+    Returns:
+        (mcps_upserted, skills_upserted, error_message)
+    """
+    import logging
+    log = logging.getLogger("resources.register_local")
+    try:
+        from app.services.opencode_config_discovery_service import (
+            OpencodeConfigDiscoveryService,  # type: ignore
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("OpencodeConfigDiscoveryService 不可用: %s", exc)
+        return 0, 0, f"service_unavailable: {exc}"
+    try:
+        svc = OpencodeConfigDiscoveryService(db=db)
+        result = svc.discover_all(dry_run=False)
+        mcp_upserts = int(result.get("mcp_created", 0)) + int(result.get("mcp_updated", 0))
+        skill_upserts = int(result.get("skill_created", 0)) + int(result.get("skill_updated", 0))
+        return mcp_upserts, skill_upserts, None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("OpencodeConfigDiscoveryService 执行失败: %s", exc)
+        return 0, 0, f"discovery_error: {exc}"
+
+
+def _run_agent_container_discovery() -> tuple[list[dict], str | None]:
+    """调用 AgentContainerDiscoveryService (T47) 扫描本地 opencode/openclaw/harness 容器.
+
+    Returns:
+        (container_records_as_dicts, error_message) — 只返回 is_running=True 的记录。
+    """
+    import logging
+    log = logging.getLogger("resources.register_local")
+    try:
+        from app.services.agent_container_discovery_service import (
+            AgentContainerDiscoveryService,  # type: ignore
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("AgentContainerDiscoveryService 不可用: %s", exc)
+        return [], f"service_unavailable: {exc}"
+    try:
+        svc = AgentContainerDiscoveryService()
+        records = svc.discover_running()
+        return [r.to_dict() for r in records], None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("AgentContainerDiscoveryService 执行失败: %s", exc)
+        return [], f"discovery_error: {exc}"
+
+
 def _run_agent_looper_discovery(db: Session, user_id: int | None) -> tuple[int, str | None]:
     """调用 AgentLooperDiscoveryService 扫描 + 入库 — import guard + 全异常兜底。
 
@@ -141,8 +254,8 @@ def _run_agent_looper_discovery(db: Session, user_id: int | None) -> tuple[int, 
         return 0, f"discovery_error: {exc}"
 
 
-@router.post("/instances/register-local")
-def register_local_instance(
+@router.post("/compute-nodes/register-local")
+def register_local_compute_node(
     db: Session = Depends(get_db),
     authorization: str | None = Header(default=None),
 ):
@@ -167,13 +280,16 @@ def register_local_instance(
     ip = info["ip"]
     os_name = info["platform"]
 
-    svc = InstanceService(db)
+    svc = ComputeNodeService(db)
 
     # 检查是否已注册 — 幂等：已存在则直接返回，但仍然执行 agent-looper 扫描以刷新 payload
     existing = db.query(Instance).filter(Instance.name == hostname).first()
     if existing:
         # 也跑一次 agent-looper 扫描，让 payload 保持一致（agent 扫描则不重复跑以省时）
         agent_looper_count, al_error = _run_agent_looper_discovery(db, user_id)
+        # T46 + T47: opencode 配置发现 + 本地 agent 容器扫描（幂等分支同样执行）
+        mcp_upserts, skill_upserts, oc_error = _run_opencode_config_discovery(db)
+        containers, container_error = _run_agent_container_discovery()
         payload = {
             "code": "SUCCESS",
             "message": "本地服务器已存在",
@@ -182,11 +298,19 @@ def register_local_instance(
             "platform": os_name,
             "agent_count": 0,
             "agent_looper_count": agent_looper_count,
+            "mcp_count": mcp_upserts,
+            "skill_count": skill_upserts,
+            "container_count": len(containers),
             "discovered_agents": [],
+            "discovered_containers": containers,
             "total_ports_scanned": 0,
         }
         if al_error:
             payload["agent_looper_error"] = al_error
+        if oc_error:
+            payload["opencode_config_error"] = oc_error
+        if container_error:
+            payload["agent_container_error"] = container_error
         return payload
 
     data = InstanceCreate(
@@ -240,26 +364,50 @@ def register_local_instance(
     # T37: 新增 — 自动扫描 Agent Looper 配置（graceful degradation）
     agent_looper_count, al_error = _run_agent_looper_discovery(db, user_id)
 
+    # T46: opencode.json + skills/*/SKILL.md 扫描并 upsert
+    mcp_upserts, skill_upserts, oc_error = _run_opencode_config_discovery(db)
+    # T47: 扫描本地运行的 agent 容器（opencode/openclaw/harness）
+    containers, container_error = _run_agent_container_discovery()
+
     payload = {
         "code": "SUCCESS",
-        "message": f"本地服务器已添加，发现 {len(agents_data)} 个 Agent，{agent_looper_count} 个 Agent Looper",
+        "message": (
+            f"本地服务器已添加，发现 {len(agents_data)} 个 Agent，"
+            f"{agent_looper_count} 个 Agent Looper，{mcp_upserts} 个 MCP，"
+            f"{skill_upserts} 个 Skill，{len(containers)} 个 Container"
+        ),
         "data": result,
         "hostname": hostname,
         "platform": os_name,
         "agent_count": len(agents_data),
         "agent_looper_count": agent_looper_count,
+        "mcp_count": mcp_upserts,
+        "skill_count": skill_upserts,
+        "container_count": len(containers),
         "discovered_agents": agents_data,
+        "discovered_containers": containers,
         "total_ports_scanned": total_ports_scanned,
     }
     if al_error:
         payload["agent_looper_error"] = al_error
+    if oc_error:
+        payload["opencode_config_error"] = oc_error
+    if container_error:
+        payload["agent_container_error"] = container_error
     return payload
+
+
+@router.post("/instances/register-local")
+def _legacy_register_local_instance(request: Request):
+    return _redirect_308(
+        "/api/v1/resources/compute-nodes/register-local", request
+    )
 
 
 # ==================== Agent 发现 ====================
 
 
-@router.post("/instances/{inst_id}/scan-agents")
+@router.post("/compute-nodes/{inst_id}/scan-agents")
 def scan_agents(inst_id: int, db: Session = Depends(get_db)):
     """
     扫描指定计算节点上的 Agent 服务，并将健康的 Agent 自动添加到 Agent 表。
@@ -376,6 +524,13 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
             "auto_registered": auto_registered,
         },
     }
+
+
+@router.post("/instances/{inst_id}/scan-agents")
+def _legacy_scan_agents(inst_id: int, request: Request):
+    return _redirect_308(
+        f"/api/v1/resources/compute-nodes/{inst_id}/scan-agents", request
+    )
 
 
 # ==================== WebSocket 实时 Agent 交互 ====================
@@ -989,6 +1144,26 @@ def install_skill(skill_id: int, body: SkillInstallRequest = None, db: Session =
     return {"code": "SUCCESS", "message": "安装成功", "data": svc.install(skill_id, instance_id)}
 
 
+@router.post("/skills/sync")
+def sync_skills(body: dict | None = None, db: Session = Depends(get_db)):
+    """双向同步 skills 与 opencode 配置目录。
+
+    body 支持：
+    - ``direction``: ``in`` (从文件导入) / ``out`` (从 DB 写出)，默认 ``in``
+    - ``dry_run``: 布尔，默认 False
+    """
+    from app.services.opencode_sync_service import OpencodeSyncService
+
+    payload = body or {}
+    direction = str(payload.get("direction") or "in").lower()
+    dry_run = bool(payload.get("dry_run", False))
+    if direction not in ("in", "out"):
+        raise HTTPException(status_code=400, detail="direction must be 'in' or 'out'")
+    svc = OpencodeSyncService(db)
+    data = svc.sync_skills(direction=direction, dry_run=dry_run)
+    return {"code": "SUCCESS", "message": "同步完成", "data": data}
+
+
 # ==================== MCP 工具/服务 ====================
 
 
@@ -1036,6 +1211,37 @@ async def auto_discover_mcp(data: MCPAutoDiscoverRequest, db: Session = Depends(
         description_text=data.description_text,
     )
     return result
+
+
+
+@router.post("/mcps/sync")
+def sync_mcps(body: dict | None = None, db: Session = Depends(get_db)):
+    """双向同步 mcp 配置与 opencode.json。"""
+    from app.services.opencode_sync_service import OpencodeSyncService
+    payload = body or {}
+    direction = str(payload.get("direction") or "in").lower()
+    dry_run = bool(payload.get("dry_run", False))
+    if direction not in ("in", "out"):
+        raise HTTPException(status_code=400, detail="direction must be in or out")
+    svc = OpencodeSyncService(db)
+    data = svc.sync_mcps(direction=direction, dry_run=dry_run)
+    return {"code": "SUCCESS", "message": "同步完成", "data": data}
+
+# --- Legacy /mcp-configs/* -> 308 redirect to /mcps/* ------------------------
+def _legacy_get_mcp_config(mcp_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/mcps/{mcp_id}", request)
+
+
+@router.put("/mcp-configs/{mcp_id}")
+def _legacy_update_mcp_config(mcp_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/mcps/{mcp_id}", request)
+
+
+@router.delete("/mcp-configs/{mcp_id}")
+def _legacy_delete_mcp_config(mcp_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/mcps/{mcp_id}", request)
+
+
 
 
 # ==================== AgentRun 运行时 ====================

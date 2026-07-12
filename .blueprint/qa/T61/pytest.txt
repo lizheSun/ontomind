@@ -1,0 +1,30 @@
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/data_platform/test_agent_looper_test.py::test_sse_happy_yields_text_and_done
+FAILED tests/data_platform/test_agent_looper_test.py::test_sse_error_yields_error_event_and_marks_run
+FAILED tests/data_platform/test_agent_looper_test.py::test_list_test_runs_returns_history
+FAILED tests/data_platform/test_agent_looper_test.py::test_parse_config_uses_agent_system_prompt_when_id_given
+FAILED tests/data_platform/test_agent_looper_test.py::test_send_message_uses_agent_system_prompt
+FAILED tests/data_platform/test_naming_migration.py::test_legacy_mcp_config_paths_redirect_308_to_mcps[GET-/api/v1/resources/mcp-configs-/api/v1/resources/mcps]
+FAILED tests/data_platform/test_naming_migration.py::test_legacy_mcp_config_paths_redirect_308_to_mcps[POST-/api/v1/resources/mcp-configs-/api/v1/resources/mcps]
+FAILED tests/data_platform/test_naming_migration.py::test_legacy_mcp_config_paths_redirect_308_to_mcps[GET-/api/v1/resources/mcp-configs/3-/api/v1/resources/mcps/3]
+FAILED tests/data_platform/test_opencode_discovery.py::test_upsert_mcps_creates_and_is_idempotent
+FAILED tests/data_platform/test_opencode_discovery.py::test_upsert_mcps_updates_changed_fields
+FAILED tests/data_platform/test_opencode_discovery.py::test_upsert_skills_creates_and_is_idempotent
+FAILED tests/data_platform/test_opencode_discovery.py::test_discover_all_writes_when_not_dry
+FAILED tests/data_platform/test_opencode_discovery.py::test_discover_all_errors_do_not_break_flow
+FAILED tests/data_platform/test_opencode_sync.py::test_mcp_row_to_opencode_serializes_list_command
+FAILED tests/data_platform/test_opencode_sync.py::test_mcp_row_to_opencode_single_word_command_stays_string
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_from_opencode_all_upserts_mcps_and_skills
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_from_opencode_target_mcps_only
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_to_opencode_writes_mcp_section
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_to_opencode_preserves_other_top_level_fields
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_to_opencode_creates_backup_when_file_exists
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_to_opencode_no_backup_when_no_prior_file
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_to_opencode_dry_run_produces_diff_and_no_write
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_to_opencode_writes_skill_md
+FAILED tests/data_platform/test_opencode_sync.py::test_sync_to_opencode_skips_inactive_mcps
+FAILED tests/data_platform/test_opencode_sync.py::test_roundtrip_file_to_db_to_file
+FAILED tests/data_platform/test_opencode_sync.py::test_endpoint_skills_sync_in
+FAILED tests/data_platform/test_opencode_sync.py::test_endpoint_mcps_sync_out
+27 failed, 234 passed, 147 warnings in 9.91s

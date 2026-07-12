@@ -1,68 +1,72 @@
-"""Agent 智能体定义模型."""
-from sqlalchemy import Column, String, Integer, Text, Boolean, Enum as SAEnum, JSON
-import enum
+"""Agent 智能体模型（T44 — 合并 agents + agent_looper_configs）.
+
+新版 Agent 模型合并了原 `agents` 和 `agent_looper_configs` 两张表的核心字段，
+支持 `custom_looper / opencode_native / mcp_agent / imported` 四种类型。
+"""
+from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, JSON
 from app.db.models.base import BaseModel
 
 
-class AgentType(str, enum.Enum):
-    openclaw = "openclaw"
-    opencode = "opencode"
-    harness = "harness"
-    custom = "custom"
-
-
-class RuntimeType(str, enum.Enum):
-    docker = "docker"
-    python = "python"
-    node = "node"
-    binary = "binary"
-
-
 class Agent(BaseModel):
-    """Agent 智能体定义表"""
+    """智能体（原 agent_looper_configs + agents 合并）"""
 
     __tablename__ = "agents"
+    __table_args__ = {"comment": "智能体（原 agent_looper_configs + agents 合并）"}
 
-    name = Column(String(128), nullable=False, comment="Agent 名称")
-    agent_type = Column(
-        SAEnum(AgentType, name="agent_type_enum", create_type=False),
+    name = Column(String(128), nullable=False, unique=True, comment="智能体名称")
+    type = Column(
+        String(32),
         nullable=False,
-        comment="Agent 类型: openclaw / opencode / harness / custom",
+        server_default="custom_looper",
+        comment="custom_looper/opencode_native/mcp_agent/imported",
     )
-    version = Column(String(32), default="latest", comment="版本号")
-    runtime = Column(
-        SAEnum(RuntimeType, name="runtime_type_enum", create_type=False),
-        nullable=False,
-        comment="运行方式: docker / python / node / binary",
+    container_id = Column(
+        Integer,
+        ForeignKey("agent_containers.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="所属容器 ID",
     )
-    docker_image = Column(String(256), nullable=True, comment="Docker 镜像地址")
-    entrypoint = Column(Text, nullable=True, comment="启动命令/入口脚本")
-    env_template = Column(JSON, nullable=True, comment="环境变量模板")
-    config_template = Column(Text, nullable=True, comment="配置文件模板")
-    ports = Column(JSON, nullable=True, comment="需要暴露的端口列表")
-    volume_mounts = Column(JSON, nullable=True, comment="挂载卷配置")
-    resource_limit = Column(JSON, nullable=True, comment="资源限制（cpu/memory）")
-    skill_ids = Column(JSON, nullable=True, comment="关联的技能 ID 列表")
     description = Column(Text, nullable=True, comment="描述")
-    is_active = Column(Boolean, default=True, comment="是否启用")
-
-    def to_response_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "agent_type": self.agent_type.value if hasattr(self.agent_type, "value") else self.agent_type,
-            "version": self.version,
-            "runtime": self.runtime.value if hasattr(self.runtime, "value") else self.runtime,
-            "docker_image": self.docker_image,
-            "entrypoint": self.entrypoint,
-            "env_template": self.env_template,
-            "config_template": self.config_template,
-            "ports": self.ports,
-            "volume_mounts": self.volume_mounts,
-            "resource_limit": self.resource_limit,
-            "skill_ids": self.skill_ids,
-            "description": self.description,
-            "is_active": bool(self.is_active),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }
+    model = Column(String(256), nullable=True, comment="模型名称")
+    temperature = Column(Integer, nullable=True, comment="温度 * 100（存整数避免浮点）")
+    loop_strategy = Column(
+        String(32),
+        nullable=True,
+        server_default="react",
+        comment="single_shot/react/plan_execute/reflect",
+    )
+    system_prompt = Column(Text, nullable=True, comment="系统提示词")
+    tool_permissions = Column(JSON, nullable=True, comment="工具权限 JSON")
+    custom_tools = Column(JSON, nullable=True, comment="自定义工具 JSON")
+    memory_window = Column(
+        Integer,
+        nullable=True,
+        server_default="0",
+        comment="记忆窗口大小",
+    )
+    guardrails = Column(JSON, nullable=True, comment="护栏配置 JSON")
+    resource_bindings = Column(JSON, nullable=True, comment="资源绑定 JSON")
+    credential_ref = Column(JSON, nullable=True, comment="凭据引用 JSON")
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        server_default="1",
+        comment="是否激活",
+    )
+    is_published = Column(
+        Boolean,
+        nullable=False,
+        server_default="0",
+        comment="是否已发布",
+    )
+    version = Column(
+        Integer,
+        nullable=False,
+        server_default="1",
+        comment="当前版本号",
+    )
+    published_path = Column(
+        String(512),
+        nullable=True,
+        comment="发布到 opencode 的文件路径",
+    )

@@ -1,0 +1,33 @@
+/Users/sun/CodeBuddy/20260627212423/backend/venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-8.3.4, pluggy-1.6.0 -- /Users/sun/CodeBuddy/20260627212423/backend/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sun/CodeBuddy/20260627212423-w10t53/backend
+plugins: asyncio-0.24.0, cov-7.1.0, anyio-4.14.1
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 19 items
+
+tests/data_platform/test_agent_loop.py::test_can_transition_matrix PASSED [  5%]
+tests/data_platform/test_agent_loop.py::test_eval_result_score_bounds PASSED [ 10%]
+tests/data_platform/test_agent_loop.py::test_single_shot_completes_without_eval PASSED [ 15%]
+tests/data_platform/test_agent_loop.py::test_single_shot_with_pass_eval PASSED [ 21%]
+tests/data_platform/test_agent_loop.py::test_single_shot_with_fail_eval_marks_failed PASSED [ 26%]
+tests/data_platform/test_agent_loop.py::test_single_shot_revise_without_optimizer_yields_needs_review PASSED [ 31%]
+tests/data_platform/test_agent_loop.py::test_react_short_circuits_on_done_marker PASSED [ 36%]
+tests/data_platform/test_agent_loop.py::test_react_hits_max_iterations_without_done PASSED [ 42%]
+tests/data_platform/test_agent_loop.py::test_plan_execute_emits_plan_then_execute_steps PASSED [ 47%]
+tests/data_platform/test_agent_loop.py::test_evaluator_optimizer_passes_on_first_try PASSED [ 52%]
+tests/data_platform/test_agent_loop.py::test_evaluator_optimizer_revises_then_passes PASSED [ 57%]
+tests/data_platform/test_agent_loop.py::test_evaluator_optimizer_exhausts_revisions_needs_review PASSED [ 63%]
+tests/data_platform/test_agent_loop.py::test_evaluator_optimizer_fail_verdict_marks_failed PASSED [ 68%]
+tests/data_platform/test_agent_loop.py::test_evaluator_optimizer_requires_eval_fn PASSED [ 73%]
+tests/data_platform/test_agent_loop.py::test_reflect_pairs_execute_and_reflect PASSED [ 78%]
+tests/data_platform/test_agent_loop.py::test_reflect_stops_when_reflection_says_done PASSED [ 84%]
+tests/data_platform/test_agent_loop.py::test_unknown_strategy_rejected PASSED [ 89%]
+tests/data_platform/test_agent_loop.py::test_step_fn_exception_transitions_to_failed PASSED [ 94%]
+tests/data_platform/test_agent_loop.py::test_engine_forces_iteration_number PASSED [100%]
+
+============================== 19 passed in 0.02s ==============================

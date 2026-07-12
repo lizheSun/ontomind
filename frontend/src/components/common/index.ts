@@ -22,3 +22,27 @@ export { DataTable } from './DataTable';
 export type { DataTableProps } from './DataTable';
 export { default as AgentPicker } from './AgentPicker';
 export type { AgentPickerProps } from './AgentPicker';
+export { default as AgentEmbedRunner } from './AgentEmbedRunner';
+export type {
+  AgentEmbedRunnerProps,
+  AgentEmbedContext,
+  AgentEmbedInboundMessage,
+  AgentEmbedOutboundMessage,
+} from './AgentEmbedRunner';
+export { CmdKOmnibar } from './CmdKOmnibar';
+export type { CmdKOmnibarProps } from './CmdKOmnibar';
+export {
+  ZenGodToggle,
+  useUIMode,
+  useProgressiveDisclosure,
+  setUIMode,
+} from './ZenGodToggle';
+export type { UIMode, ZenGodToggleProps } from './ZenGodToggle';
+export { default as AgentChatPanel } from './AgentChatPanel';
+export type {
+  AgentChatPanelProps,
+  AgentChatMessage,
+  AgentChatPart,
+  AgentChatRole,
+  AgentToolPartStatus,
+} from './AgentChatPanel';

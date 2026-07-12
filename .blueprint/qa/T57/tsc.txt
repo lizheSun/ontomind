@@ -1,0 +1,11 @@
+src/pages/application/index.tsx(1,48): error TS6133: 'Space' is declared but its value is never read.
+src/pages/data-platform/MetadataPage.tsx(1,10): error TS6133: 'useCallback' is declared but its value is never read.
+src/pages/Login.tsx(54,25): error TS2339: Property 'register' does not exist on type '{ getUsers: (params?: { skip?: number | undefined; limit?: number | undefined; activeOnly?: boolean | undefined; } | undefined) => Promise<UserListResponse>; ... 5 more ...; getCurrentUser: () => Promise<...>; }'.
+src/pages/perception/index.tsx(2,152): error TS6133: 'Tooltip' is declared but its value is never read.
+src/pages/perception/index.tsx(2,161): error TS6133: 'Tree' is declared but its value is never read.
+src/pages/perception/index.tsx(83,10): error TS6133: 'annotating' is declared but its value is never read.
+src/pages/perception/index.tsx(83,22): error TS6133: 'setAnnotating' is declared but its value is never read.
+src/pages/projects/index.tsx(9,18): error TS6133: 'EyeOutlined' is declared but its value is never read.
+src/pages/projects/index.tsx(11,37): error TS6133: 'ProfileOutlined' is declared but its value is never read.
+src/pages/projects/index.tsx(437,10): error TS6133: 'loading' is declared but its value is never read.
+src/stores/userStore.ts(25,53): error TS6133: 'get' is declared but its value is never read.

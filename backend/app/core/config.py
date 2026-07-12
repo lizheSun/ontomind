@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     AGENT_CONFIG_PATH: str = "~/.config/opencode/agents"
     AGENT_LOOPER_TEST_RUNS_TTL_DAYS: int = 30
 
+    # === Agent Resource Platform (T44) / Opencode Config Discovery (T46) ===
+    OPENCODE_CONFIG_PATH: str = "~/.config/opencode"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

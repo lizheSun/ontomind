@@ -10,7 +10,7 @@ from app.db.models.ontology_model import (
 from app.db.models.instance_model import Instance
 from app.db.models.agent_model import Agent
 from app.db.models.skill_model import Skill
-from app.db.models.mcp_model import MCPConfig
+from app.db.models.mcp_model import MCP
 from app.db.models.agent_run_model import AgentRun
 from app.db.models.project_model import Project
 from app.db.models.requirement_model import Requirement
@@ -37,13 +37,31 @@ from app.db.models.agent_looper_config_model import AgentLooperConfig
 from app.db.models.agent_looper_version_model import AgentLooperVersion
 from app.db.models.agent_looper_test_run_model import AgentLooperTestRun
 
+# --- Agent Resource Platform (T44) — 5 核心 + 7 关联 ---
+from app.db.models.compute_node_model import ComputeNode
+from app.db.models.agent_container_model import AgentContainer
+from app.db.models.node_container_model import NodeContainer
+from app.db.models.container_agent_model import ContainerAgent
+from app.db.models.container_skill_model import ContainerSkill
+from app.db.models.container_mcp_model import ContainerMCP
+from app.db.models.agent_skill_model import AgentSkill
+from app.db.models.agent_mcp_model import AgentMCP
+from app.db.models.agent_run_job_model import AgentRunJob
+
+# Backwards-compat alias: 旧代码继续 import MCPConfig（已重命名为 MCP）
+MCPConfig = MCP
+
 __all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaProfile",
            "OntologyVersion", "OntologyClass", "OntologyProperty",
            "OntologyRelationship", "OntologyConstraint",
-           "Instance", "Agent", "Skill", "MCPConfig", "AgentRun",
+           "Instance", "Agent", "Skill", "MCP", "MCPConfig", "AgentRun",
            "Project", "Requirement", "Plan", "Task",
            "DpDataSource", "DpSqlQuery", "DpQueryHistory",
            "DpChatSession", "DpChatMessage",
            "KbLibrary", "KbDataAsset", "KbCodeRepo",
            "KbDocument", "KbExperience", "KbTag",
-           "AgentLooperConfig", "AgentLooperVersion", "AgentLooperTestRun"]
+           "AgentLooperConfig", "AgentLooperVersion", "AgentLooperTestRun",
+           # T44
+           "ComputeNode", "AgentContainer",
+           "NodeContainer", "ContainerAgent", "ContainerSkill", "ContainerMCP",
+           "AgentSkill", "AgentMCP", "AgentRunJob"]
