@@ -109,6 +109,56 @@ def _detect_local_host_info() -> dict:
     }
 
 
+def _run_opencode_config_discovery(db: Session) -> tuple[int, int, str | None]:
+    """调用 OpencodeConfigDiscoveryService (T46) 扫描 opencode.json + skills 目录.
+
+    Returns:
+        (mcps_upserted, skills_upserted, error_message)
+    """
+    import logging
+    log = logging.getLogger("resources.register_local")
+    try:
+        from app.services.opencode_config_discovery_service import (
+            OpencodeConfigDiscoveryService,  # type: ignore
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("OpencodeConfigDiscoveryService 不可用: %s", exc)
+        return 0, 0, f"service_unavailable: {exc}"
+    try:
+        svc = OpencodeConfigDiscoveryService(db=db)
+        result = svc.discover_all(dry_run=False)
+        mcp_upserts = int(result.get("mcp_created", 0)) + int(result.get("mcp_updated", 0))
+        skill_upserts = int(result.get("skill_created", 0)) + int(result.get("skill_updated", 0))
+        return mcp_upserts, skill_upserts, None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("OpencodeConfigDiscoveryService 执行失败: %s", exc)
+        return 0, 0, f"discovery_error: {exc}"
+
+
+def _run_agent_container_discovery() -> tuple[list[dict], str | None]:
+    """调用 AgentContainerDiscoveryService (T47) 扫描本地 opencode/openclaw/harness 容器.
+
+    Returns:
+        (container_records_as_dicts, error_message) — 只返回 is_running=True 的记录。
+    """
+    import logging
+    log = logging.getLogger("resources.register_local")
+    try:
+        from app.services.agent_container_discovery_service import (
+            AgentContainerDiscoveryService,  # type: ignore
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("AgentContainerDiscoveryService 不可用: %s", exc)
+        return [], f"service_unavailable: {exc}"
+    try:
+        svc = AgentContainerDiscoveryService()
+        records = svc.discover_running()
+        return [r.to_dict() for r in records], None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("AgentContainerDiscoveryService 执行失败: %s", exc)
+        return [], f"discovery_error: {exc}"
+
+
 def _run_agent_looper_discovery(db: Session, user_id: int | None) -> tuple[int, str | None]:
     """调用 AgentLooperDiscoveryService 扫描 + 入库 — import guard + 全异常兜底。
 
@@ -174,6 +224,9 @@ def register_local_instance(
     if existing:
         # 也跑一次 agent-looper 扫描，让 payload 保持一致（agent 扫描则不重复跑以省时）
         agent_looper_count, al_error = _run_agent_looper_discovery(db, user_id)
+        # T46 + T47: opencode 配置发现 + 本地 agent 容器扫描（幂等分支同样执行）
+        mcp_upserts, skill_upserts, oc_error = _run_opencode_config_discovery(db)
+        containers, container_error = _run_agent_container_discovery()
         payload = {
             "code": "SUCCESS",
             "message": "本地服务器已存在",
@@ -182,11 +235,19 @@ def register_local_instance(
             "platform": os_name,
             "agent_count": 0,
             "agent_looper_count": agent_looper_count,
+            "mcp_count": mcp_upserts,
+            "skill_count": skill_upserts,
+            "container_count": len(containers),
             "discovered_agents": [],
+            "discovered_containers": containers,
             "total_ports_scanned": 0,
         }
         if al_error:
             payload["agent_looper_error"] = al_error
+        if oc_error:
+            payload["opencode_config_error"] = oc_error
+        if container_error:
+            payload["agent_container_error"] = container_error
         return payload
 
     data = InstanceCreate(
@@ -240,19 +301,36 @@ def register_local_instance(
     # T37: 新增 — 自动扫描 Agent Looper 配置（graceful degradation）
     agent_looper_count, al_error = _run_agent_looper_discovery(db, user_id)
 
+    # T46: opencode.json + skills/*/SKILL.md 扫描并 upsert
+    mcp_upserts, skill_upserts, oc_error = _run_opencode_config_discovery(db)
+    # T47: 扫描本地运行的 agent 容器（opencode/openclaw/harness）
+    containers, container_error = _run_agent_container_discovery()
+
     payload = {
         "code": "SUCCESS",
-        "message": f"本地服务器已添加，发现 {len(agents_data)} 个 Agent，{agent_looper_count} 个 Agent Looper",
+        "message": (
+            f"本地服务器已添加，发现 {len(agents_data)} 个 Agent，"
+            f"{agent_looper_count} 个 Agent Looper，{mcp_upserts} 个 MCP，"
+            f"{skill_upserts} 个 Skill，{len(containers)} 个 Container"
+        ),
         "data": result,
         "hostname": hostname,
         "platform": os_name,
         "agent_count": len(agents_data),
         "agent_looper_count": agent_looper_count,
+        "mcp_count": mcp_upserts,
+        "skill_count": skill_upserts,
+        "container_count": len(containers),
         "discovered_agents": agents_data,
+        "discovered_containers": containers,
         "total_ports_scanned": total_ports_scanned,
     }
     if al_error:
         payload["agent_looper_error"] = al_error
+    if oc_error:
+        payload["opencode_config_error"] = oc_error
+    if container_error:
+        payload["agent_container_error"] = container_error
     return payload
 
 
