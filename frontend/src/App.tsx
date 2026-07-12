@@ -15,6 +15,8 @@ import AgentLooperWizard from './pages/resources/AgentLooperWizard';
 import ComputeNodeDetailPage from './pages/resources/ComputeNodeDetailPage';
 import AgentContainerDetailPage from './pages/resources/AgentContainerDetailPage';
 import AgentDetailPage from './pages/resources/AgentDetailPage';
+import SkillDetailPage from './pages/resources/SkillDetailPage';
+import MCPDetailPage from './pages/resources/MCPDetailPage';
 import UsersPage from './pages/users/index';
 import ProjectsPage from './pages/projects/index';
 import DataPlatformIndex from './pages/data-platform';
@@ -120,6 +122,8 @@ export default function App() {
               <Route path="resources/agent-looper/:id" element={<AgentDetailPage />} />
               <Route path="resources/agent/new" element={<AgentDetailPage />} />
               <Route path="resources/agent/:id" element={<AgentDetailPage />} />
+              <Route path="resources/skills/:id" element={<SkillDetailPage />} />
+              <Route path="resources/mcps/:id" element={<MCPDetailPage />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="users" element={<UsersPage />} />
               {/* Wave 5 T20: data platform + knowledge base */}
