@@ -31,3 +31,10 @@ export type {
 } from './AgentEmbedRunner';
 export { CmdKOmnibar } from './CmdKOmnibar';
 export type { CmdKOmnibarProps } from './CmdKOmnibar';
+export {
+  ZenGodToggle,
+  useUIMode,
+  useProgressiveDisclosure,
+  setUIMode,
+} from './ZenGodToggle';
+export type { UIMode, ZenGodToggleProps } from './ZenGodToggle';

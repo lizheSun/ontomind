@@ -1,6 +1,7 @@
 import { ConfigProvider, theme, App as AntApp } from 'antd';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
+import { ZenGodToggle } from './components/common';
 import Login from './pages/Login';
 import { CmdKOmnibar } from './components/common';
 
@@ -97,6 +98,7 @@ export default function App() {
       }}
     >
       <AntApp>
+        <ZenGodToggle />
         <BrowserRouter>
           <CmdKOmnibar />
           <Routes>
