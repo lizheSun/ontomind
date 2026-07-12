@@ -2,6 +2,7 @@ import { ConfigProvider, theme, App as AntApp } from 'antd';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
+import { CmdKOmnibar } from './components/common';
 
 import Dashboard from './pages/dashboard/index';
 import PerceptionLegacyIndex from './pages/perception/index';
@@ -97,6 +98,7 @@ export default function App() {
     >
       <AntApp>
         <BrowserRouter>
+          <CmdKOmnibar />
           <Routes>
             <Route path="/login" element={<Login />} />
 
