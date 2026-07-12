@@ -1,11 +1,22 @@
-"""资源管理 API — Instance / Agent / Skill / MCP / AgentRun."""
+"""资源管理 API — ComputeNode(Instance) / Agent / Skill / MCP / AgentRun.
+
+T45 naming migration:
+    - `/api/v1/resources/instances`      → `/api/v1/resources/compute-nodes`   (308 redirect)
+    - `/api/v1/resources/mcp-configs`    → `/api/v1/resources/mcps`            (308 redirect, mcps is canonical)
+    - `/api/v1/agent-looper/configs`     → `/api/v1/resources/agents`          (308 redirect, wired below)
+
+308 (Permanent Redirect) is used instead of 301 to preserve the HTTP method
+and body — a GET stays a GET, a POST stays a POST. Old paths remain for at
+least 3 months to give downstream clients time to migrate.
+"""
 import json
 import asyncio
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, Header
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, HTTPException, Header
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services.instance_service import InstanceService
+from app.services.instance_service import ComputeNodeService, InstanceService
 from app.services.agent_service import AgentService
 from app.services.skill_service import SkillService
 from app.services.mcp_service import MCPService
@@ -19,46 +30,98 @@ from app.schemas.agent_run_schema import AgentRunCreate, AgentRunUpdate
 
 router = APIRouter()
 
-# ==================== Instance 计算节点 ====================
+
+def _redirect_308(new_path: str, request: Request) -> RedirectResponse:
+    """Build a 308 Permanent Redirect to `new_path`, preserving querystring.
+
+    308 keeps the request method + body intact, which is what we want for a
+    rename that must not break POST/PUT/DELETE calls.
+    """
+    qs = request.url.query
+    target = f"{new_path}?{qs}" if qs else new_path
+    return RedirectResponse(url=target, status_code=308)
+
+# ==================== ComputeNode (计算节点; formerly Instance) ====================
+#
+# Canonical routes live under `/compute-nodes`. Legacy `/instances/*` paths
+# are preserved as 308 Permanent Redirects (see the redirect stubs at the
+# bottom of this section).
 
 
-@router.get("/instances")
-def list_instances(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.get("/compute-nodes")
+def list_compute_nodes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     return {"code": "SUCCESS", "data": svc.list(skip, limit)}
 
 
-@router.post("/instances")
-def create_instance(data: InstanceCreate, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.post("/compute-nodes")
+def create_compute_node(data: InstanceCreate, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     return {"code": "SUCCESS", "message": "创建成功", "data": svc.create(data)}
 
 
-@router.get("/instances/{inst_id}")
-def get_instance(inst_id: int, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.get("/compute-nodes/{inst_id}")
+def get_compute_node(inst_id: int, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     return {"code": "SUCCESS", "data": svc.get(inst_id)}
 
 
-@router.put("/instances/{inst_id}")
-def update_instance(inst_id: int, data: InstanceUpdate, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.put("/compute-nodes/{inst_id}")
+def update_compute_node(inst_id: int, data: InstanceUpdate, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     return {"code": "SUCCESS", "message": "更新成功", "data": svc.update(inst_id, data)}
 
 
-@router.delete("/instances/{inst_id}")
-def delete_instance(inst_id: int, db: Session = Depends(get_db)):
-    svc = InstanceService(db)
+@router.delete("/compute-nodes/{inst_id}")
+def delete_compute_node(inst_id: int, db: Session = Depends(get_db)):
+    svc = ComputeNodeService(db)
     svc.delete(inst_id)
     return {"code": "SUCCESS", "message": "删除成功"}
 
 
-@router.post("/instances/{inst_id}/heartbeat")
-def heartbeat_instance(inst_id: int, db: Session = Depends(get_db)):
+@router.post("/compute-nodes/{inst_id}/heartbeat")
+def heartbeat_compute_node(inst_id: int, db: Session = Depends(get_db)):
     """手动标记心跳"""
     from app.db.repositories.instance_repo import InstanceRepository
     InstanceRepository(db).update_heartbeat(inst_id)
     return {"code": "SUCCESS", "message": "心跳已刷新"}
+
+
+# --- Legacy /instances/* → 308 redirect to /compute-nodes/* -----------------
+# TestClient follows redirects by default, so existing callers keep working.
+# Kept for ≥3 months per T45 deprecation policy.
+
+
+@router.get("/instances")
+def _legacy_list_instances(request: Request):
+    return _redirect_308("/api/v1/resources/compute-nodes", request)
+
+
+@router.post("/instances")
+def _legacy_create_instance(request: Request):
+    return _redirect_308("/api/v1/resources/compute-nodes", request)
+
+
+@router.get("/instances/{inst_id}")
+def _legacy_get_instance(inst_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/compute-nodes/{inst_id}", request)
+
+
+@router.put("/instances/{inst_id}")
+def _legacy_update_instance(inst_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/compute-nodes/{inst_id}", request)
+
+
+@router.delete("/instances/{inst_id}")
+def _legacy_delete_instance(inst_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/compute-nodes/{inst_id}", request)
+
+
+@router.post("/instances/{inst_id}/heartbeat")
+def _legacy_heartbeat_instance(inst_id: int, request: Request):
+    return _redirect_308(
+        f"/api/v1/resources/compute-nodes/{inst_id}/heartbeat", request
+    )
 
 
 def _detect_local_host_info() -> dict:
@@ -141,8 +204,8 @@ def _run_agent_looper_discovery(db: Session, user_id: int | None) -> tuple[int, 
         return 0, f"discovery_error: {exc}"
 
 
-@router.post("/instances/register-local")
-def register_local_instance(
+@router.post("/compute-nodes/register-local")
+def register_local_compute_node(
     db: Session = Depends(get_db),
     authorization: str | None = Header(default=None),
 ):
@@ -167,7 +230,7 @@ def register_local_instance(
     ip = info["ip"]
     os_name = info["platform"]
 
-    svc = InstanceService(db)
+    svc = ComputeNodeService(db)
 
     # 检查是否已注册 — 幂等：已存在则直接返回，但仍然执行 agent-looper 扫描以刷新 payload
     existing = db.query(Instance).filter(Instance.name == hostname).first()
@@ -256,10 +319,17 @@ def register_local_instance(
     return payload
 
 
+@router.post("/instances/register-local")
+def _legacy_register_local_instance(request: Request):
+    return _redirect_308(
+        "/api/v1/resources/compute-nodes/register-local", request
+    )
+
+
 # ==================== Agent 发现 ====================
 
 
-@router.post("/instances/{inst_id}/scan-agents")
+@router.post("/compute-nodes/{inst_id}/scan-agents")
 def scan_agents(inst_id: int, db: Session = Depends(get_db)):
     """
     扫描指定计算节点上的 Agent 服务，并将健康的 Agent 自动添加到 Agent 表。
@@ -376,6 +446,13 @@ def scan_agents(inst_id: int, db: Session = Depends(get_db)):
             "auto_registered": auto_registered,
         },
     }
+
+
+@router.post("/instances/{inst_id}/scan-agents")
+def _legacy_scan_agents(inst_id: int, request: Request):
+    return _redirect_308(
+        f"/api/v1/resources/compute-nodes/{inst_id}/scan-agents", request
+    )
 
 
 # ==================== WebSocket 实时 Agent 交互 ====================
@@ -1036,6 +1113,34 @@ async def auto_discover_mcp(data: MCPAutoDiscoverRequest, db: Session = Depends(
         description_text=data.description_text,
     )
     return result
+
+
+# --- Legacy /mcp-configs/* → 308 redirect to /mcps/* ------------------------
+
+
+@router.get("/mcp-configs")
+def _legacy_list_mcp_configs(request: Request):
+    return _redirect_308("/api/v1/resources/mcps", request)
+
+
+@router.post("/mcp-configs")
+def _legacy_create_mcp_config(request: Request):
+    return _redirect_308("/api/v1/resources/mcps", request)
+
+
+@router.get("/mcp-configs/{mcp_id}")
+def _legacy_get_mcp_config(mcp_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/mcps/{mcp_id}", request)
+
+
+@router.put("/mcp-configs/{mcp_id}")
+def _legacy_update_mcp_config(mcp_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/mcps/{mcp_id}", request)
+
+
+@router.delete("/mcp-configs/{mcp_id}")
+def _legacy_delete_mcp_config(mcp_id: int, request: Request):
+    return _redirect_308(f"/api/v1/resources/mcps/{mcp_id}", request)
 
 
 # ==================== AgentRun 运行时 ====================
