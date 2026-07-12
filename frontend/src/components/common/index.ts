@@ -29,3 +29,5 @@ export type {
   AgentEmbedInboundMessage,
   AgentEmbedOutboundMessage,
 } from './AgentEmbedRunner';
+export { CmdKOmnibar } from './CmdKOmnibar';
+export type { CmdKOmnibarProps } from './CmdKOmnibar';
