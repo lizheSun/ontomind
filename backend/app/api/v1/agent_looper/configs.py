@@ -1,12 +1,19 @@
-"""Agent Looper 配置路由。
+"""Agent Looper 配置路由（T45: 已归口 `/api/v1/resources/agents`）。
 
-- POST /configs/{id}/publish  — 本任务（T35）完整实现，落盘 .md
-- GET  /configs               — TODO(T34): list_by_owner
-- POST /configs               — TODO(T34): create
+T45 naming migration:
+    `/api/v1/agent-looper/configs`            → `/api/v1/resources/agents`
+    `/api/v1/agent-looper/configs/{id}/publish`
+                                              → `/api/v1/resources/agents/{id}/publish`
 
-list/create 为 stub，占位便于 aggregator 完整，等 T34 合入后填充真实实现。
+All old routes return **HTTP 308 Permanent Redirect** to preserve request
+method + body, so existing POST/PUT callers keep working while they migrate.
+The `publish` handler still lives here because the canonical `/resources/agents`
+namespace currently serves the *Agent definition* CRUD, not the config
+publish action — see `.blueprint/tasks/45-naming-migration.md` for the
+follow-up unification plan.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user_id
@@ -19,31 +26,20 @@ from app.services.agent_looper_writer_service import (
 router = APIRouter()
 
 
-@router.get("/configs", response_model=dict)
-async def list_configs(
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-):
-    """TODO(T34): 委托 AgentLooperService.list_by_owner。此处占位。"""
-    return {
-        "code": "SUCCESS",
-        "message": "TODO(T34): list_by_owner",
-        "data": [],
-    }
+def _redirect_308(new_path: str, request: Request) -> RedirectResponse:
+    qs = request.url.query
+    target = f"{new_path}?{qs}" if qs else new_path
+    return RedirectResponse(url=target, status_code=308)
 
 
-@router.post("/configs", response_model=dict)
-async def create_config(
-    payload: dict,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-):
-    """TODO(T34): 委托 AgentLooperService.create。此处占位。"""
-    return {
-        "code": "PENDING",
-        "message": "TODO(T34): create 由 AgentLooperService 提供",
-        "data": None,
-    }
+@router.get("/configs")
+async def list_configs(request: Request):
+    return _redirect_308("/api/v1/resources/agents", request)
+
+
+@router.post("/configs")
+async def create_config(request: Request):
+    return _redirect_308("/api/v1/resources/agents", request)
 
 
 @router.post("/configs/{config_id}/publish", response_model=dict)

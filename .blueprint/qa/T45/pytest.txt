@@ -1,0 +1,41 @@
+/Users/sun/CodeBuddy/20260627212423/backend/venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-8.3.4, pluggy-1.6.0 -- /Users/sun/CodeBuddy/20260627212423/backend/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sun/CodeBuddy/20260627212423-w10t45/backend
+plugins: asyncio-0.24.0, cov-7.1.0, anyio-4.14.1
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 21 items
+
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[GET-/api/v1/resources/instances-/api/v1/resources/compute-nodes] PASSED [  4%]
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[POST-/api/v1/resources/instances-/api/v1/resources/compute-nodes] PASSED [  9%]
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[GET-/api/v1/resources/instances/7-/api/v1/resources/compute-nodes/7] PASSED [ 14%]
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[PUT-/api/v1/resources/instances/7-/api/v1/resources/compute-nodes/7] PASSED [ 19%]
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[DELETE-/api/v1/resources/instances/7-/api/v1/resources/compute-nodes/7] PASSED [ 23%]
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[POST-/api/v1/resources/instances/7/heartbeat-/api/v1/resources/compute-nodes/7/heartbeat] PASSED [ 28%]
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[POST-/api/v1/resources/instances/register-local-/api/v1/resources/compute-nodes/register-local] PASSED [ 33%]
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[POST-/api/v1/resources/instances/7/scan-agents-/api/v1/resources/compute-nodes/7/scan-agents] PASSED [ 38%]
+tests/data_platform/test_naming_migration.py::test_legacy_mcp_config_paths_redirect_308_to_mcps[GET-/api/v1/resources/mcp-configs-/api/v1/resources/mcps] PASSED [ 42%]
+tests/data_platform/test_naming_migration.py::test_legacy_mcp_config_paths_redirect_308_to_mcps[POST-/api/v1/resources/mcp-configs-/api/v1/resources/mcps] PASSED [ 47%]
+tests/data_platform/test_naming_migration.py::test_legacy_mcp_config_paths_redirect_308_to_mcps[GET-/api/v1/resources/mcp-configs/3-/api/v1/resources/mcps/3] PASSED [ 52%]
+tests/data_platform/test_naming_migration.py::test_legacy_mcp_config_paths_redirect_308_to_mcps[PUT-/api/v1/resources/mcp-configs/3-/api/v1/resources/mcps/3] PASSED [ 57%]
+tests/data_platform/test_naming_migration.py::test_legacy_mcp_config_paths_redirect_308_to_mcps[DELETE-/api/v1/resources/mcp-configs/3-/api/v1/resources/mcps/3] PASSED [ 61%]
+tests/data_platform/test_naming_migration.py::test_legacy_agent_looper_configs_redirect_308_to_resources_agents[GET-/api/v1/agent-looper/configs] PASSED [ 66%]
+tests/data_platform/test_naming_migration.py::test_legacy_agent_looper_configs_redirect_308_to_resources_agents[POST-/api/v1/agent-looper/configs] PASSED [ 71%]
+tests/data_platform/test_naming_migration.py::test_compute_nodes_crud_roundtrip PASSED [ 76%]
+tests/data_platform/test_naming_migration.py::test_legacy_instances_post_follow_redirect_lands_on_canonical_and_creates PASSED [ 80%]
+tests/data_platform/test_naming_migration.py::test_register_local_reachable_via_new_canonical_path PASSED [ 85%]
+tests/data_platform/test_naming_migration.py::test_instance_service_alias_points_at_compute_node_service PASSED [ 90%]
+tests/data_platform/test_naming_migration.py::test_agent_looper_service_still_importable_from_agent_service PASSED [ 95%]
+tests/data_platform/test_naming_migration.py::test_mcp_config_model_alias_still_resolves PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/data_platform/test_naming_migration.py::test_legacy_instance_paths_redirect_308_to_compute_nodes[GET-/api/v1/resources/instances-/api/v1/resources/compute-nodes]
+  /Users/sun/CodeBuddy/20260627212423/backend/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 21 passed, 1 warning in 0.54s =========================

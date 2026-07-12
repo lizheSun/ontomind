@@ -130,7 +130,7 @@ function SideNav({ active, counts, onChange }: { active: string; counts: Record<
 
 // ===================== 计算节点面板 =====================
 
-function InstancesPanel() {
+function ComputeNodesPanel() {
   const { message, notification } = App.useApp();
   const [items, setItems] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1640,7 +1640,8 @@ export default function ResourcesPage() {
 
   const panel = () => {
     switch (activeNav) {
-      case 'instances': return <InstancesPanel />;
+      case 'instances':
+      case 'compute-nodes': return <ComputeNodesPanel />;
       case 'agents': return <AgentLooperListPage />;
       // Legacy AgentsPanel kept on disk for reference — Wave 9 T38 replaced it
       // with AgentLooperListPage. Referenced here so noUnusedLocals stays happy.
