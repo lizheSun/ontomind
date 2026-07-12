@@ -22,3 +22,10 @@ export { DataTable } from './DataTable';
 export type { DataTableProps } from './DataTable';
 export { default as AgentPicker } from './AgentPicker';
 export type { AgentPickerProps } from './AgentPicker';
+export { default as AgentEmbedRunner } from './AgentEmbedRunner';
+export type {
+  AgentEmbedRunnerProps,
+  AgentEmbedContext,
+  AgentEmbedInboundMessage,
+  AgentEmbedOutboundMessage,
+} from './AgentEmbedRunner';
