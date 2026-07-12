@@ -1,18 +1,20 @@
-"""Agent Looper 测试端点 (SSE) + 测试历史列表。
+"""Agent Looper 测试端点 (SSE) + 测试历史列表 + Agent Job 管理（T55）。
 
 - `POST /configs/{config_id}/test` — 使用 Agent 的 system_prompt 走一次 LLM，
   SSE 流式返回 text/done/error 事件；每次调用持久化一条 AgentLooperTestRun。
 - `POST /test-runs/{config_id}` — 返回该 config 的最近测试历史（POST 兼容平台风格）。
 - `GET /test-runs` — GET 变体（query: config_id）。
+- `POST/GET/PUT/DELETE /jobs` — Agent 长任务 Job CRUD + 生命周期端点（T55）。
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import time
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
@@ -21,6 +23,7 @@ from app.core.exceptions import BusinessException, NotFoundException
 from app.db.repositories.agent_looper_repo import AgentLooperTestRunRepository
 from app.db.session import get_db
 from app.schemas.agent_looper_schema import TestRunRead, TestRunRequest
+from app.services.agent_job_service import AgentJobService
 from app.services.agent_looper_service import AgentLooperService
 from app.services.llm_config_service import LLMConfigService
 
@@ -165,3 +168,187 @@ async def list_test_runs_get(
 ):
     """GET 变体。"""
     return await list_test_runs(config_id, limit, user_id, db)
+
+
+# ---------------------------------------------------------------------------
+# Agent Job endpoints (T55) — ETL-style long-running job management.
+# ---------------------------------------------------------------------------
+
+
+class JobCreateRequest(BaseModel):
+    agent_id: int = Field(..., ge=1)
+    name: str = Field(..., min_length=1, max_length=256)
+    steps: Optional[list[Any]] = None
+    input_data: Optional[Any] = None
+    total_steps: Optional[int] = Field(default=None, ge=1)
+
+
+class JobUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=256)
+    steps: Optional[list[Any]] = None
+    total_steps: Optional[int] = Field(default=None, ge=1)
+    input_data: Optional[Any] = None
+
+
+class JobTransitionRequest(BaseModel):
+    action: str = Field(
+        ...,
+        description="start | pause | resume | complete | fail | cancel | advance_step",
+    )
+    error_message: Optional[str] = None
+    output_data: Optional[Any] = None
+
+
+def _job_ok(job: dict[str, Any], message: str = "OK") -> dict[str, Any]:
+    return {"code": "SUCCESS", "message": message, "data": job}
+
+
+def _raise_biz(e: BusinessException) -> None:
+    raise HTTPException(
+        status_code=e.status_code,
+        detail={"code": e.code, "message": e.message},
+    )
+
+
+@router.post("/jobs")
+async def create_job(
+    payload: JobCreateRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Create an Agent Job in `pending` state."""
+    svc = AgentJobService(db)
+    try:
+        job = svc.create(
+            agent_id=payload.agent_id,
+            name=payload.name,
+            user_id=user_id,
+            steps=payload.steps,
+            input_data=payload.input_data,
+            total_steps=payload.total_steps,
+        )
+    except (BusinessException, NotFoundException) as e:
+        _raise_biz(e)
+    return _job_ok(job, "Job 已创建")
+
+
+@router.get("/jobs")
+async def list_jobs(
+    agent_id: Optional[int] = Query(default=None, ge=1),
+    status: Optional[str] = Query(default=None),
+    mine: bool = Query(default=True, description="仅返回当前用户创建的 Job"),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """List jobs with optional filters."""
+    svc = AgentJobService(db)
+    try:
+        jobs = svc.list(
+            user_id=user_id if mine else None,
+            agent_id=agent_id,
+            status=status,
+            skip=skip,
+            limit=limit,
+        )
+    except (BusinessException, NotFoundException) as e:
+        _raise_biz(e)
+    return {"code": "SUCCESS", "message": "OK", "data": jobs}
+
+
+@router.get("/jobs/{job_id}")
+async def get_job(
+    job_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    svc = AgentJobService(db)
+    try:
+        job = svc.get(job_id)
+    except (BusinessException, NotFoundException) as e:
+        _raise_biz(e)
+    return _job_ok(job)
+
+
+@router.put("/jobs/{job_id}")
+async def update_job(
+    job_id: int,
+    payload: JobUpdateRequest = Body(...),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    svc = AgentJobService(db)
+    kw: dict[str, Any] = {}
+    if payload.name is not None:
+        kw["name"] = payload.name
+    if payload.steps is not None:
+        kw["steps"] = payload.steps
+    if payload.total_steps is not None:
+        kw["total_steps"] = payload.total_steps
+    # Detect whether input_data was explicitly provided (None is a valid value).
+    fields_set = payload.model_fields_set
+    if "input_data" in fields_set:
+        kw["input_data"] = payload.input_data
+        kw["_input_data_set"] = True
+    try:
+        job = svc.update(job_id, user_id, **kw)
+    except (BusinessException, NotFoundException) as e:
+        _raise_biz(e)
+    return _job_ok(job, "Job 已更新")
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_job(
+    job_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    svc = AgentJobService(db)
+    try:
+        svc.delete(job_id, user_id)
+    except (BusinessException, NotFoundException) as e:
+        _raise_biz(e)
+    return {"code": "SUCCESS", "message": "Job 已删除", "data": None}
+
+
+@router.post("/jobs/{job_id}/transition")
+async def transition_job(
+    job_id: int,
+    payload: JobTransitionRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Drive the job through its state machine.
+
+    Supported `action` values: start, pause, resume, complete, fail, cancel,
+    advance_step.
+    """
+    svc = AgentJobService(db)
+    action = (payload.action or "").strip().lower()
+    try:
+        if action == "start":
+            job = svc.start(job_id, user_id)
+        elif action == "pause":
+            job = svc.pause(job_id, user_id)
+        elif action == "resume":
+            job = svc.resume(job_id, user_id)
+        elif action == "complete":
+            job = svc.complete(job_id, user_id, output_data=payload.output_data)
+        elif action == "fail":
+            job = svc.fail(job_id, user_id, error_message=payload.error_message)
+        elif action == "cancel":
+            job = svc.cancel(job_id, user_id)
+        elif action == "advance_step":
+            job = svc.advance_step(job_id, user_id)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "AGENT_JOB_UNKNOWN_ACTION",
+                    "message": f"未知 action: {payload.action!r}",
+                },
+            )
+    except (BusinessException, NotFoundException) as e:
+        _raise_biz(e)
+    return _job_ok(job, f"Job {action} 已执行")

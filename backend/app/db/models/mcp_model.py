@@ -3,6 +3,8 @@
 在原 `mcp_configs` 表基础上重命名为 `mcps` 表，并扩展 opencode 原生 MCP
 配置格式（command 数组、transport_type、source 等）。
 """
+from enum import Enum
+
 from sqlalchemy import Column, String, Boolean, JSON
 from app.db.models.base import BaseModel
 
@@ -49,3 +51,19 @@ class MCP(BaseModel):
 
 # Backwards-compat alias: 旧代码 `from app.db.models.mcp_model import MCPConfig`
 MCPConfig = MCP
+
+
+class MCPType(str, Enum):
+    """Legacy enum retained for callers written against the pre-T44 model.
+
+    T44 renamed the transport-kind column to `MCP.transport_type` (String) and
+    dropped the SA `Enum` column. Downstream services (opencode_sync_service,
+    opencode_config_discovery_service) still reference `MCPType.stdio` etc.,
+    so this string-enum keeps them working until they migrate.
+    """
+
+    stdio = "stdio"
+    sse = "sse"
+    http = "http"
+    local = "local"
+    remote = "remote"

@@ -3,8 +3,20 @@
 在原 `skills` 表基础上扩展 opencode SKILL.md 相关字段：
 `type / source_path / body_markdown / version / requires_bins` 等。
 """
+from enum import Enum
+
 from sqlalchemy import Column, String, Text, Boolean, JSON
 from app.db.models.base import BaseModel
+
+
+class SkillType(str, Enum):
+    """Legacy enum retained for callers written against the pre-T44 model."""
+
+    opencode_prompt = "opencode_prompt"
+    docker = "docker"
+    mcp = "mcp"
+    script = "script"
+    api = "api"
 
 
 class Skill(BaseModel):
