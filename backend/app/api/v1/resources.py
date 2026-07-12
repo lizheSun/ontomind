@@ -1240,26 +1240,8 @@ def _legacy_update_mcp_config(mcp_id: int, request: Request):
 @router.delete("/mcp-configs/{mcp_id}")
 def _legacy_delete_mcp_config(mcp_id: int, request: Request):
     return _redirect_308(f"/api/v1/resources/mcps/{mcp_id}", request)
-=======
 
 
-    """双向同步 mcp 配置与 opencode.json。
-
-    body 支持：
-    - ``direction``: ``in`` / ``out``，默认 ``in``
-    - ``dry_run``: 布尔，默认 False
-    """
-    from app.services.opencode_sync_service import OpencodeSyncService
-
-    payload = body or {}
-    direction = str(payload.get("direction") or "in").lower()
-    dry_run = bool(payload.get("dry_run", False))
-    if direction not in ("in", "out"):
-        raise HTTPException(status_code=400, detail="direction must be 'in' or 'out'")
-    svc = OpencodeSyncService(db)
-    data = svc.sync_mcps(direction=direction, dry_run=dry_run)
-    return {"code": "SUCCESS", "message": "同步完成", "data": data}
->>>>>>> blueprint/48-skills-mcps-sync
 
 
 # ==================== AgentRun 运行时 ====================

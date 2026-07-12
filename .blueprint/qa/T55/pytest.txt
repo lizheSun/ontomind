@@ -1,0 +1,28 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-8.3.4, pluggy-1.6.0 -- /Users/sun/CodeBuddy/20260627212423/backend/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sun/CodeBuddy/20260627212423-w10t55/backend
+plugins: asyncio-0.24.0, cov-7.1.0, anyio-4.14.1
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 12 items
+
+tests/data_platform/test_agent_jobs.py::test_create_defaults_and_infer_total_steps PASSED [  8%]
+tests/data_platform/test_agent_jobs.py::test_create_requires_valid_name_and_agent PASSED [ 16%]
+tests/data_platform/test_agent_jobs.py::test_full_lifecycle_pending_running_paused_completed PASSED [ 25%]
+tests/data_platform/test_agent_jobs.py::test_illegal_transition_and_terminal_guard PASSED [ 33%]
+tests/data_platform/test_agent_jobs.py::test_fail_and_cancel_paths PASSED [ 41%]
+tests/data_platform/test_agent_jobs.py::test_owner_permission_and_metadata_update PASSED [ 50%]
+tests/data_platform/test_agent_jobs.py::test_update_step_output_and_running_delete_guard PASSED [ 58%]
+tests/data_platform/test_agent_jobs.py::test_advance_step_bounds_and_state_guards PASSED [ 66%]
+tests/data_platform/test_agent_jobs.py::test_list_filters PASSED         [ 75%]
+tests/data_platform/test_agent_jobs.py::test_api_jobs_crud_and_transition PASSED [ 83%]
+tests/data_platform/test_agent_jobs.py::test_api_jobs_owner_scope_and_unknown_action PASSED [ 91%]
+tests/data_platform/test_agent_jobs.py::test_state_constants_are_consistent PASSED [100%]
+
+=============================== warnings summary ===============================
+../../20260627212423/backend/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+  /Users/sun/CodeBuddy/20260627212423/backend/venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 12 passed, 1 warning in 0.32s =========================
