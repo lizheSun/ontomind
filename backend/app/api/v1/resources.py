@@ -11,10 +11,19 @@ least 3 months to give downstream clients time to migrate.
 """
 import json
 import asyncio
-from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, HTTPException, Header
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import RedirectResponse
+from fastapi.routing import APIRoute
 from sqlalchemy.orm import Session
 
+from app.core.authorization import (
+    PlatformPermission,
+    PlatformPrincipal,
+    get_current_principal,
+    get_websocket_principal,
+    require_permission,
+)
+from app.core.security import create_websocket_ticket
 from app.db.session import get_db
 from app.services.instance_service import ComputeNodeService, InstanceService
 from app.services.agent_service import AgentService
@@ -27,8 +36,21 @@ from app.schemas.agent_schema import AgentCreate, AgentUpdate
 from app.schemas.skill_schema import SkillCreate, SkillUpdate, SkillInstallRequest
 from app.schemas.mcp_schema import MCPCreate, MCPUpdate, MCPAutoDiscoverRequest
 from app.schemas.agent_run_schema import AgentRunCreate, AgentRunUpdate
+from app.schemas.credential_schema import CredentialCreate, CredentialUpdate
+from app.services.audit_log_service import AuditLogService
+from app.services.credential_service import CredentialService
 
-router = APIRouter()
+
+class AuthenticatedResourceRoute(APIRoute):
+    """Inject JWT authentication into every HTTP resource route."""
+
+    def __init__(self, *args, **kwargs):
+        dependencies = list(kwargs.pop("dependencies", None) or [])
+        dependencies.insert(0, Depends(get_current_principal))
+        super().__init__(*args, dependencies=dependencies, **kwargs)
+
+
+router = APIRouter(route_class=AuthenticatedResourceRoute)
 
 
 def _redirect_308(new_path: str, request: Request) -> RedirectResponse:
@@ -257,23 +279,13 @@ def _run_agent_looper_discovery(db: Session, user_id: int | None) -> tuple[int, 
 @router.post("/compute-nodes/register-local")
 def register_local_compute_node(
     db: Session = Depends(get_db),
-    authorization: str | None = Header(default=None),
+    principal: PlatformPrincipal = Depends(get_current_principal),
 ):
     """一键添加本地服务器为计算节点，自动检测主机名/OS/CPU/内存 +
     扫描本地 Agent + 扫描 Agent Looper 配置。"""
     from app.db.models.instance_model import Instance
 
-    # 尝试从 Authorization Header 取 user_id（可选，无 token 时 = None）
-    user_id: int | None = None
-    try:
-        from app.core.security import get_current_user_id_from_token
-        # authorization 通过 kwarg 传入（老签名兼容），如果没有则从 request 头拿
-        if authorization and isinstance(authorization, str):
-            scheme, _, token = authorization.partition(" ")
-            if scheme.lower() == "bearer" and token:
-                user_id = get_current_user_id_from_token(token)
-    except Exception:
-        user_id = None
+    user_id = principal.user_id
 
     info = _detect_local_host_info()
     hostname = info["hostname"]
@@ -537,7 +549,11 @@ def _legacy_scan_agents(inst_id: int, request: Request):
 
 
 @router.websocket("/agents/{agent_id}/chat/stream")
-async def stream_agent_chat(websocket: WebSocket, agent_id: int):
+async def stream_agent_chat(
+    websocket: WebSocket,
+    agent_id: int,
+    principal: PlatformPrincipal = Depends(get_websocket_principal),
+):
     """
     WebSocket 实时流式 Agent 交互。
 
@@ -1281,7 +1297,11 @@ def stop_run(run_id: int, db: Session = Depends(get_db)):
 
 
 @router.websocket("/runs/{run_id}/logs")
-async def stream_run_logs(websocket: WebSocket, run_id: int):
+async def stream_run_logs(
+    websocket: WebSocket,
+    run_id: int,
+    principal: PlatformPrincipal = Depends(get_websocket_principal),
+):
     """WebSocket 实时推送 AgentRun 日志"""
     await websocket.accept()
     try:
@@ -1297,3 +1317,92 @@ async def stream_run_logs(websocket: WebSocket, run_id: int):
     except Exception as e:
         await websocket.send_text(json.dumps({"error": str(e)}))
         await websocket.close()
+
+
+# ==================== Credential / Audit 安全基线 ====================
+
+
+@router.post("/ws-tickets")
+def create_ws_ticket(
+    principal: PlatformPrincipal = Depends(get_current_principal),
+):
+    """Issue a short-lived alternative to exposing access JWTs in query URLs."""
+    return {
+        "code": "SUCCESS",
+        "data": {
+            "ticket": create_websocket_ticket(principal.user_id),
+            "expires_in": 60,
+        },
+    }
+
+
+@router.get("/credentials")
+def list_credentials(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    principal: PlatformPrincipal = Depends(
+        require_permission(PlatformPermission.CREDENTIAL_READ)
+    ),
+):
+    return {"code": "SUCCESS", "data": CredentialService(db).list(skip, limit)}
+
+
+@router.post("/credentials")
+def create_credential(
+    data: CredentialCreate,
+    db: Session = Depends(get_db),
+    principal: PlatformPrincipal = Depends(
+        require_permission(PlatformPermission.CREDENTIAL_WRITE)
+    ),
+):
+    result = CredentialService(db).create(data, principal.user_id)
+    return {"code": "SUCCESS", "message": "创建成功", "data": result}
+
+
+@router.get("/credentials/{credential_id}")
+def get_credential(
+    credential_id: int,
+    db: Session = Depends(get_db),
+    principal: PlatformPrincipal = Depends(
+        require_permission(PlatformPermission.CREDENTIAL_READ)
+    ),
+):
+    return {"code": "SUCCESS", "data": CredentialService(db).get(credential_id)}
+
+
+@router.put("/credentials/{credential_id}")
+def update_credential(
+    credential_id: int,
+    data: CredentialUpdate,
+    db: Session = Depends(get_db),
+    principal: PlatformPrincipal = Depends(
+        require_permission(PlatformPermission.CREDENTIAL_WRITE)
+    ),
+):
+    result = CredentialService(db).update(credential_id, data, principal.user_id)
+    return {"code": "SUCCESS", "message": "更新成功", "data": result}
+
+
+@router.delete("/credentials/{credential_id}")
+def delete_credential(
+    credential_id: int,
+    db: Session = Depends(get_db),
+    principal: PlatformPrincipal = Depends(
+        require_permission(PlatformPermission.CREDENTIAL_WRITE)
+    ),
+):
+    CredentialService(db).delete(credential_id, principal.user_id)
+    return {"code": "SUCCESS", "message": "删除成功"}
+
+
+@router.get("/audit-logs")
+def list_audit_logs(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    principal: PlatformPrincipal = Depends(
+        require_permission(PlatformPermission.AUDIT_READ)
+    ),
+):
+    return {"code": "SUCCESS", "data": AuditLogService(db).list_logs(skip, limit)}

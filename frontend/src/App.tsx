@@ -19,6 +19,13 @@ import AgentContainerDetailPage from './pages/resources/AgentContainerDetailPage
 import AgentDetailPage from './pages/resources/AgentDetailPage';
 import SkillDetailPage from './pages/resources/SkillDetailPage';
 import MCPDetailPage from './pages/resources/MCPDetailPage';
+import AgentPlatformPrototype from './pages/resources/AgentPlatformPrototype';
+import {
+  ChatWorkspacePage,
+  ResourcesConsolePage,
+  AgentStudioPage,
+  RunsPage,
+} from './pages/agent-platform';
 import UsersPage from './pages/users/index';
 import ProjectsPage from './pages/projects/index';
 import DataPlatformIndex from './pages/data-platform';
@@ -103,6 +110,7 @@ export default function App() {
           <CmdKOmnibar />
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/prototype/agent-platform" element={<AgentPlatformPrototype />} />
 
             <Route
               path="/"
@@ -112,7 +120,13 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Dashboard />} />
+              <Route index element={<Navigate to="/workspace" replace />} />
+              <Route path="workspace" element={<ChatWorkspacePage />} />
+              <Route path="agent-platform/resources" element={<ResourcesConsolePage />} />
+              <Route path="agent-platform/runs" element={<RunsPage />} />
+              <Route path="agent-platform/agents/new/studio" element={<AgentStudioPage />} />
+              <Route path="agent-platform/agents/:id/studio" element={<AgentStudioPage />} />
+              <Route path="dashboard" element={<Dashboard />} />
               <Route path="perception" element={<PerceptionShell />} />
               <Route path="perception-legacy" element={<PerceptionLegacyIndex />} />
               <Route path="cognition" element={<CognitionIndex />} />
@@ -120,6 +134,7 @@ export default function App() {
               <Route path="execution" element={<ExecutionIndex />} />
               <Route path="application" element={<ApplicationIndex />} />
               <Route path="resources" element={<ResourcesPage />} />
+              <Route path="resources/legacy" element={<ResourcesPage />} />
               <Route path="resources/agent-looper/new" element={<AgentLooperWizard />} />
               <Route path="resources/compute-nodes/:id" element={<ComputeNodeDetailPage />} />
               <Route path="resources/agent-containers/:id" element={<AgentContainerDetailPage />} />

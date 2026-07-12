@@ -70,3 +70,20 @@ class Agent(BaseModel):
         nullable=True,
         comment="发布到 opencode 的文件路径",
     )
+    owner_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        comment="Agent 所有者（统一平台新增，旧数据可为空）",
+    )
+    current_version_id = Column(
+        Integer,
+        ForeignKey(
+            "agent_versions.id",
+            use_alter=True,
+            name="fk_agents_current_version",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        comment="当前发布的不可变 AgentVersion",
+    )

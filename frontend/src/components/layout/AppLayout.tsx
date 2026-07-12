@@ -14,6 +14,8 @@ import {
   LogoutOutlined,
   TeamOutlined,
   ProjectOutlined,
+  RobotOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import useUserStore from '../../stores/userStore';
 
@@ -22,14 +24,16 @@ const { Header, Content } = Layout;
 type MenuItem = Required<MenuProps>['items'][number];
 
 const topMenuItems: MenuItem[] = [
-  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
+  { key: '/workspace', icon: <MessageOutlined />, label: '对话工作台' },
+  { key: '/agent-platform/resources', icon: <SettingOutlined />, label: '资源管理' },
+  { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
   { key: '/perception', icon: <ApiOutlined />, label: '感知层' },
   { key: '/cognition', icon: <NodeIndexOutlined />, label: '认知层' },
   { key: '/decision', icon: <ThunderboltOutlined />, label: '决策层' },
   { key: '/execution', icon: <SendOutlined />, label: '执行层' },
   { key: '/application', icon: <AppstoreOutlined />, label: '应用层' },
   { key: '/projects', icon: <ProjectOutlined />, label: '项目管理' },
-  { key: '/resources', icon: <SettingOutlined />, label: '资源管理' },
+  { key: '/agent-platform/runs', icon: <RobotOutlined />, label: '运行记录' },
   { key: '/users', icon: <TeamOutlined />, label: '用户管理' },
 ];
 
@@ -44,7 +48,11 @@ export default function AppLayout() {
   }, [currentUser, fetchCurrentUser]);
 
   const segments = location.pathname.split('/').filter(Boolean);
-  const selectedKey = segments.length ? `/${segments[0]}` : '/';
+  const selectedKey = (() => {
+    if (segments.length === 0) return '/workspace';
+    if (segments[0] === 'agent-platform') return `/${segments[0]}/${segments[1] || 'resources'}`;
+    return `/${segments[0]}`;
+  })();
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');

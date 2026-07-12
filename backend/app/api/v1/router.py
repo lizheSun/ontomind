@@ -25,3 +25,6 @@ api_router.include_router(knowledge_base.router, prefix="/knowledge-base", tags=
 
 from app.api.v1 import agent_looper
 api_router.include_router(agent_looper.router, prefix="/agent-looper", tags=["Agent Looper"])
+
+from app.api.v1 import agent_platform
+api_router.include_router(agent_platform.router, prefix="/agent-platform")

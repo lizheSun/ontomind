@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
+from app.core.config import settings, validate_production_security
 from app.api.v1.router import api_router
 from app.core.exceptions import add_exception_handlers
 from app.db.session import engine, Base
@@ -15,6 +15,7 @@ import app.db.models  # noqa: import all models for table discovery
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup / shutdown lifecycle."""
+    validate_production_security()
     # Startup: create tables if not exist (dev convenience)
     Base.metadata.create_all(bind=engine)
     # === Knowledge Base seed (T07) ===

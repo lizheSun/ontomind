@@ -6,8 +6,14 @@ from app.db.session import get_db
 from app.services.user_service import UserService
 from app.schemas.user_schema import UserCreate, UserUpdate
 from app.core.exceptions import BusinessException
+from app.core.authorization import (
+    PlatformPermission,
+    require_permission,
+)
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(require_permission(PlatformPermission.USER_MANAGE))]
+)
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
     """依赖注入: 创建 UserService 实例"""

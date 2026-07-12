@@ -1,7 +1,11 @@
 """Application configuration loaded from environment variables."""
 
+from cryptography.fernet import Fernet
 from pydantic_settings import BaseSettings
 from typing import Optional
+
+
+DEFAULT_SECRET_KEY = "change-me-in-production-use-openssl-rand-hex-32"
 
 
 class Settings(BaseSettings):
@@ -38,7 +42,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # JWT Auth
-    SECRET_KEY: str = "change-me-in-production-use-openssl-rand-hex-32"
+    SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
@@ -46,7 +50,11 @@ class Settings(BaseSettings):
     FERNET_KEY: Optional[str] = None  # 逗号分隔 = MultiFernet 轮换
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+    ]
 
     # AI / LLM
     OPENAI_API_KEY: Optional[str] = None
@@ -68,3 +76,37 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def validate_production_security(config: Settings = settings) -> None:
+    """Fail startup when production is using missing/default security keys."""
+    if config.ENVIRONMENT.strip().lower() not in {"production", "prod"}:
+        return
+
+    errors: list[str] = []
+    if not config.SECRET_KEY or config.SECRET_KEY == DEFAULT_SECRET_KEY:
+        errors.append("SECRET_KEY 仍为默认值")
+
+    raw_fernet = (config.FERNET_KEY or "").strip()
+    if not raw_fernet:
+        errors.append("FERNET_KEY 未配置")
+    else:
+        try:
+            keys = [part.strip() for part in raw_fernet.split(",") if part.strip()]
+            if not keys:
+                raise ValueError("no Fernet keys")
+            for key in keys:
+                Fernet(key.encode("ascii"))
+        except (ValueError, TypeError):
+            errors.append("FERNET_KEY 格式无效")
+
+    if errors:
+        raise RuntimeError("生产环境安全配置校验失败: " + "；".join(errors))
+
+
+__all__ = [
+    "DEFAULT_SECRET_KEY",
+    "Settings",
+    "settings",
+    "validate_production_security",
+]

@@ -23,25 +23,25 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.models.mcp_model import MCPConfig, MCPType
-from app.db.models.skill_model import Skill, SkillType
+from app.db.models.mcp_model import MCP
+from app.db.models.skill_model import Skill
 
 
 _MCP_TYPE_MAP = {
-    "local": MCPType.stdio,
-    "stdio": MCPType.stdio,
-    "remote": MCPType.sse,
-    "sse": MCPType.sse,
-    "http": MCPType.http,
-    "https": MCPType.http,
+    "local": "stdio",
+    "stdio": "stdio",
+    "remote": "sse",
+    "sse": "sse",
+    "http": "http",
+    "https": "http",
 }
 
 
-def _normalize_mcp_type(raw: Any) -> MCPType:
+def _normalize_mcp_type(raw: Any) -> str:
     if not raw:
-        return MCPType.stdio
+        return "stdio"
     key = str(raw).lower().strip()
-    return _MCP_TYPE_MAP.get(key, MCPType.stdio)
+    return _MCP_TYPE_MAP.get(key, "stdio")
 
 
 def _split_frontmatter(text: str) -> tuple[Optional[dict[str, Any]], str]:
@@ -117,13 +117,13 @@ class OpencodeConfigDiscoveryService:
                 args = []
             results.append({
                 "name": name,
-                "mcp_type": mcp_type,
+                "transport_type": mcp_type,
                 "url": mcp.get("url") or None,
                 "command": command_str,
                 "args": args or None,
                 "env_vars": mcp.get("environment") or mcp.get("env") or None,
                 "headers": mcp.get("headers") or None,
-                "description": mcp.get("description") or f"opencode MCP: {name}",
+                
                 "is_active": bool(mcp.get("enabled", True)),
             })
         return results, errors
@@ -156,16 +156,14 @@ class OpencodeConfigDiscoveryService:
                 tags = [str(tags)]
             results.append({
                 "name": name,
-                "skill_type": SkillType.script,
-                "entrypoint": str(skill_md),
-                "install_cmd": None,
-                "parameters_schema": None,
+                "type": "script",
+                "source_path": str(skill_md),
+                                "parameters_schema": None,
                 "output_schema": None,
                 "env_vars": None,
                 "description": meta.get("description") or (body.strip()[:200] if body else None),
                 "tags": tags,
-                "icon": None,
-                "is_installed": True,
+                                "is_installed": True,
                 "is_active": True,
             })
         return results, errors
@@ -182,7 +180,7 @@ class OpencodeConfigDiscoveryService:
             name = data.get("name")
             if not name:
                 continue
-            existing = self.db.query(MCPConfig).filter(MCPConfig.name == name).first()
+            existing = self.db.query(MCP).filter(MCP.name == name).first()
             if existing is not None:
                 for key, value in data.items():
                     if key == "name":
@@ -191,7 +189,7 @@ class OpencodeConfigDiscoveryService:
                         setattr(existing, key, value)
                 updated += 1
             else:
-                self.db.add(MCPConfig(**data))
+                self.db.add(MCP(**data))
                 created += 1
         self.db.commit()
         return created, updated
@@ -207,8 +205,6 @@ class OpencodeConfigDiscoveryService:
             if not name:
                 continue
             payload = dict(data)
-            if payload.get("is_installed") and "installed_at" not in payload:
-                payload["installed_at"] = now
             existing = self.db.query(Skill).filter(Skill.name == name).first()
             if existing is not None:
                 for key, value in payload.items():

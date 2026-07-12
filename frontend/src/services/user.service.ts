@@ -87,6 +87,13 @@ export const userService = {
     await api.delete(`/users/${id}`);
   },
 
+  /** 用户注册 - 调用 /auth/register */
+  register: async (data: UserCreateRequest): Promise<UserResponse> => {
+    const response = await api.post('/auth/register', data);
+    const body = response.data;
+    return { code: body.code, message: body.message, data: mapUser(body.data) };
+  },
+
   /** 用户登录 - 调用 /auth/login */
   login: async (data: UserLoginRequest): Promise<UserLoginResponse> => {
     const response = await api.post('/auth/login', data);

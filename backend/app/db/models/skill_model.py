@@ -57,3 +57,6 @@ class Skill(BaseModel):
         server_default="1",
         comment="是否启用",
     )
+
+    def to_response_dict(self) -> dict:
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}

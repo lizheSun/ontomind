@@ -8,8 +8,11 @@ from app.schemas.llm_config_schema import (
     LLMChatRequest, LLMChatResponse,
 )
 from app.services.llm_config_service import LLMConfigService
+from app.core.authorization import PlatformPermission, require_permission
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(require_permission(PlatformPermission.LLM_MANAGE))]
+)
 
 
 def get_llm_service(db: Session = Depends(get_db)) -> LLMConfigService:

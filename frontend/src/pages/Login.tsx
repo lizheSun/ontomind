@@ -11,6 +11,20 @@ import userService from '../services/user.service';
 
 const { Title, Text } = Typography;
 
+function formatApiError(err: any, fallback: string): string {
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
+    return detail.message;
+  }
+  const message = err?.response?.data?.message;
+  if (typeof message === 'string') return message;
+  if (err?.message === 'Network Error') {
+    return '无法连接后端服务，请确认后端已启动且 CORS 配置正确';
+  }
+  return err?.message || fallback;
+}
+
 export default function Login() {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
@@ -36,7 +50,7 @@ export default function Login() {
     } catch (err: any) {
       notification.error({
         message: '登录失败',
-        description: err?.response?.data?.detail || err.message || '请检查用户名和密码',
+        description: formatApiError(err, '请检查用户名和密码'),
         placement: 'top',
       });
     } finally {
@@ -57,7 +71,7 @@ export default function Login() {
     } catch (err: any) {
       notification.error({
         message: '注册失败',
-        description: err?.response?.data?.detail || err.message,
+        description: formatApiError(err, '注册失败，请稍后重试'),
         placement: 'top',
       });
     } finally {

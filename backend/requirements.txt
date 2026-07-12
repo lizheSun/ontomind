@@ -34,6 +34,7 @@ httpx==0.28.1
 python-dotenv==1.0.1
 loguru==0.7.3
 rdflib==7.0.0
+asyncssh==2.21.1
 
 # Dev
 pytest==8.3.4

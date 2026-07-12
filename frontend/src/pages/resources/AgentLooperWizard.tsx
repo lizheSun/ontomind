@@ -9,7 +9,7 @@ import {
   PlusOutlined, DeleteOutlined, PlayCircleOutlined,
 } from '@ant-design/icons';
 import { PageHeader, GlassPanel } from '../../components/common';
-import api from '../../services/api';
+import { agentLooperService } from '../../services/agentLooper.service';
 import {
   EMPTY_CONFIG, PRESETS, findPreset,
 } from '../../presets/agentLoopers';
@@ -19,26 +19,6 @@ import type {
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
-
-// ---- Colocated tiny service (Wave 9 T35-T40 frontend service isn't shipped yet).
-// Tests mock '../../services/api' to intercept the underlying axios call.
-export const agentLooperService = {
-  async create(payload: {
-    name: string;
-    type: AgentLooperType;
-    description?: string | null;
-    config_json: AgentLooperConfig;
-  }): Promise<{ id: number; name: string }> {
-    const res = await api.post('/agent-loopers', {
-      name: payload.name,
-      type: payload.type,
-      description: payload.description ?? null,
-      config_json: payload.config_json,
-    });
-    // Backend response envelope: { code, message, data: { id, name, ... } }
-    return res.data?.data ?? res.data;
-  },
-};
 
 const LOOP_STRATEGY_OPTIONS: { value: LoopStrategy; label: string; hint: string }[] = [
   { value: 'single_shot',  label: 'single_shot — 单次响应',      hint: '一次调用即返回，适合直接问答/单步生成。' },
@@ -113,20 +93,8 @@ export default function AgentLooperWizard({ onCreated }: AgentLooperWizardProps 
     setTesting(true);
     setTestResult(null);
     try {
-      // W1 test endpoint may not be merged yet — best-effort.
-      const res = await api.post('/agent-loopers/preview-test', {
-        config_json: config,
-        prompt: testPrompt,
-      });
-      const body = res.data?.data ?? res.data;
-      setTestResult(typeof body === 'string' ? body : JSON.stringify(body, null, 2));
-    } catch (err) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 404 || status === undefined) {
-        setTestResult('暂不可用：后端 preview-test 接口尚未部署，可先完成注册后到详情页测试。');
-      } else {
-        setTestResult(`测试失败：${(err as Error).message ?? '未知错误'}`);
-      }
+      // Preview test skipped for now (backend endpoint not available)
+      setTestResult('暂不可用：后端 preview-test 接口尚未部署，可先完成注册后到详情页测试。');
     } finally {
       setTesting(false);
     }
@@ -141,7 +109,7 @@ export default function AgentLooperWizard({ onCreated }: AgentLooperWizardProps 
     setSubmitting(true);
     try {
       const created = await agentLooperService.create({
-        name: meta.name.trim(),
+        name: meta.name.trim() || '未命名 Agent',
         type: meta.type,
         description: meta.description || null,
         config_json: config,
@@ -251,12 +219,21 @@ export default function AgentLooperWizard({ onCreated }: AgentLooperWizardProps 
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="模型 (model)">
-              <Input
+              <Select
                 data-testid="wizard-model"
                 placeholder="agent-plan/ark-code-latest"
-                value={config.model}
-                onChange={(e) => updateConfig('model', e.target.value)}
-              />
+                value={config.model || undefined}
+                onChange={(v) => updateConfig('model', v)}
+                showSearch
+                allowClear
+                style={{ width: '100%' }}
+              >
+                <Select.Option value="agent-plan/ark-code-latest">agent-plan/ark-code-latest</Select.Option>
+                <Select.Option value="doubao-seed-2-0-pro-260215">doubao-seed-2-0-pro-260215</Select.Option>
+                <Select.Option value="doubao-seed-2-0-code-preview-260215">doubao-seed-2-0-code-preview-260215</Select.Option>
+                <Select.Option value="gpt-4o">gpt-4o</Select.Option>
+                <Select.Option value="claude-sonnet-4-20250514">claude-sonnet-4-20250514</Select.Option>
+              </Select>
             </Form.Item>
           </Col>
           <Col span={12}>

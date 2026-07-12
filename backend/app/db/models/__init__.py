@@ -47,6 +47,16 @@ from app.db.models.container_mcp_model import ContainerMCP
 from app.db.models.agent_skill_model import AgentSkill
 from app.db.models.agent_mcp_model import AgentMCP
 from app.db.models.agent_run_job_model import AgentRunJob
+from app.db.models.credential_model import Credential
+from app.db.models.audit_log_model import AuditLog
+from app.db.models.role_model import Role, UserRole
+from app.db.models.agent_platform_model import (
+    AgentVersion, AgentDeployment, AgentSession, AgentMessage,
+    AgentRunStep, AgentRunEvent, AgentToolApproval, EvalSuite, EvalCase,
+)
+from app.db.models.node_connection_model import NodeConnection
+from app.db.models.discovery_run_model import DiscoveryRun
+from app.db.models.discovery_item_model import DiscoveryItem
 
 # Backwards-compat alias: 旧代码继续 import MCPConfig（已重命名为 MCP）
 MCPConfig = MCP
@@ -64,4 +74,9 @@ __all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaPr
            # T44
            "ComputeNode", "AgentContainer",
            "NodeContainer", "ContainerAgent", "ContainerSkill", "ContainerMCP",
-           "AgentSkill", "AgentMCP", "AgentRunJob"]
+           "AgentSkill", "AgentMCP", "AgentRunJob",
+           "AgentVersion", "AgentDeployment", "AgentSession", "AgentMessage",
+           "AgentRunStep", "AgentRunEvent", "AgentToolApproval",
+           "EvalSuite", "EvalCase",
+           "Credential", "AuditLog", "Role", "UserRole",
+           "NodeConnection", "DiscoveryRun", "DiscoveryItem"]

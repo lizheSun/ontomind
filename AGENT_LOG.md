@@ -573,3 +573,51 @@
 - [ ] 重构 `perception.py`、`cognition.py` 等其他 API 文件为三层架构
 - [ ] 完善 JWT 认证中间件（当前 `/me` 端点临时硬编码 user_id=1）
 - [ ] 创建 perceptions/cognitions 等模块的 Repository 和 Service
+
+---
+
+## 2026-07-12
+
+### Agent: 主开发 Agent（OntoMind Agent 资源平台 + OpenCode 流式 SSE）
+
+### 目标
+1. 落地 Agent 资源管理 / Studio / 对话工作台，对接本机 OpenCode
+2. 会话执行过程（thinking / tools / steps / 文本）改为 **实时 SSE 流式**，不再与最终回复整包阻塞返回
+3. 写清跨机交接文档，便于另一台电脑 pull 后续作
+
+### 设计决策
+
+| 决策点 | 选择 |
+|--------|------|
+| 资源真源 | 平台 `agents` 表；OpenCode 为运行时/发现面 |
+| 层级 | 计算节点 → OpenCode 容器 → Agent/Skill/MCP |
+| 编辑发布 | 仅资源管理 + Studio；对话工作台只聊天 |
+| 执行通道 | `opencode run --format json`，按行解析 JSONL |
+| 实时推送 | SSE（`GET /runs/{id}/events` 长连接）；非 WebSocket |
+| 发消息 | 立即返回 `run_id`，BackgroundTasks 后台流式写事件 |
+| 测试 | `force_stub=true` 同步 stub，不调 CLI |
+
+### 功能清单
+- 资源控制台：本机注册、inventory、三栏 UI、发布/去对话
+- Agent Studio：草稿/发布、绑本机 OpenCode runtime
+- 对话工作台：Session + Run + SSE 时间线
+- Run 控制：start/cancel/pause/resume/retry + 乐观锁 `state_version`
+
+### 新增主要路径
+- `backend/app/api/v1/agent_platform/`
+- `backend/app/services/agent_platform/`（含 `opencode_chat.py` 流式）
+- `backend/app/db/models/agent_platform_model.py` 及 credentials/audit/discovery 模型
+- `backend/alembic/versions/2026071202_*.py`、`2026071204_*.py`
+- `frontend/src/pages/agent-platform/`、`hooks/useAgentStream.ts`、`stores/agentPlatformStore.ts`
+- `docs/agent-platform/HANDOFF-2026-07-12.md`（**跨机必读**）
+
+### 数据库
+- 新表：`credentials`、`audit_logs`、`agent_versions`、`agent_deployments`、`agent_sessions`、`agent_messages`、`agent_run_steps`、`agent_run_events`、`agent_approvals`、`node_connections`、`discovery_runs`、`discovery_items` 等
+- 改表：`agents`、`agent_runs`、`compute_nodes` 等（见交接文档 §3）
+
+### 验证
+- `pytest tests/agent_platform/` → 10 passed
+- 联调：发消息应立刻返回，SSE 推送 step/thinking/message.delta
+
+### 跨机续作入口
+详见 [`docs/agent-platform/HANDOFF-2026-07-12.md`](docs/agent-platform/HANDOFF-2026-07-12.md)

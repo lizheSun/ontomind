@@ -103,14 +103,14 @@ export interface AgentLooperCreatePayload {
   name: string;
   type?: AgentLooperType;
   description?: string | null;
-  active_config_json: AgentLooperConfig;
+  config_json: AgentLooperConfig;
   is_active?: boolean;
 }
 
 export interface AgentLooperUpdatePayload {
   name?: string;
   description?: string | null;
-  active_config_json?: AgentLooperConfig;
+  config_json?: AgentLooperConfig;
   is_active?: boolean;
   note?: string | null;
 }

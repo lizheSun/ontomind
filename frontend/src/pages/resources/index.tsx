@@ -188,6 +188,7 @@ export default function ResourcesPage() {
   const [counts, setCounts] = useState<Counts>(INITIAL_COUNTS);
   const [collapsed, setCollapsed] = useState<CollapseState>(loadCollapse);
   const [discovering, setDiscovering] = useState(false);
+  const [discoverVersion, setDiscoverVersion] = useState(0);
 
   // 更新单个 count（由子面板回调触发）
   const setCount = useCallback((key: keyof Counts, value: number) => {
@@ -211,6 +212,7 @@ export default function ResourcesPage() {
 
   useEffect(() => {
     loadRunsStats();
+      setDiscoverVersion(v => v + 1);
   }, [loadRunsStats]);
 
   // 折叠切换
@@ -252,6 +254,7 @@ export default function ResourcesPage() {
       }
       message.success(parts.join('；'));
       loadRunsStats();
+      setDiscoverVersion(v => v + 1);
     } catch (err) {
       message.error(
         err instanceof Error ? err.message : '自动发现失败',
@@ -377,7 +380,7 @@ export default function ResourcesPage() {
         collapsed={collapsed.containers}
         onToggle={() => toggleCollapse('containers')}
       >
-        <AgentContainerPanel
+        <AgentContainerPanel key={discoverVersion}
           onCountChange={(n) => setCount('containers', n)}
         />
       </CollapsibleSection>

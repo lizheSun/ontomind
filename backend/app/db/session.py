@@ -22,3 +22,8 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def get_session_factory():
+    """可覆盖的 sessionmaker，供 SSE 等长连接按轮次开闭 session。"""
+    return SessionLocal

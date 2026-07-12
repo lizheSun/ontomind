@@ -48,6 +48,9 @@ class MCP(BaseModel):
         comment="是否启用",
     )
 
+    def to_response_dict(self) -> dict:
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 
 # Backwards-compat alias: 旧代码 `from app.db.models.mcp_model import MCPConfig`
 MCPConfig = MCP

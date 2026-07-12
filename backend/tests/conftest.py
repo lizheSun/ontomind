@@ -94,6 +94,7 @@ def override_db(isolated_engine):
 
     def _factory(app):
         from app.db.session import get_db as real_get_db
+        from app.db.session import get_session_factory as real_session_factory
 
         def _override():
             s = SessionLocal()
@@ -102,14 +103,18 @@ def override_db(isolated_engine):
             finally:
                 s.close()
 
+        def _override_factory():
+            return SessionLocal
+
         app.dependency_overrides[real_get_db] = _override
+        app.dependency_overrides[real_session_factory] = _override_factory
         return app
 
     return _factory
 
 
 @pytest.fixture
-def client(override_db) -> Iterator[TestClient]:
+def client(override_db, test_user) -> Iterator[TestClient]:
     """FastAPI TestClient with in-memory sqlite backing all requests.
 
     Uses raw TestClient() without `with:` so the lifespan seeder does NOT run
@@ -120,6 +125,7 @@ def client(override_db) -> Iterator[TestClient]:
 
     override_db(app)
     c = TestClient(app)
+    c.headers.update({"Authorization": f"Bearer {test_user['token']}"})
     try:
         yield c
     finally:

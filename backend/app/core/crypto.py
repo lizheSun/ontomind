@@ -18,6 +18,8 @@ from typing import Optional
 from cryptography.fernet import Fernet, MultiFernet, InvalidToken
 from loguru import logger
 
+from app.core.config import settings
+
 _ENV_VAR = "FERNET_KEY"
 
 _fernet: Optional[MultiFernet] = None
@@ -27,7 +29,7 @@ ENCRYPTION_DISABLED: bool = True
 def _load() -> None:
     """从环境读取密钥并初始化 (Multi)Fernet；模块加载时和轮换后都会调用。"""
     global _fernet, ENCRYPTION_DISABLED
-    raw = os.environ.get(_ENV_VAR, "").strip()
+    raw = (os.environ.get(_ENV_VAR) or settings.FERNET_KEY or "").strip()
     if not raw:
         _fernet = None
         ENCRYPTION_DISABLED = True

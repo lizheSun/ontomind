@@ -29,6 +29,15 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
+
+def create_websocket_ticket(user_id: int, expires_seconds: int = 60) -> str:
+    """Mint a short-lived WebSocket ticket safe for legacy query transport."""
+    lifetime = max(10, min(expires_seconds, 120))
+    return create_access_token(
+        {"user_id": user_id, "token_use": "websocket"},
+        expires_delta=timedelta(seconds=lifetime),
+    )
+
 def decode_access_token(token: str) -> Dict[str, Any]:
     """解码 JWT Token"""
     try:
