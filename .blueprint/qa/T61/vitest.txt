@@ -1,0 +1,40 @@
+ ✓ src/components/common/__tests__/SqlEditor.smoke.test.tsx > SqlEditor (smoke) > mounts without throwing (monaco stubbed by test-setup)
+ ✓ src/components/common/__tests__/SqlEditor.smoke.test.tsx > SqlEditor (smoke) > forwards value + onChange through the mock
+ ✓ src/pages/resources/__tests__/AgentLooperWizard.test.tsx > AgentLooperWizard > renders 4 steps and 4 preset cards on step 1 302ms
+ ✓ src/pages/resources/__tests__/AgentLooperWizard.test.tsx > AgentLooperWizard > applies a preset when its card is clicked (temperature + loop_strategy propagate to step 2) 485ms
+ ✓ src/pages/resources/__tests__/AgentLooperWizard.test.tsx > AgentLooperWizard > calls agentLooperService.create (via api.post) on 完成注册 and passes full config_json
+ ✓ src/components/common/__tests__/AgentPicker.test.tsx > AgentPicker > renders platform LLM option by default
+ ✓ src/components/common/__tests__/AgentPicker.test.tsx > AgentPicker > renders agent looper options when data available
+ ✓ src/components/common/__tests__/AgentPicker.test.tsx > AgentPicker > renders without crash when value=null (platform LLM)
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > renders header + counters when rows present
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > only renders a small window of rows for 500-row input (virtualization)
+ ✓ src/components/common/__tests__/ResultGrid.test.tsx > ResultGrid virtualization > shows EmptyState when rows are empty
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/visual/screenshots.spec.ts [ tests/visual/screenshots.spec.ts ]
+Error: Playwright Test did not expect test.beforeAll() to be called here.
+Most common reasons include:
+- You are calling test.beforeAll() in a configuration file.
+- You are calling test.beforeAll() in a file that is imported by the configuration file.
+- You have two different versions of @playwright/test. This usually happens
+  when one of the dependencies in your package.json depends on @playwright/test.
+- You are calling test.beforeAll() from an async test.describe() block. Only sync ones are supported.
+ ❯ _TestTypeImpl._currentSuite ../../20260627212423/frontend/node_modules/playwright/lib/common/index.js:2257:13
+ ❯ _TestTypeImpl._hook ../../20260627212423/frontend/node_modules/playwright/lib/common/index.js:2343:24
+ ❯ Function.beforeAll ../../20260627212423/frontend/node_modules/playwright/lib/common/index.js:1220:12
+ ❯ tests/visual/screenshots.spec.ts:42:6
+     40| });
+     41| 
+     42| test.beforeAll(async () => {
+       |      ^
+     43|   await fs.mkdir(OUTPUT_DIR, { recursive: true });
+     44|   await fs.writeFile(CONSOLE_LOG, `# T28 console.log — captured ${new …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 15 passed (16)
+      Tests  45 passed (45)
+   Start at  13:09:45
+   Duration  3.63s (transform 645ms, setup 1.06s, collect 12.83s, tests 3.97s, environment 4.92s, prepare 869ms)
+

@@ -1,0 +1,8 @@
+Wave 10 integration branch: blueprint/int-full-w10 (from blueprint/61-int-full-w10)
+Built from blueprint/int-w10-w4 head 3fa4b2a which already merges 17 W1-W4 branches:
+  W1: 45-naming-migration, 46-opencode-discovery, 47-node-container-discovery, 48-skills-mcps-sync
+  W2: 49-resources-ui-refactor, 50-node-container-detail, 51-agent-detail, 52-skill-mcp-detail
+  W3: 53-agent-loop-engine, 54-sop-editor, 55-agent-jobs, 56-agent-embed
+  W4: 57-cmdk-omnibar, 58-zen-god-mode, 59-agent-chat-upgrade, 60-templates-onboarding
+No new merges needed - int-w10-w4 already contains full W1-W4.
+Integration complete.
