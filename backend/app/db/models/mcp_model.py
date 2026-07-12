@@ -1,52 +1,51 @@
-"""MCP 工具/服务模型."""
-from sqlalchemy import Column, String, Text, Boolean, Enum as SAEnum, JSON
-import enum
+"""MCP 工具连接模型（T44 — 扩展支持 opencode 原生格式）.
+
+在原 `mcp_configs` 表基础上重命名为 `mcps` 表，并扩展 opencode 原生 MCP
+配置格式（command 数组、transport_type、source 等）。
+"""
+from sqlalchemy import Column, String, Boolean, JSON
 from app.db.models.base import BaseModel
 
 
-class MCPType(str, enum.Enum):
-    sse = "sse"
-    stdio = "stdio"
-    http = "http"
+class MCP(BaseModel):
+    """MCP 工具连接（扩展支持 opencode 原生格式）"""
 
+    __tablename__ = "mcps"
+    __table_args__ = {"comment": "MCP 工具连接（扩展支持 opencode 原生格式）"}
 
-class MCPConfig(BaseModel):
-    """MCP 工具/服务配置表"""
-
-    __tablename__ = "mcp_configs"
-
-    name = Column(String(128), nullable=False, comment="MCP 名称")
-    mcp_type = Column(
-        SAEnum(MCPType, name="mcp_type_enum", create_type=False),
+    name = Column(String(128), nullable=False, unique=True, comment="MCP 名称")
+    transport_type = Column(
+        String(32),
         nullable=False,
-        comment="MCP 类型: sse / stdio / http",
+        server_default="stdio",
+        comment="local/remote/sse/stdio/http",
     )
-    url = Column(String(512), nullable=True, comment="连接地址（sse/http 模式）")
-    command = Column(Text, nullable=True, comment="启动命令（stdio 模式）")
-    args = Column(JSON, nullable=True, comment="启动参数")
+    command = Column(JSON, nullable=True, comment="命令数组（opencode 格式）")
+    url = Column(String(512), nullable=True, comment="URL（remote/sse/http）")
+    args = Column(JSON, nullable=True, comment="参数")
     env_vars = Column(JSON, nullable=True, comment="环境变量")
-    headers = Column(JSON, nullable=True, comment="自定义请求头")
+    headers = Column(JSON, nullable=True, comment="HTTP 头")
     auto_discovery_url = Column(String(512), nullable=True, comment="自动发现的 API 文档 URL")
-    auto_discovery_enabled = Column(Boolean, default=False, comment="是否启用自动发现")
-    tools_manifest = Column(JSON, nullable=True, comment="工具清单（自动/手动）")
-    description = Column(Text, nullable=True, comment="描述")
-    is_active = Column(Boolean, default=True, comment="是否启用")
+    auto_discovery_enabled = Column(
+        Boolean,
+        nullable=False,
+        server_default="0",
+        comment="是否启用自动发现",
+    )
+    tools_manifest = Column(JSON, nullable=True, comment="工具清单")
+    source = Column(
+        String(32),
+        nullable=False,
+        server_default="manual",
+        comment="manual/opencode_config/auto_discover",
+    )
+    is_active = Column(
+        Boolean,
+        nullable=False,
+        server_default="1",
+        comment="是否启用",
+    )
 
-    def to_response_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "mcp_type": self.mcp_type.value if hasattr(self.mcp_type, "value") else self.mcp_type,
-            "url": self.url,
-            "command": self.command,
-            "args": self.args,
-            "env_vars": self.env_vars,
-            "headers": self.headers,
-            "auto_discovery_url": self.auto_discovery_url,
-            "auto_discovery_enabled": bool(self.auto_discovery_enabled),
-            "tools_manifest": self.tools_manifest,
-            "description": self.description,
-            "is_active": bool(self.is_active),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }
+
+# Backwards-compat alias: 旧代码 `from app.db.models.mcp_model import MCPConfig`
+MCPConfig = MCP

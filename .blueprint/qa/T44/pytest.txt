@@ -1,0 +1,18 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-8.3.4, pluggy-1.6.0 -- /Users/sun/CodeBuddy/20260627212423/backend/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sun/CodeBuddy/20260627212423-w10t44/backend
+plugins: asyncio-0.24.0, cov-7.1.0, anyio-4.14.1
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 8 items
+
+tests/data_platform/test_data_model.py::test_all_12_models_importable PASSED [ 12%]
+tests/data_platform/test_data_model.py::test_all_12_tables_created PASSED [ 25%]
+tests/data_platform/test_data_model.py::test_association_tables_have_binding_type PASSED [ 37%]
+tests/data_platform/test_data_model.py::test_agent_run_job_status_column PASSED [ 50%]
+tests/data_platform/test_data_model.py::test_agent_run_job_status_lifecycle PASSED [ 62%]
+tests/data_platform/test_data_model.py::test_agent_has_expected_columns PASSED [ 75%]
+tests/data_platform/test_data_model.py::test_mcp_backward_compat_alias PASSED [ 87%]
+tests/data_platform/test_data_model.py::test_opencode_config_path_setting PASSED [100%]
+
+============================== 8 passed in 0.11s ===============================
