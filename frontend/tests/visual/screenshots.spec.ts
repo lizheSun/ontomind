@@ -12,7 +12,6 @@ const PAGES = [
   { slug: 'kb-data-assets', path: '/knowledge-base/data-assets' },
   { slug: 'kb-search', path: '/knowledge-base/search?q=test' },
   { slug: 'perception-legacy', path: '/perception' },
-  { slug: 'dashboard', path: '/' },
 ] as const;
 
 const VIEWPORTS = [
@@ -98,8 +97,8 @@ for (const p of PAGES) {
         console.log(pageErrs.slice(0, 3).join('\n'));
       }
 
-      // For new pages (not /perception, /dashboard = legacy), assert clean
-      if (!['perception-legacy', 'dashboard'].includes(p.slug)) {
+      // For new pages (not /perception-legacy), assert clean
+      if (!['perception-legacy'].includes(p.slug)) {
         expect(pageErrs, `${p.slug} produced page errors: ${pageErrs.join('; ')}`).toEqual([]);
       }
     });

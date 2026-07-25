@@ -21,7 +21,6 @@ import {
   Button,
   Descriptions,
   Drawer,
-  Empty,
   Input,
   Modal,
   Space,
@@ -40,7 +39,6 @@ import {
   ArrowLeftOutlined,
   ThunderboltOutlined,
   ApiOutlined,
-  HistoryOutlined,
 } from '@ant-design/icons';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -59,7 +57,7 @@ import type {
   AgentType,
   AgentVersionRead,
 } from '../../types/agent';
-import type { AgentRun, MCPConfig, Skill } from '../../types';
+import type { MCPConfig, Skill } from '../../types';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -88,14 +86,7 @@ const STRATEGY_LABELS: Record<string, string> = {
   reflect: 'Reflect',
 };
 
-const RUN_STATUS_COLOR: Record<AgentRun['status'], string> = {
-  initializing: 'processing',
-  running: 'success',
-  error: 'error',
-  stopped: 'default',
-};
-
-type TabKey = 'config' | 'versions' | 'test' | 'skills' | 'mcps' | 'jobs';
+type TabKey = 'config' | 'versions' | 'test' | 'skills' | 'mcps';
 
 export default function AgentDetailPage() {
   const { id: idParam } = useParams<{ id: string }>();
@@ -131,8 +122,6 @@ export default function AgentDetailPage() {
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [mcps, setMcps] = useState<MCPConfig[]>([]);
   const [mcpsLoading, setMcpsLoading] = useState(false);
-  const [runs, setRuns] = useState<AgentRun[]>([]);
-  const [runsLoading, setRunsLoading] = useState(false);
 
   const isNew = idParam === 'new';
 
@@ -196,20 +185,6 @@ export default function AgentDetailPage() {
     }
   }, []);
 
-  const loadRuns = useCallback(async () => {
-    if (isNew || !Number.isFinite(id)) return;
-    setRunsLoading(true);
-    try {
-      const res = await resourcesAPI.listRuns({ skip: 0, limit: 200 });
-      const list: AgentRun[] = res.data?.data ?? [];
-      setRuns(list.filter((r) => r.agent_id === id));
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : '加载 Job 历史失败');
-    } finally {
-      setRunsLoading(false);
-    }
-  }, [id, isNew]);
-
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
@@ -218,8 +193,7 @@ export default function AgentDetailPage() {
     if (activeTab === 'versions') void loadVersions();
     else if (activeTab === 'skills') void loadSkills();
     else if (activeTab === 'mcps') void loadMcps();
-    else if (activeTab === 'jobs') void loadRuns();
-  }, [activeTab, loadVersions, loadSkills, loadMcps, loadRuns]);
+  }, [activeTab, loadVersions, loadSkills, loadMcps]);
 
   const cfg: AgentConfig | null = detail?.active_config_json ?? null;
 
@@ -478,62 +452,6 @@ export default function AgentDetailPage() {
     },
   ];
 
-  // ---- Job history columns ----
-  const runColumns: ColumnsType<AgentRun> = [
-    {
-      title: 'Run ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 80,
-      render: (v: number) => (
-        <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>#{v}</span>
-      ),
-    },
-    {
-      title: '名称',
-      dataIndex: 'run_name',
-      key: 'run_name',
-      render: (v: string) => (
-        <span style={{ color: '#e8eef5' }}>{v || '-'}</span>
-      ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 120,
-      render: (s: AgentRun['status']) => (
-        <Tag color={RUN_STATUS_COLOR[s] ?? 'default'}>{s}</Tag>
-      ),
-    },
-    {
-      title: '开始时间',
-      dataIndex: 'started_at',
-      key: 'started_at',
-      width: 170,
-      render: (v: string | undefined) => (v ? new Date(v).toLocaleString() : '-'),
-    },
-    {
-      title: '结束时间',
-      dataIndex: 'stopped_at',
-      key: 'stopped_at',
-      width: 170,
-      render: (v: string | undefined) => (v ? new Date(v).toLocaleString() : '-'),
-    },
-    {
-      title: 'Exit',
-      dataIndex: 'exit_code',
-      key: 'exit_code',
-      width: 70,
-      render: (v: number | undefined) =>
-        v == null ? (
-          '-'
-        ) : (
-          <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{v}</span>
-        ),
-    },
-  ];
-
   const configTab = useMemo(() => {
     if (!detail || !cfg) {
       return (
@@ -766,33 +684,6 @@ export default function AgentDetailPage() {
     </>
   );
 
-  const jobsTab = (
-    <>
-      <GlassPanel style={{ marginBottom: 12 }}>
-        <Space size={8} align="center">
-          <HistoryOutlined style={{ color: '#60a5fa' }} />
-          <Text style={{ color: '#8895b4' }}>
-            该 Agent 关联的 Run 记录（按 agent_id 过滤）。共 {runs.length} 条。
-          </Text>
-        </Space>
-      </GlassPanel>
-      {runs.length === 0 && !runsLoading ? (
-        <GlassPanel>
-          <Empty description="暂无 Job 历史" />
-        </GlassPanel>
-      ) : (
-        <DataTable<AgentRun>
-          rowKey="id"
-          columns={runColumns}
-          dataSource={runs}
-          loading={runsLoading}
-          emptyTitle="暂无 Job 历史"
-          emptyDescription="发起 Run 后会显示在此"
-        />
-      )}
-    </>
-  );
-
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
@@ -874,7 +765,6 @@ export default function AgentDetailPage() {
             { key: 'test', label: '测试', children: testTab },
             { key: 'skills', label: '关联的 Skill', children: skillsTab },
             { key: 'mcps', label: '关联的 MCP', children: mcpsTab },
-            { key: 'jobs', label: 'Job 历史', children: jobsTab },
           ]}
         />
       )}

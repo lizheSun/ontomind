@@ -1,0 +1,883 @@
+/**
+ * OpenCode 视觉主题 (light + dark, based on opencode v1.18.4 packages/ui/src/v2/styles/).
+ *
+ * 只作用于 `.oc-scope` 后代，不污染 antd 主体样式.
+ * 用 CSS custom properties + light-dark() 支持自动跟随系统主题.
+ */
+
+.oc-scope {
+  /* ── Grey scale (warm ivory / ink) ── */
+  --oc-grey-50:   #ffffff;
+  --oc-grey-100:  #fafaf7;   /* 米白 base */
+  --oc-grey-200:  #f4f3ee;
+  --oc-grey-300:  #ecebe4;
+  --oc-grey-400:  #e0dfd7;
+  --oc-grey-500:  #bfbcb5;
+  --oc-grey-600:  #8f8b84;
+  --oc-grey-700:  #605c56;
+  --oc-grey-800:  #35322e;
+  --oc-grey-900:  #262421;
+  --oc-grey-1000: #1a1918;   /* ink primary */
+  --oc-grey-1100: #101010;
+  --oc-grey-1200: #050505;
+
+  --oc-blue-500:  #3b52af;   /* indigo ink */
+  --oc-blue-600:  #2f4295;
+  --oc-blue-700:  #253578;
+  --oc-blue-800:  #1c2960;
+  --oc-blue-900:  #131c47;
+
+  --oc-green-500: #476a4b;
+  --oc-yellow-500: #a86e12;
+  --oc-red-500:   #a5361e;
+  --oc-purple-500: #7c3aed;
+  --oc-cyan-500:  #388494;
+
+  /* ── Background ── */
+  --oc-bg-base:      var(--oc-grey-100);
+  --oc-bg-deep:      var(--oc-grey-200);
+  --oc-bg-layer-1:   var(--oc-grey-50);
+  --oc-bg-layer-2:   var(--oc-grey-200);
+  --oc-bg-layer-3:   var(--oc-grey-300);
+  --oc-bg-accent:    var(--oc-blue-500);
+  --oc-bg-raised:    var(--oc-grey-50);
+
+  /* ── Text ── */
+  --oc-text-base:    var(--oc-grey-1000);
+  --oc-text-muted:   var(--oc-grey-700);
+  --oc-text-faint:   var(--oc-grey-600);
+  --oc-text-inverse: var(--oc-grey-50);
+  --oc-text-accent:  var(--oc-blue-500);
+
+  /* ── Border ── */
+  --oc-border-muted:  rgba(26, 25, 24, 0.06);
+  --oc-border-base:   rgba(26, 25, 24, 0.10);
+  --oc-border-strong: rgba(26, 25, 24, 0.18);
+  --oc-border-focus:  var(--oc-blue-500);
+
+  /* ── Overlay / hover ── */
+  --oc-hover:    rgba(26, 25, 24, 0.05);
+  --oc-active:   rgba(26, 25, 24, 0.09);
+  --oc-selected: rgba(59, 82, 175, 0.08);
+
+  /* ── Elevation ── */
+  --oc-elevation-raised:
+    0 1px 2px rgba(26, 25, 24, 0.04),
+    0 0 0 0.5px rgba(26, 25, 24, 0.08);
+  --oc-elevation-floating:
+    0 12px 40px -8px rgba(26, 25, 24, 0.12),
+    0 4px 12px rgba(26, 25, 24, 0.06),
+    0 0 0 0.5px rgba(26, 25, 24, 0.10);
+
+  /* ── Typography ── */
+  --oc-font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Inter', 'PingFang SC', 'Helvetica Neue', sans-serif;
+  --oc-font-serif: 'Fraunces', 'Cormorant Garamond', 'Songti SC', serif;
+  --oc-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', monospace;
+  --oc-text-size-body: 14px;
+  --oc-text-size-small: 12px;
+  --oc-text-size-code: 13px;
+  --oc-line-height-body: 1.7;
+  --oc-line-height-small: 1.55;
+
+  color-scheme: light;
+
+  font-family: var(--oc-font-sans);
+  color: var(--oc-text-base);
+  background: var(--oc-bg-base);
+}
+
+.oc-scope[data-oc-theme="dark"] {
+  color-scheme: dark;
+}
+.oc-scope[data-oc-theme="light"] {
+  color-scheme: light;
+}
+
+/* ============================================================
+ * 消息气泡 —— 严格参考 message-part.css
+ * ============================================================ */
+
+.oc-turn {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px min(48px, 6%) 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.oc-turn::-webkit-scrollbar { width: 8px; }
+.oc-turn::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+.oc-turn:hover::-webkit-scrollbar-thumb {
+  background: var(--oc-border-strong);
+}
+
+.oc-msg-wrap {
+  width: 100%;
+  display: flex;
+}
+.oc-msg-wrap[data-role="user"] {
+  justify-content: flex-end;
+}
+.oc-msg-wrap[data-role="assistant"],
+.oc-msg-wrap[data-role="system"] {
+  justify-content: flex-start;
+}
+
+/* user: 右对齐圆角气泡 */
+.oc-msg[data-role="user"] {
+  max-width: min(82%, 64ch);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--oc-bg-layer-2);
+  border: 1px solid var(--oc-border-muted);
+  color: var(--oc-text-base);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: var(--oc-text-size-body);
+  line-height: var(--oc-line-height-body);
+}
+
+/* assistant: 全宽无气泡，纯文本流 */
+.oc-msg[data-role="assistant"] {
+  width: 100%;
+  max-width: 72ch;
+  color: var(--oc-text-base);
+  font-size: var(--oc-text-size-body);
+  line-height: var(--oc-line-height-body);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oc-msg[data-role="system"] {
+  width: 100%;
+  max-width: 72ch;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--oc-border-strong);
+  color: var(--oc-text-muted);
+  font-size: var(--oc-text-size-small);
+}
+
+.oc-msg-meta {
+  color: var(--oc-text-faint);
+  font-size: 11px;
+  margin-top: 4px;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 文本 part */
+.oc-part-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* reasoning: 浅灰、缩进、小字 */
+.oc-part-reasoning {
+  padding: 8px 10px;
+  border-left: 2px solid var(--oc-border-strong);
+  color: var(--oc-text-muted);
+  font-size: var(--oc-text-size-small);
+  line-height: var(--oc-line-height-small);
+  white-space: pre-wrap;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+/* tool part */
+.oc-part-tool {
+  border: 1px solid var(--oc-border-base);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--oc-bg-layer-1);
+  font-size: var(--oc-text-size-small);
+}
+.oc-part-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  color: var(--oc-text-base);
+  background: var(--oc-bg-layer-2);
+  border-bottom: 1px solid var(--oc-border-base);
+  font-weight: 500;
+}
+.oc-part-tool-name {
+  color: var(--oc-text-base);
+  font-family: var(--oc-font-mono);
+  font-size: 12px;
+}
+.oc-part-tool-status {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.oc-part-tool-status[data-status="running"] {
+  background: rgba(59,130,246,0.14);
+  color: var(--oc-blue-500);
+}
+.oc-part-tool-status[data-status="completed"] {
+  background: rgba(34,197,94,0.14);
+  color: #22c55e;
+}
+.oc-part-tool-status[data-status="error"] {
+  background: rgba(239,68,68,0.14);
+  color: #ef4444;
+}
+.oc-part-tool-status[data-status="pending"] {
+  background: var(--oc-bg-layer-3);
+  color: var(--oc-text-muted);
+}
+.oc-part-tool-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.oc-part-tool-block-title {
+  color: var(--oc-text-faint);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+.oc-part-tool pre {
+  font-family: var(--oc-font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--oc-text-muted);
+  background: var(--oc-bg-deep);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 0;
+  overflow: auto;
+  max-height: 240px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* file part */
+.oc-part-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--oc-bg-layer-2);
+  color: var(--oc-text-base);
+  font-family: var(--oc-font-mono);
+  font-size: 12px;
+}
+
+/* thinking pulse */
+.oc-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-text-size-small);
+}
+.oc-thinking::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--oc-text-muted);
+  animation: oc-pulse 1.2s ease-in-out infinite;
+}
+@keyframes oc-pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+/* ============================================================
+ * Session Sidebar
+ * ============================================================ */
+.oc-sidebar {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--oc-bg-deep);
+  border-right: 1px solid var(--oc-border-base);
+}
+.oc-sidebar-header {
+  padding: 14px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-bottom: 1px solid var(--oc-border-muted);
+}
+.oc-sidebar-title {
+  font-family: var(--oc-font-serif);
+  font-weight: 500;
+  font-size: 17px;
+  color: var(--oc-text-base);
+  letter-spacing: -0.01em;
+  font-style: italic;
+}
+.oc-sidebar-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.oc-sidebar-search {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--oc-border-base);
+  background: var(--oc-bg-layer-1);
+  color: var(--oc-text-base);
+  font-size: 12px;
+  outline: none;
+  transition: border-color .15s;
+}
+.oc-sidebar-search::placeholder { color: var(--oc-text-faint); }
+.oc-sidebar-search:focus { border-color: var(--oc-border-focus); }
+
+.oc-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 6px 6px 20px;
+}
+.oc-sidebar-list::-webkit-scrollbar { width: 6px; }
+.oc-sidebar-list::-webkit-scrollbar-thumb {
+  background: var(--oc-border-strong);
+  border-radius: 3px;
+}
+
+.oc-session-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  gap: 8px;
+  color: var(--oc-text-base);
+  transition: background-color .12s;
+  user-select: none;
+  min-height: 34px;
+}
+.oc-session-item:hover { background: var(--oc-hover); }
+.oc-session-item[data-active="true"] {
+  background: var(--oc-selected);
+}
+.oc-session-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.oc-session-item-title[data-empty="true"] {
+  color: var(--oc-text-faint);
+  font-style: italic;
+}
+.oc-session-item-actions {
+  display: none;
+  gap: 2px;
+}
+.oc-session-item:hover .oc-session-item-actions { display: flex; }
+.oc-session-item-actions .oc-icon-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+.oc-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--oc-text-muted);
+  cursor: pointer;
+  transition: background-color .12s, color .12s;
+  padding: 0;
+}
+.oc-icon-btn:hover {
+  background: var(--oc-hover);
+  color: var(--oc-text-base);
+}
+.oc-icon-btn[data-danger="true"]:hover { color: #a5361e; }
+
+/* ============================================================
+ * Composer
+ * ============================================================ */
+.oc-composer {
+  position: relative;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--oc-border-base);
+  background: var(--oc-bg-base);
+}
+.oc-composer-inner {
+  border: 1px solid var(--oc-border-base);
+  background: var(--oc-bg-layer-1);
+  border-radius: 12px;
+  padding: 8px 10px;
+  transition: border-color .12s;
+}
+.oc-composer-inner:focus-within {
+  border-color: var(--oc-border-strong);
+}
+.oc-composer textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--oc-text-base);
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-text-size-body);
+  line-height: 1.55;
+  resize: none;
+  min-height: 48px;
+  max-height: 220px;
+}
+.oc-composer textarea::placeholder { color: var(--oc-text-faint); }
+
+.oc-composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  gap: 8px;
+}
+.oc-composer-toolbar-left,
+.oc-composer-toolbar-right {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.oc-hint-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--oc-bg-layer-2);
+  color: var(--oc-text-faint);
+  font-family: var(--oc-font-mono);
+  user-select: none;
+}
+.oc-btn {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--oc-bg-accent);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity .12s;
+}
+.oc-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.oc-btn-secondary {
+  background: transparent;
+  border-color: var(--oc-border-base);
+  color: var(--oc-text-base);
+}
+.oc-btn-secondary:hover:not(:disabled) {
+  background: var(--oc-hover);
+}
+.oc-btn-danger {
+  background: transparent;
+  border-color: var(--oc-border-base);
+  color: #ef4444;
+}
+.oc-btn-danger:hover:not(:disabled) {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.4);
+}
+
+/* ============================================================
+ * Popover (slash / mention)
+ * ============================================================ */
+.oc-popover {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(100% + 6px);
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  background: var(--oc-bg-raised);
+  border: 1px solid var(--oc-border-base);
+  border-radius: 12px;
+  padding: 4px;
+  box-shadow: var(--oc-elevation-floating);
+  z-index: 70;
+  animation: oc-pop-in .08s ease-out;
+}
+.oc-popover::-webkit-scrollbar { width: 6px; }
+.oc-popover::-webkit-scrollbar-thumb {
+  background: var(--oc-border-strong);
+  border-radius: 3px;
+}
+@keyframes oc-pop-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.oc-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--oc-text-base);
+  min-height: 32px;
+  transition: background-color .1s;
+}
+.oc-popover-item[data-active="true"] {
+  background: var(--oc-selected);
+}
+.oc-popover-item:hover { background: var(--oc-hover); }
+
+.oc-popover-item-primary {
+  font-family: var(--oc-font-mono);
+  font-size: 13px;
+  color: var(--oc-text-base);
+  white-space: nowrap;
+}
+.oc-popover-item-secondary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--oc-text-muted);
+  font-size: 12px;
+}
+.oc-popover-item-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--oc-bg-layer-2);
+  color: var(--oc-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.oc-popover-item-badge[data-source="skill"] {
+  background: rgba(168,85,247,0.14); color: #a855f7;
+}
+.oc-popover-item-badge[data-source="mcp"] {
+  background: rgba(6,182,212,0.14); color: #06b6d4;
+}
+.oc-popover-item-badge[data-source="command"] {
+  background: rgba(59,130,246,0.14); color: #3b82f6;
+}
+.oc-popover-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--oc-text-faint);
+  font-size: 12px;
+}
+
+/* ============================================================
+ * Header / Empty
+ * ============================================================ */
+.oc-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--oc-text-faint);
+  font-size: 13px;
+}
+
+.oc-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--oc-border-muted);
+  background: var(--oc-bg-base);
+}
+.oc-header-title {
+  font-family: var(--oc-font-serif);
+  font-size: 18px;
+  color: var(--oc-text-base);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-header-sub {
+  font-size: 10px;
+  color: var(--oc-text-faint);
+  font-family: var(--oc-font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+ * Zen / God 模式响应
+ * ============================================================
+ * Zen (默认，极简): 隐藏 hint chips / meta / composer 底栏的次要提示
+ * God (专家): 显示会话 id / model tag / cursor 位置 / part id 等 debug 信息
+ */
+
+/* Zen: 隐藏 provider/model 副信息 & 主 UI 上的 hint chip；
+   AgentModeSwitcher / ModelSwitcher 是核心 UX，不隐藏 */
+html[data-ui-mode="zen"] .oc-scope .oc-msg-meta,
+html[data-ui-mode="zen"] .oc-scope .oc-header-sub {
+  display: none !important;
+}
+html[data-ui-mode="zen"] .oc-scope .oc-composer-toolbar-left .oc-hint-chip {
+  display: none !important;
+}
+
+/* God: 特殊显示（右上角 badge、更多 meta） */
+html[data-ui-mode="god"] .oc-scope .oc-msg-meta {
+  color: var(--oc-text-accent);
+}
+html[data-ui-mode="god"] .oc-scope .oc-god-only {
+  display: inline-flex !important;
+}
+html[data-ui-mode="zen"] .oc-scope .oc-god-only {
+  display: none !important;
+}
+
+/* 兜底：oc-scope 内的 button/input 不要被外部 CSS 影响 */
+.oc-scope button.oc-icon-btn,
+.oc-scope button.oc-btn {
+  font-family: var(--oc-font-sans);
+}
+
+/* Sidebar 严格填满父容器 */
+.oc-sidebar {
+  min-height: 0;
+}
+.oc-sidebar-list {
+  min-height: 0;
+}
+
+/* ============================================================
+ * Mode / Model Pills (opencode desktop 风格)
+ * ============================================================ */
+.oc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--oc-bg-layer-1);
+  border: 1px solid var(--oc-border-base);
+  color: var(--oc-text-base);
+  font-size: 12px;
+  font-family: var(--oc-font-sans);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color .12s, border-color .12s;
+  white-space: nowrap;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oc-pill:hover:not(:disabled) {
+  background: var(--oc-hover);
+  border-color: var(--oc-border-strong);
+}
+.oc-pill[data-active="true"] {
+  background: var(--oc-selected);
+  border-color: var(--oc-blue-500);
+  color: var(--oc-blue-500);
+}
+.oc-pill svg {
+  width: 12px;
+  height: 12px;
+}
+.oc-pill .oc-pill-caret {
+  margin-left: 2px;
+  opacity: 0.6;
+}
+
+/* Agent Mode dual-pill container */
+.oc-mode-group {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--oc-bg-layer-2);
+  border: 1px solid var(--oc-border-muted);
+}
+.oc-mode-group .oc-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: transparent;
+  border: none;
+  color: var(--oc-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color .12s, background-color .12s;
+  letter-spacing: 0.005em;
+}
+.oc-mode-group .oc-mode-pill:hover {
+  color: var(--oc-text-base);
+}
+.oc-mode-group .oc-mode-pill[data-active="true"] {
+  background: var(--oc-bg-raised);
+  color: var(--oc-text-base);
+  box-shadow: 0 1px 2px rgba(26,25,24,0.05), 0 0 0 0.5px rgba(26,25,24,0.10);
+}
+.oc-mode-group .oc-mode-pill[data-active="true"][data-mode="plan"] {
+  color: var(--oc-blue-500);
+}
+.oc-mode-group .oc-mode-pill svg {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+/* ============================================================
+ * Model Popover (放在 composer 上方，右对齐)
+ * ============================================================ */
+.oc-model-popover {
+  position: absolute;
+  right: 16px;
+  bottom: calc(100% + 6px);
+  width: min(560px, calc(100vw - 320px));
+  max-height: 480px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--oc-bg-raised);
+  border: 1px solid var(--oc-border-base);
+  border-radius: 12px;
+  box-shadow: var(--oc-elevation-floating);
+  z-index: 80;
+  animation: oc-pop-in .1s ease-out;
+}
+.oc-model-popover-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--oc-border-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.oc-model-popover-header input {
+  flex: 1;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--oc-border-base);
+  background: var(--oc-bg-layer-1);
+  color: var(--oc-text-base);
+  outline: none;
+  font-size: 12px;
+}
+.oc-model-popover-header input:focus { border-color: var(--oc-border-focus); }
+.oc-model-popover-body {
+  overflow-y: auto;
+  padding: 4px;
+  min-height: 60px;
+}
+.oc-model-popover-body::-webkit-scrollbar { width: 6px; }
+.oc-model-popover-body::-webkit-scrollbar-thumb {
+  background: var(--oc-border-strong);
+  border-radius: 3px;
+}
+.oc-model-group {
+  padding: 4px 0;
+}
+.oc-model-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--oc-text-faint);
+  font-weight: 600;
+}
+.oc-model-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--oc-text-base);
+  font-size: 13px;
+  min-height: 30px;
+}
+.oc-model-item:hover { background: var(--oc-hover); }
+.oc-model-item[data-active="true"] { background: var(--oc-selected); }
+.oc-model-item-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--oc-blue-500);
+  opacity: 0;
+}
+.oc-model-item[data-current="true"] .oc-model-item-check { opacity: 1; }
+.oc-model-item-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--oc-font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.oc-model-item-name {
+  flex: 0 0 auto;
+  color: var(--oc-text-muted);
+  font-size: 11px;
+  max-width: 30%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-model-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--oc-text-muted);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+.oc-model-popover-footer {
+  padding: 6px 10px;
+  border-top: 1px solid var(--oc-border-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--oc-text-faint);
+}
+.oc-model-popover-footer .oc-hint-chip {
+  padding: 1px 6px;
+  font-size: 10px;
+}

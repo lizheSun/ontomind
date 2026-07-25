@@ -1,17 +1,14 @@
 import { ConfigProvider, theme, App as AntApp } from 'antd';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
-import { ZenGodToggle } from './components/common';
 import Login from './pages/Login';
 import { CmdKOmnibar } from './components/common';
 
-import Dashboard from './pages/dashboard/index';
 import PerceptionLegacyIndex from './pages/perception/index';
 import PerceptionShell from './pages/perception/PerceptionShell';
 import CognitionIndex from './pages/cognition/index';
 import DecisionIndex from './pages/decision/index';
 import ExecutionIndex from './pages/execution/index';
-import ApplicationIndex from './pages/application/index';
 import ResourcesPage from './pages/resources/index';
 import AgentLooperWizard from './pages/resources/AgentLooperWizard';
 import ComputeNodeDetailPage from './pages/resources/ComputeNodeDetailPage';
@@ -22,12 +19,10 @@ import MCPDetailPage from './pages/resources/MCPDetailPage';
 import AgentPlatformPrototype from './pages/resources/AgentPlatformPrototype';
 import {
   ChatWorkspacePage,
-  ResourcesConsolePage,
   AgentStudioPage,
-  RunsPage,
 } from './pages/agent-platform';
+import ExpertTeamPage from './pages/experts/ExpertTeamPage';
 import UsersPage from './pages/users/index';
-import ProjectsPage from './pages/projects/index';
 import DataPlatformIndex from './pages/data-platform';
 import SourcesListPage from './pages/data-platform/SourcesListPage';
 import SourceDetailPage from './pages/data-platform/SourceDetailPage';
@@ -52,60 +47,63 @@ export default function App() {
   return (
     <ConfigProvider
       theme={{
-        algorithm: theme.darkAlgorithm,
+        algorithm: theme.defaultAlgorithm,
         token: {
           fontFamily:
-            "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', sans-serif",
-          colorPrimary: '#3b82f6',
-          colorSuccess: '#34d399',
-          colorWarning: '#fbbf24',
-          colorError: '#fb7185',
-          colorInfo: '#60a5fa',
-          colorTextBase: '#e8eef5',
-          colorBgBase: '#060b14',
-          colorBgContainer: '#0a0f1f',
-          colorBgElevated: '#111827',
-          colorBorder: 'rgba(255,255,255,0.08)',
-          colorBorderSecondary: 'rgba(255,255,255,0.05)',
+            "'Geist', -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', sans-serif",
+          colorPrimary: '#3b52af',
+          colorSuccess: '#476a4b',
+          colorWarning: '#a86e12',
+          colorError: '#a5361e',
+          colorInfo: '#3b52af',
+          colorTextBase: '#1a1918',
+          colorBgBase: '#fafaf7',
+          colorBgContainer: '#ffffff',
+          colorBgElevated: '#ffffff',
+          colorBgLayout: '#fafaf7',
+          colorBorder: 'rgba(26,25,24,0.10)',
+          colorBorderSecondary: 'rgba(26,25,24,0.08)',
           borderRadius: 10,
-          borderRadiusLG: 16,
+          borderRadiusLG: 14,
           borderRadiusSM: 6,
           wireframe: false,
-          // Perception-layer additions (T02)
-          controlItemBgActive: 'rgba(59, 130, 246, 0.14)',
-          controlItemBgActiveHover: 'rgba(59, 130, 246, 0.20)',
+          controlItemBgActive: 'rgba(59, 82, 175, 0.08)',
+          controlItemBgActiveHover: 'rgba(59, 82, 175, 0.14)',
         },
         components: {
           Layout: {
-            bodyBg: '#060b14',
-            headerBg: 'rgba(10,15,31,0.7)',
+            bodyBg: '#fafaf7',
+            headerBg: 'rgba(250,250,247,0.85)',
           },
           Menu: {
-            darkItemBg: 'transparent',
-            darkItemSelectedBg: 'rgba(59,130,246,0.12)',
-            darkItemHoverBg: 'rgba(255,255,255,0.05)',
-            itemBorderRadius: 10,
+            itemBg: 'transparent',
+            itemSelectedBg: 'transparent',
+            itemHoverBg: 'transparent',
+            itemColor: '#605c56',
+            itemSelectedColor: '#1a1918',
+            itemHoverColor: '#1a1918',
+            horizontalItemSelectedColor: '#1a1918',
+            itemBorderRadius: 0,
           },
           Card: {
-            colorBgContainer: 'rgba(255,255,255,0.02)',
+            colorBgContainer: '#ffffff',
           },
           Table: {
-            headerBg: 'rgba(255,255,255,0.02)',
-            rowHoverBg: 'rgba(255,255,255,0.04)',
-            borderColor: 'rgba(255,255,255,0.05)',
+            headerBg: 'transparent',
+            rowHoverBg: 'rgba(26,25,24,0.04)',
+            borderColor: 'rgba(26,25,24,0.08)',
           },
           Button: {
-            primaryShadow: '0 2px 12px rgba(59,130,246,0.3)',
+            primaryShadow: 'none',
           },
           Input: {
-            activeBorderColor: 'rgba(59,130,246,0.5)',
-            activeShadow: '0 0 0 2px rgba(59,130,246,0.15)',
+            activeBorderColor: '#3b52af',
+            activeShadow: '0 0 0 3px rgba(59,82,175,0.10)',
           },
         },
       }}
     >
       <AntApp>
-        <ZenGodToggle />
         <BrowserRouter>
           <CmdKOmnibar />
           <Routes>
@@ -122,17 +120,15 @@ export default function App() {
             >
               <Route index element={<Navigate to="/workspace" replace />} />
               <Route path="workspace" element={<ChatWorkspacePage />} />
-              <Route path="agent-platform/resources" element={<ResourcesConsolePage />} />
-              <Route path="agent-platform/runs" element={<RunsPage />} />
+              <Route path="agent-platform/resources" element={<Navigate to="/experts" replace />} />
               <Route path="agent-platform/agents/new/studio" element={<AgentStudioPage />} />
               <Route path="agent-platform/agents/:id/studio" element={<AgentStudioPage />} />
-              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="experts" element={<ExpertTeamPage />} />
               <Route path="perception" element={<PerceptionShell />} />
               <Route path="perception-legacy" element={<PerceptionLegacyIndex />} />
               <Route path="cognition" element={<CognitionIndex />} />
               <Route path="decision" element={<DecisionIndex />} />
               <Route path="execution" element={<ExecutionIndex />} />
-              <Route path="application" element={<ApplicationIndex />} />
               <Route path="resources" element={<ResourcesPage />} />
               <Route path="resources/legacy" element={<ResourcesPage />} />
               <Route path="resources/agent-looper/new" element={<AgentLooperWizard />} />
@@ -143,7 +139,6 @@ export default function App() {
               <Route path="resources/agent/:id" element={<AgentDetailPage />} />
               <Route path="resources/skills/:id" element={<SkillDetailPage />} />
               <Route path="resources/mcps/:id" element={<MCPDetailPage />} />
-              <Route path="projects" element={<ProjectsPage />} />
               <Route path="users" element={<UsersPage />} />
               {/* Wave 5 T20: data platform + knowledge base */}
               <Route path="data-platform" element={<DataPlatformIndex />} />

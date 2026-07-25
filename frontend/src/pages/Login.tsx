@@ -5,20 +5,20 @@ import {
   LockOutlined,
   UserOutlined,
   MailOutlined,
-  RocketOutlined,
 } from '@ant-design/icons';
 import userService from '../services/user.service';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatApiError(err: any, fallback: string): string {
   const detail = err?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
   if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
     return detail.message;
   }
-  const message = err?.response?.data?.message;
-  if (typeof message === 'string') return message;
+  const messageStr = err?.response?.data?.message;
+  if (typeof messageStr === 'string') return messageStr;
   if (err?.message === 'Network Error') {
     return '无法连接后端服务，请确认后端已启动且 CORS 配置正确';
   }
@@ -47,6 +47,7 @@ export default function Login() {
       }
       message.success('登录成功');
       navigate('/');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       notification.error({
         message: '登录失败',
@@ -68,6 +69,7 @@ export default function Login() {
       await userService.register(values);
       message.success('注册成功，请登录');
       setActiveTab('login');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       notification.error({
         message: '注册失败',
@@ -86,48 +88,21 @@ export default function Login() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#060b14',
+        background: 'var(--paper-01, #fafaf7)',
         position: 'relative',
         overflow: 'hidden',
         fontFamily: 'inherit',
       }}
     >
-      {/* 背景动效 */}
+      {/* 极淡背景 dot */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
           backgroundImage:
-            'radial-gradient(circle, rgba(59,130,246,0.08) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
+            'radial-gradient(circle, rgba(26,25,24,0.06) 0.5px, transparent 0.5px)',
+          backgroundSize: '24px 24px',
           opacity: 0.5,
-        }}
-      />
-
-      {/* 模糊光球 */}
-      <div
-        style={{
-          position: 'absolute',
-          width: 600,
-          height: 600,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
-          top: -200,
-          right: -150,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          width: 500,
-          height: 500,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%)',
-          bottom: -150,
-          left: -100,
           pointerEvents: 'none',
         }}
       />
@@ -137,54 +112,56 @@ export default function Login() {
         style={{
           position: 'relative',
           zIndex: 1,
-          width: 420,
+          width: 400,
           padding: '40px 36px',
-          borderRadius: 20,
-          background:
-            'linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          borderRadius: 14,
+          background: 'var(--paper-00, #ffffff)',
+          border: '1px solid var(--border-subtle, rgba(26,25,24,0.10))',
+          boxShadow: 'var(--shadow-md, 0 4px 20px rgba(26,25,24,0.06))',
           opacity: mounted ? 1 : 0,
-          transform: mounted ? 'translateY(0)' : 'translateY(16px)',
-          transition: 'opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1)',
+          transform: mounted ? 'translateY(0)' : 'translateY(12px)',
+          transition:
+            'opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1)',
         }}
       >
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        {/* Logo — editorial */}
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <div
             style={{
-              width: 52,
-              height: 52,
-              borderRadius: 14,
-              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 16,
-              boxShadow: '0 8px 24px rgba(59,130,246,0.3)',
+              display: 'inline-block',
+              fontFamily: "'Fraunces', serif",
+              fontSize: 40,
+              fontWeight: 500,
+              color: 'var(--ink-100, #1a1918)',
+              letterSpacing: '-0.02em',
+              fontStyle: 'italic',
+              lineHeight: 1,
+              marginBottom: 8,
             }}
           >
-            <RocketOutlined style={{ fontSize: 24, color: '#fff' }} />
-          </div>
-          <Title
-            level={3}
-            style={{ color: '#e8eef5', margin: 0, fontWeight: 700, letterSpacing: -0.5 }}
-          >
             OntoMind
-          </Title>
-          <Text style={{ color: '#506380', fontSize: 13 }}>
-            智能知识引擎
-          </Text>
+          </div>
+          <div>
+            <Text
+              style={{
+                color: 'var(--ink-40, #8f8b84)',
+                fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace",
+                textTransform: 'uppercase',
+                letterSpacing: '0.16em',
+              }}
+            >
+              专家团 · Editorial
+            </Text>
+          </div>
         </div>
 
         <Tabs
           activeKey={activeTab}
           onChange={(k) => setActiveTab(k as 'login' | 'register')}
           centered
-          size="large"
-          style={{ marginBottom: 8 }}
+          size="middle"
+          style={{ marginBottom: 12 }}
           items={[
             { key: 'login', label: '登录' },
             { key: 'register', label: '注册' },
@@ -198,13 +175,9 @@ export default function Login() {
               rules={[{ required: true, message: '请输入用户名' }]}
             >
               <Input
-                prefix={<UserOutlined style={{ color: '#506380' }} />}
+                prefix={<UserOutlined style={{ color: 'var(--ink-40, #8f8b84)' }} />}
                 placeholder="用户名"
-                style={{
-                  height: 46,
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.03)',
-                }}
+                style={{ height: 44, borderRadius: 10 }}
               />
             </Form.Item>
 
@@ -213,13 +186,9 @@ export default function Login() {
               rules={[{ required: true, message: '请输入密码' }]}
             >
               <Input.Password
-                prefix={<LockOutlined style={{ color: '#506380' }} />}
+                prefix={<LockOutlined style={{ color: 'var(--ink-40, #8f8b84)' }} />}
                 placeholder="密码"
-                style={{
-                  height: 46,
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.03)',
-                }}
+                style={{ height: 44, borderRadius: 10 }}
               />
             </Form.Item>
 
@@ -230,10 +199,10 @@ export default function Login() {
                 loading={loading}
                 block
                 style={{
-                  height: 46,
-                  borderRadius: 12,
-                  fontSize: 15,
-                  fontWeight: 600,
+                  height: 44,
+                  borderRadius: 10,
+                  fontSize: 14,
+                  fontWeight: 500,
                 }}
               >
                 登录
@@ -250,13 +219,9 @@ export default function Login() {
               ]}
             >
               <Input
-                prefix={<UserOutlined style={{ color: '#506380' }} />}
+                prefix={<UserOutlined style={{ color: 'var(--ink-40, #8f8b84)' }} />}
                 placeholder="用户名"
-                style={{
-                  height: 46,
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.03)',
-                }}
+                style={{ height: 44, borderRadius: 10 }}
               />
             </Form.Item>
 
@@ -268,13 +233,9 @@ export default function Login() {
               ]}
             >
               <Input
-                prefix={<MailOutlined style={{ color: '#506380' }} />}
+                prefix={<MailOutlined style={{ color: 'var(--ink-40, #8f8b84)' }} />}
                 placeholder="邮箱"
-                style={{
-                  height: 46,
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.03)',
-                }}
+                style={{ height: 44, borderRadius: 10 }}
               />
             </Form.Item>
 
@@ -286,13 +247,9 @@ export default function Login() {
               ]}
             >
               <Input.Password
-                prefix={<LockOutlined style={{ color: '#506380' }} />}
+                prefix={<LockOutlined style={{ color: 'var(--ink-40, #8f8b84)' }} />}
                 placeholder="密码"
-                style={{
-                  height: 46,
-                  borderRadius: 12,
-                  background: 'rgba(255,255,255,0.03)',
-                }}
+                style={{ height: 44, borderRadius: 10 }}
               />
             </Form.Item>
 
@@ -303,10 +260,10 @@ export default function Login() {
                 loading={loading}
                 block
                 style={{
-                  height: 46,
-                  borderRadius: 12,
-                  fontSize: 15,
-                  fontWeight: 600,
+                  height: 44,
+                  borderRadius: 10,
+                  fontSize: 14,
+                  fontWeight: 500,
                 }}
               >
                 创建账号
@@ -319,12 +276,14 @@ export default function Login() {
           style={{
             display: 'block',
             textAlign: 'center',
-            marginTop: 24,
-            color: '#405070',
-            fontSize: 11,
+            marginTop: 28,
+            color: 'var(--ink-40, #8f8b84)',
+            fontSize: 10,
+            fontFamily: "'JetBrains Mono', monospace",
+            letterSpacing: '0.12em',
           }}
         >
-          OntoMind · 版本 0.1.0
+          v0.1.0
         </Text>
       </div>
     </div>

@@ -1,14 +1,10 @@
-"""API v1 route aggregation."""
+"""API v1 route aggregation (legacy shim).
 
-from fastapi import APIRouter
+Prefer :mod:`app.api.v1.router.api_router` — that is the current canonical
+aggregator. This module exists purely so imports of ``app.api.api_router`` in
+older callsites continue to work.
+"""
 
-from app.api.v1 import perception, cognition, decision, execution, application, auth
+from app.api.v1.router import api_router  # noqa: F401
 
-api_router = APIRouter()
-
-api_router.include_router(auth.router, prefix="/auth", tags=["认证"])
-api_router.include_router(perception.router, prefix="/perception", tags=["感知层"])
-api_router.include_router(cognition.router, prefix="/cognition", tags=["认知层"])
-api_router.include_router(decision.router, prefix="/decision", tags=["决策层"])
-api_router.include_router(execution.router, prefix="/execution", tags=["执行层"])
-api_router.include_router(application.router, prefix="/application", tags=["应用层"])
+__all__ = ["api_router"]

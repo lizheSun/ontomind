@@ -11,11 +11,6 @@ from app.db.models.instance_model import Instance
 from app.db.models.agent_model import Agent
 from app.db.models.skill_model import Skill
 from app.db.models.mcp_model import MCP
-from app.db.models.agent_run_model import AgentRun
-from app.db.models.project_model import Project
-from app.db.models.requirement_model import Requirement
-from app.db.models.plan_model import Plan
-from app.db.models.task_model import Task
 
 # --- Data Platform (T06) ---
 from app.db.models.dp_data_source_model import DpDataSource
@@ -46,17 +41,21 @@ from app.db.models.container_skill_model import ContainerSkill
 from app.db.models.container_mcp_model import ContainerMCP
 from app.db.models.agent_skill_model import AgentSkill
 from app.db.models.agent_mcp_model import AgentMCP
-from app.db.models.agent_run_job_model import AgentRunJob
 from app.db.models.credential_model import Credential
 from app.db.models.audit_log_model import AuditLog
 from app.db.models.role_model import Role, UserRole
-from app.db.models.agent_platform_model import (
-    AgentVersion, AgentDeployment, AgentSession, AgentMessage,
-    AgentRunStep, AgentRunEvent, AgentToolApproval, EvalSuite, EvalCase,
-)
 from app.db.models.node_connection_model import NodeConnection
 from app.db.models.discovery_run_model import DiscoveryRun
 from app.db.models.discovery_item_model import DiscoveryItem
+
+# --- OpenCode 对话工作台（SDK 直连）业务侧映射 ---
+from app.db.models.opencode_session_model import OpencodeSession
+
+# --- Agent Platform 保留：版本配置快照 + 部署记录 ---
+from app.db.models.agent_platform_model import AgentVersion, AgentDeployment
+
+# --- 专家团（Expert Team）---
+from app.db.models.expert_model import Expert
 
 # Backwards-compat alias: 旧代码继续 import MCPConfig（已重命名为 MCP）
 MCPConfig = MCP
@@ -64,8 +63,7 @@ MCPConfig = MCP
 __all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaProfile",
            "OntologyVersion", "OntologyClass", "OntologyProperty",
            "OntologyRelationship", "OntologyConstraint",
-           "Instance", "Agent", "Skill", "MCP", "MCPConfig", "AgentRun",
-           "Project", "Requirement", "Plan", "Task",
+           "Instance", "Agent", "Skill", "MCP", "MCPConfig",
            "DpDataSource", "DpSqlQuery", "DpQueryHistory",
            "DpChatSession", "DpChatMessage",
            "KbLibrary", "KbDataAsset", "KbCodeRepo",
@@ -74,9 +72,9 @@ __all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaPr
            # T44
            "ComputeNode", "AgentContainer",
            "NodeContainer", "ContainerAgent", "ContainerSkill", "ContainerMCP",
-           "AgentSkill", "AgentMCP", "AgentRunJob",
-           "AgentVersion", "AgentDeployment", "AgentSession", "AgentMessage",
-           "AgentRunStep", "AgentRunEvent", "AgentToolApproval",
-           "EvalSuite", "EvalCase",
+           "AgentSkill", "AgentMCP",
            "Credential", "AuditLog", "Role", "UserRole",
-           "NodeConnection", "DiscoveryRun", "DiscoveryItem"]
+           "NodeConnection", "DiscoveryRun", "DiscoveryItem",
+           "OpencodeSession",
+           "AgentVersion", "AgentDeployment",
+           "Expert"]

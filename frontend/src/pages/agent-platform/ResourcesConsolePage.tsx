@@ -264,7 +264,6 @@ export default function ResourcesConsolePage() {
       const optimistic = resolveDiscoveryDecision(item, decision);
       setItems((current) => current.map((row) => row.id === item.id ? optimistic : row));
       const saved = await agentPlatformService.decideDiscoveryItem(
-        discoveryId,
         item.id,
         decision,
       );

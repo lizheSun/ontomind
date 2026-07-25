@@ -214,11 +214,16 @@ function ToolPartView({ messageId, part, onApprove, onReject }: ToolPartViewProp
           {meta.label}
         </Tag>
         <Text strong style={{ fontSize: 13 }}>
-          {part.toolName}
+          {part.toolName === 'permission' ? '工具权限请求' : part.toolName}
         </Text>
         {part.requiresApproval && !isAwaiting ? (
           <Tag color="geekblue" bordered={false}>
             需审批
+          </Tag>
+        ) : null}
+        {isAwaiting ? (
+          <Tag color="gold" bordered={false}>
+            等待你批准后继续
           </Tag>
         ) : null}
       </Space>

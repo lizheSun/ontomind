@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import perception, cognition, decision, execution, application, auth, users, llm, resources, projects
+from app.api.v1 import perception, cognition, decision, execution, auth, users, llm, resources
 from app.api.v1 import knowledge_base
 
 api_router = APIRouter()
@@ -11,12 +11,10 @@ api_router.include_router(auth.router, prefix="/auth", tags=["认证"])
 api_router.include_router(users.router, prefix="/users", tags=["用户管理"])
 api_router.include_router(llm.router, prefix="/llm", tags=["LLM 配置"])
 api_router.include_router(resources.router, prefix="/resources", tags=["资源管理"])
-api_router.include_router(projects.router, prefix="/projects", tags=["项目管理"])
 api_router.include_router(perception.router, prefix="/perception", tags=["感知层"])
 api_router.include_router(cognition.router, prefix="/cognition", tags=["认知层"])
 api_router.include_router(decision.router, prefix="/decision", tags=["决策层"])
 api_router.include_router(execution.router, prefix="/execution", tags=["执行层"])
-api_router.include_router(application.router, prefix="/application", tags=["应用层"])
 
 from app.api.v1 import data_platform
 api_router.include_router(data_platform.router, prefix="/data-platform", tags=["数据平台"])
@@ -28,3 +26,11 @@ api_router.include_router(agent_looper.router, prefix="/agent-looper", tags=["Ag
 
 from app.api.v1 import agent_platform
 api_router.include_router(agent_platform.router, prefix="/agent-platform")
+
+# --- OpenCode 对话工作台（SDK 直连桥接）---
+from app.api.v1 import opencode as opencode_bridge
+api_router.include_router(opencode_bridge.router, prefix="/opencode", tags=["OpenCode 桥接"])
+
+# --- 专家团（Expert Team）---
+from app.api.v1 import experts
+api_router.include_router(experts.router, prefix="/experts", tags=["专家团"])

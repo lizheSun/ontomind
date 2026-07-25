@@ -72,6 +72,17 @@ class Settings(BaseSettings):
     # === Agent Resource Platform (T44) / Opencode Config Discovery (T46) ===
     OPENCODE_CONFIG_PATH: str = "~/.config/opencode"
 
+    # === OpenCode Serve（对话工作台长驻引擎，对齐 CLI 1.17+）===
+    OPENCODE_SERVE_ENABLED: bool = True
+    OPENCODE_SERVE_HOST: str = "127.0.0.1"
+    OPENCODE_SERVE_PORT: int = 4096
+    OPENCODE_SERVE_PASSWORD: str = "ontomind-dev"
+    OPENCODE_SERVE_USERNAME: str = "opencode"
+    OPENCODE_MIN_VERSION: str = "1.17.0"
+    OPENCODE_SERVE_START_TIMEOUT_SECONDS: float = 30.0
+    # chat 优先走 serve；失败时回退 `opencode run --format json`
+    OPENCODE_CHAT_PREFER_SERVE: bool = True
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

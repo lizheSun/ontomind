@@ -31,6 +31,8 @@ celery==5.4.0
 
 # Utils
 httpx==0.28.1
+# OpenCode 对话路径：Python 用 httpx 调 opencode serve（对齐本机 CLI >=1.17），
+# 不引入 Node `@opencode-ai/sdk`；CLI 版本由 OPENCODE_MIN_VERSION 校验。
 python-dotenv==1.0.1
 loguru==0.7.3
 rdflib==7.0.0

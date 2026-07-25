@@ -3,21 +3,18 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Avatar, Dropdown, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
-  DashboardOutlined,
   ApiOutlined,
   NodeIndexOutlined,
   ThunderboltOutlined,
   SendOutlined,
-  AppstoreOutlined,
   SettingOutlined,
   UserOutlined,
   LogoutOutlined,
   TeamOutlined,
-  ProjectOutlined,
-  RobotOutlined,
   MessageOutlined,
 } from '@ant-design/icons';
 import useUserStore from '../../stores/userStore';
+import { ZenGodToggle } from '../common';
 
 const { Header, Content } = Layout;
 
@@ -25,16 +22,12 @@ type MenuItem = Required<MenuProps>['items'][number];
 
 const topMenuItems: MenuItem[] = [
   { key: '/workspace', icon: <MessageOutlined />, label: '对话工作台' },
-  { key: '/agent-platform/resources', icon: <SettingOutlined />, label: '资源管理' },
-  { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
+  { key: '/experts', icon: <TeamOutlined />, label: '专家团' },
   { key: '/perception', icon: <ApiOutlined />, label: '感知层' },
   { key: '/cognition', icon: <NodeIndexOutlined />, label: '认知层' },
   { key: '/decision', icon: <ThunderboltOutlined />, label: '决策层' },
   { key: '/execution', icon: <SendOutlined />, label: '执行层' },
-  { key: '/application', icon: <AppstoreOutlined />, label: '应用层' },
-  { key: '/projects', icon: <ProjectOutlined />, label: '项目管理' },
-  { key: '/agent-platform/runs', icon: <RobotOutlined />, label: '运行记录' },
-  { key: '/users', icon: <TeamOutlined />, label: '用户管理' },
+  { key: '/users', icon: <SettingOutlined />, label: '用户管理' },
 ];
 
 export default function AppLayout() {
@@ -66,11 +59,11 @@ export default function AppLayout() {
       <Header
         style={{
           height: 56,
-          padding: '0 20px',
-          background: 'rgba(10,15,31,0.7)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          padding: '0 24px',
+          background: 'rgba(250,250,247,0.85)',
+          backdropFilter: 'saturate(180%) blur(12px)',
+          WebkitBackdropFilter: 'saturate(180%) blur(12px)',
+          borderBottom: '1px solid rgba(26,25,24,0.08)',
           display: 'flex',
           alignItems: 'center',
           position: 'sticky',
@@ -82,47 +75,43 @@ export default function AppLayout() {
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'baseline',
             flexShrink: 0,
-            marginRight: 32,
+            marginRight: 40,
             cursor: 'pointer',
+            gap: 10,
           }}
           onClick={() => navigate('/')}
         >
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: 15,
-              color: '#fff',
-              flexShrink: 0,
-              letterSpacing: -0.5,
-            }}
-          >
-            O
-          </div>
           <span
             style={{
-              marginLeft: 10,
-              fontSize: 16,
-              fontWeight: 700,
-              color: '#e8eef5',
-              letterSpacing: -0.3,
+              fontFamily: "'Fraunces', serif",
+              fontSize: 22,
+              fontWeight: 500,
+              color: '#1a1918',
+              letterSpacing: '-0.02em',
+              lineHeight: 1,
+              fontStyle: 'italic',
             }}
           >
             OntoMind
+          </span>
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              color: '#8f8b84',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              transform: 'translateY(-2px)',
+            }}
+          >
+            v0.1
           </span>
         </div>
 
         {/* 横向导航菜单 */}
         <Menu
-          theme="dark"
           mode="horizontal"
           selectedKeys={[selectedKey]}
           items={topMenuItems}
@@ -139,7 +128,16 @@ export default function AppLayout() {
         />
 
         {/* 用户区域 */}
-        <div style={{ flexShrink: 0, marginLeft: 16 }}>
+        <div
+          style={{
+            flexShrink: 0,
+            marginLeft: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          <ZenGodToggle />
           <Dropdown
             menu={{
               items: [
@@ -184,26 +182,35 @@ export default function AppLayout() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
-                padding: '4px 8px',
-                borderRadius: 10,
+                padding: '4px 10px 4px 4px',
+                borderRadius: 999,
                 transition: 'background 0.15s',
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
+                (e.currentTarget.style.background = 'rgba(26,25,24,0.04)')
               }
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <Avatar
-                size={32}
+                size={30}
                 style={{
-                  backgroundColor: 'transparent',
-                  backgroundImage: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                  backgroundColor: '#1a1918',
+                  color: '#fafaf7',
                   flexShrink: 0,
+                  fontFamily: "'Fraunces', serif",
+                  fontWeight: 500,
                 }}
-                icon={<UserOutlined />}
-              />
+              >
+                {(currentUser?.displayName || currentUser?.username || 'U')
+                  .slice(0, 1)
+                  .toUpperCase()}
+              </Avatar>
               <Typography.Text
-                style={{ color: token.colorTextSecondary, fontSize: 13, fontWeight: 500 }}
+                style={{
+                  color: '#35322e',
+                  fontSize: 13,
+                  fontWeight: 500,
+                }}
               >
                 {currentUser?.displayName || currentUser?.username || '用户'}
               </Typography.Text>

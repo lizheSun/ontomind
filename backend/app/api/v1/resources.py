@@ -1,4 +1,4 @@
-"""资源管理 API — ComputeNode(Instance) / Agent / Skill / MCP / AgentRun.
+"""资源管理 API — ComputeNode(Instance) / Agent / Skill / MCP.
 
 T45 naming migration:
     - `/api/v1/resources/instances`      → `/api/v1/resources/compute-nodes`   (308 redirect)
@@ -29,13 +29,11 @@ from app.services.instance_service import ComputeNodeService, InstanceService
 from app.services.agent_service import AgentService
 from app.services.skill_service import SkillService
 from app.services.mcp_service import MCPService
-from app.services.agent_run_service import AgentRunService
 
 from app.schemas.instance_schema import InstanceCreate, InstanceUpdate
 from app.schemas.agent_schema import AgentCreate, AgentUpdate
 from app.schemas.skill_schema import SkillCreate, SkillUpdate, SkillInstallRequest
 from app.schemas.mcp_schema import MCPCreate, MCPUpdate, MCPAutoDiscoverRequest
-from app.schemas.agent_run_schema import AgentRunCreate, AgentRunUpdate
 from app.schemas.credential_schema import CredentialCreate, CredentialUpdate
 from app.services.audit_log_service import AuditLogService
 from app.services.credential_service import CredentialService
@@ -1258,65 +1256,6 @@ def _legacy_delete_mcp_config(mcp_id: int, request: Request):
     return _redirect_308(f"/api/v1/resources/mcps/{mcp_id}", request)
 
 
-
-
-# ==================== AgentRun 运行时 ====================
-
-
-@router.get("/runs")
-def list_runs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    svc = AgentRunService(db)
-    return {"code": "SUCCESS", "data": svc.list(skip, limit)}
-
-
-@router.post("/runs")
-def create_run(data: AgentRunCreate, db: Session = Depends(get_db)):
-    svc = AgentRunService(db)
-    return {"code": "SUCCESS", "message": "启动成功", "data": svc.create(data)}
-
-
-@router.get("/runs/{run_id}")
-def get_run(run_id: int, db: Session = Depends(get_db)):
-    svc = AgentRunService(db)
-    return {"code": "SUCCESS", "data": svc.get(run_id)}
-
-
-@router.put("/runs/{run_id}")
-def update_run(run_id: int, data: AgentRunUpdate, db: Session = Depends(get_db)):
-    svc = AgentRunService(db)
-    return {"code": "SUCCESS", "message": "更新成功", "data": svc.update(run_id, data)}
-
-
-@router.post("/runs/{run_id}/stop")
-def stop_run(run_id: int, db: Session = Depends(get_db)):
-    svc = AgentRunService(db)
-    return {"code": "SUCCESS", "message": "已停止", "data": svc.stop(run_id)}
-
-
-# ==================== WebSocket 实时日志 ====================
-
-
-@router.websocket("/runs/{run_id}/logs")
-async def stream_run_logs(
-    websocket: WebSocket,
-    run_id: int,
-    principal: PlatformPrincipal = Depends(get_websocket_principal),
-):
-    """WebSocket 实时推送 AgentRun 日志"""
-    await websocket.accept()
-    try:
-        from app.db.session import SessionLocal
-        svc = AgentRunService(SessionLocal())
-
-        async for log_entry in svc.stream_logs(run_id, SessionLocal):
-            await websocket.send_text(log_entry)
-
-        await websocket.close()
-    except WebSocketDisconnect:
-        pass
-    except Exception as e:
-        await websocket.send_text(json.dumps({"error": str(e)}))
-        await websocket.close()
 
 
 # ==================== Credential / Audit 安全基线 ====================

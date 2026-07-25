@@ -39,6 +39,18 @@ def node_to_dict(node, connection=None) -> dict:
             "enabled": connection.enabled,
             "has_credential": connection.credential_id is not None,
         }
+    labels = node.labels if isinstance(node.labels, dict) else {}
+    serve = labels.get("opencode_serve")
+    if isinstance(serve, dict):
+        # 不向前端暴露 password
+        data["opencode_serve"] = {
+            "base_url": serve.get("base_url"),
+            "version": serve.get("version"),
+            "healthy": serve.get("healthy"),
+            "pid": serve.get("pid"),
+            "checked_at": serve.get("checked_at"),
+            "started_at": serve.get("started_at"),
+        }
     return data
 
 

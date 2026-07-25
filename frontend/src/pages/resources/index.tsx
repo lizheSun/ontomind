@@ -8,18 +8,16 @@
  * 每一层是一个自包含的可折叠面板，自己拉自己的 API，通过 `onCountChange`
  * 回调把最新条目数上报给统计大盘。折叠状态记忆到 localStorage。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { App, Button, Space, Tooltip, Typography } from 'antd';
 import {
   ApiOutlined,
-  BugOutlined,
   CaretDownOutlined,
   CaretRightOutlined,
   CloudServerOutlined,
   DownloadOutlined,
   LinkOutlined,
-  MonitorOutlined,
   RobotOutlined,
   ThunderboltOutlined,
   ToolOutlined,
@@ -27,7 +25,7 @@ import {
 import { GlassPanel, PageHeader, StatCard } from '../../components/common';
 import { resourcesAPI } from '../../services';
 import { agentLooperService } from '../../services/agentLooper.service';
-import type { AgentRun } from '../../types';
+// (project types removed with cleanup)
 import ComputeNodePanel from './ComputeNodePanel';
 import AgentContainerPanel from './AgentContainerPanel';
 import AgentPanel from './AgentPanel';
@@ -169,8 +167,6 @@ interface Counts {
   agents: number;
   skills: number;
   mcps: number;
-  running: number;
-  errors: number;
 }
 
 const INITIAL_COUNTS: Counts = {
@@ -179,8 +175,6 @@ const INITIAL_COUNTS: Counts = {
   agents: 0,
   skills: 0,
   mcps: 0,
-  running: 0,
-  errors: 0,
 };
 
 export default function ResourcesPage() {
@@ -194,26 +188,6 @@ export default function ResourcesPage() {
   const setCount = useCallback((key: keyof Counts, value: number) => {
     setCounts((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
   }, []);
-
-  // 运行中任务 & 错误数：单独从 runs 端点聚合
-  const loadRunsStats = useCallback(async () => {
-    try {
-      const res = await resourcesAPI.listRuns({ skip: 0, limit: 200 });
-      const runs: AgentRun[] = res.data?.data ?? [];
-      const running = runs.filter(
-        (r) => r.status === 'running' || r.status === 'initializing',
-      ).length;
-      const errors = runs.filter((r) => r.status === 'error').length;
-      setCounts((prev) => ({ ...prev, running, errors }));
-    } catch {
-      /* 静默 — 大盘统计不阻塞页面渲染 */
-    }
-  }, []);
-
-  useEffect(() => {
-    loadRunsStats();
-      setDiscoverVersion(v => v + 1);
-  }, [loadRunsStats]);
 
   // 折叠切换
   const toggleCollapse = useCallback((key: PanelKey) => {
@@ -253,7 +227,6 @@ export default function ResourcesPage() {
         parts.push('Agent 发现失败');
       }
       message.success(parts.join('；'));
-      loadRunsStats();
       setDiscoverVersion(v => v + 1);
     } catch (err) {
       message.error(
@@ -300,20 +273,6 @@ export default function ResourcesPage() {
         label: 'MCP',
         value: counts.mcps,
         accent: 'cyan' as const,
-      },
-      {
-        key: 'running',
-        icon: <MonitorOutlined />,
-        label: '正在运行的任务',
-        value: counts.running,
-        accent: 'blue' as const,
-      },
-      {
-        key: 'errors',
-        icon: <BugOutlined />,
-        label: '发现错误',
-        value: counts.errors,
-        accent: 'rose' as const,
       },
     ],
     [counts],

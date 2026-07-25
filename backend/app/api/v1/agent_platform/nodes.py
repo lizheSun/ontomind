@@ -102,3 +102,33 @@ def confirm_node_host_key(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"code": "SUCCESS", "data": result}
+
+
+@router.post("/nodes/{node_id}/opencode-serve/ensure")
+async def ensure_opencode_serve(
+    node_id: int,
+    db: Session = Depends(get_db),
+    _user_id: int = Depends(get_current_user_id),
+):
+    """发现或拉起节点上的 opencode serve，并持久化 base_url（不含密码回传）。"""
+    if NodeService(db).get(node_id) is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    from app.services.agent_platform.opencode_serve_manager import OpenCodeServeManager
+
+    try:
+        info = await OpenCodeServeManager(db).ensure(node_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "code": "SUCCESS",
+        "data": {
+            "base_url": info.get("base_url"),
+            "version": info.get("version"),
+            "healthy": info.get("healthy"),
+            "pid": info.get("pid"),
+            "checked_at": info.get("checked_at"),
+            "started_at": info.get("started_at"),
+        },
+    }

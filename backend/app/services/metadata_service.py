@@ -2,6 +2,7 @@
 import json
 import re
 import pymysql
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -9,6 +10,21 @@ from app.db.repositories.metadata_repo import MetaTableRepository, MetaColumnRep
 from app.db.repositories.data_source_repo import DataSourceRepository
 from app.db.models.metadata_model import MetaTable, MetaColumn, MetaProfile
 from app.core.exceptions import NotFoundException, BusinessException
+
+
+@dataclass
+class _DsConn:
+    """统一连接信息（兼容 legacy data_sources 与数据平台 dp_data_sources）."""
+    id: int
+    name: str
+    source_type: str
+    host: Optional[str]
+    port: Optional[int]
+    username: Optional[str]
+    password: str
+    database: Optional[str]
+    charset: Optional[str]
+    origin: str  # "legacy" | "dp"
 
 
 class MetadataService:
@@ -19,6 +35,58 @@ class MetadataService:
         self.table_repo = MetaTableRepository(db)
         self.col_repo = MetaColumnRepository(db)
         self.ds_repo = DataSourceRepository(db)
+
+    def _resolve_ds(self, ds_id: int) -> _DsConn:
+        """按 ID 解析数据源：先查 legacy ``data_sources``，再查 ``dp_data_sources``.
+
+        数据平台元数据页使用 dp_data_sources.id；旧感知层仍用 data_sources.id。
+        """
+        ds = self.ds_repo.get_by_id(ds_id)
+        if ds:
+            return _DsConn(
+                id=ds.id,
+                name=ds.name or "",
+                source_type=(ds.source_type or "").lower(),
+                host=ds.host,
+                port=ds.port,
+                username=ds.username,
+                password=ds.password or "",
+                database=ds.database,
+                charset=ds.charset,
+                origin="legacy",
+            )
+
+        from app.db.models.dp_data_source_model import DpDataSource
+        from app.core import crypto
+
+        dp = self.db.query(DpDataSource).filter(DpDataSource.id == ds_id).first()
+        if not dp:
+            raise NotFoundException(f"数据源不存在: {ds_id}")
+
+        password = ""
+        if dp.password_enc:
+            try:
+                password = crypto.decrypt(dp.password_enc)
+            except Exception as e:  # noqa: BLE001
+                raise BusinessException(f"数据源密码解密失败: {e}", code="DECRYPT_FAILED")
+
+        # dialect 优先：mysql_readonly → mysql
+        source_type = (dp.source_type or dp.dialect or "mysql").lower()
+        if source_type == "mysql_readonly":
+            source_type = "mysql"
+
+        return _DsConn(
+            id=dp.id,
+            name=dp.name or "",
+            source_type=source_type,
+            host=dp.host,
+            port=dp.port,
+            username=dp.username,
+            password=password,
+            database=dp.database,
+            charset=dp.charset,
+            origin="dp",
+        )
 
     # ========== 元数据提取 ==========
 
@@ -36,11 +104,9 @@ class MetadataService:
         Returns:
             {"tables_synced": N, "columns_synced": M, "databases": [...], "errors": [...]}
         """
-        ds = self.ds_repo.get_by_id(ds_id)
-        if not ds:
-            raise NotFoundException(f"数据源不存在: {ds_id}")
+        ds = self._resolve_ds(ds_id)
 
-        source_type = ds.source_type.lower()
+        source_type = ds.source_type
         db_drivers = {"mysql", "doris", "clickhouse"}
 
         if source_type not in db_drivers:
@@ -223,11 +289,9 @@ class MetadataService:
 
     def list_databases(self, ds_id: int) -> list[str]:
         """列出数据源上所有可用的数据库."""
-        ds = self.ds_repo.get_by_id(ds_id)
-        if not ds:
-            raise NotFoundException(f"数据源不存在: {ds_id}")
+        ds = self._resolve_ds(ds_id)
 
-        source_type = ds.source_type.lower()
+        source_type = ds.source_type
         if source_type not in ("mysql", "doris", "clickhouse"):
             return [ds.database] if ds.database else []
 
@@ -259,9 +323,7 @@ class MetadataService:
         if not table:
             raise NotFoundException(f"元数据表不存在: {table_id}")
 
-        ds = self.ds_repo.get_by_id(table.datasource_id)
-        if not ds:
-            raise NotFoundException("数据源不存在")
+        ds = self._resolve_ds(table.datasource_id)
 
         try:
             conn = pymysql.connect(
@@ -324,7 +386,7 @@ class MetadataService:
     _RE_URL = re.compile(r"^https?://", re.IGNORECASE)
     _RE_DATE = re.compile(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?)?")
 
-    def _connect_target(self, ds, database: str, timeout: int = 15):
+    def _connect_target(self, ds: _DsConn, database: str, timeout: int = 15):
         """连接数据源中指定库，返回 pymysql 连接（调用方负责关闭）."""
         try:
             return pymysql.connect(
@@ -393,9 +455,7 @@ class MetadataService:
         if not columns:
             return {"message": "表无字段，跳过画像", "profiled": 0}
 
-        ds = self.ds_repo.get_by_id(table.datasource_id)
-        if not ds:
-            raise NotFoundException("数据源不存在")
+        ds = self._resolve_ds(table.datasource_id)
 
         conn = self._connect_target(ds, table.database_name)
         try:

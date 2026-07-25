@@ -623,3 +623,583 @@
 
 ### 跨机续作入口
 详见 [`docs/agent-platform/HANDOFF-2026-07-12.md`](docs/agent-platform/HANDOFF-2026-07-12.md)
+
+---
+
+## 2026-07-24
+
+### Agent: OpenCode Serve/SDK 接入对话工作台
+
+### 目标
+不用 iframe 嵌 OpenCode Web；自研 `/workspace` UI 保持不变，后端将对话主路径从短命 `opencode run` 升级为长驻 `opencode serve` + HTTP/SSE 桥接，能力对齐 Web（多轮会话、流式、审批、取消）。
+
+### 决策
+| 决策点 | 选择 |
+|--------|------|
+| UI | 继续 AgentChatPanel / ChatWorkspacePage，不嵌官方 Web |
+| 协议 | 前端只谈 OntoMind Session/Run/SSE；后端桥接 Serve |
+| SDK | Python `httpx` 调 Serve HTTP/SSE（对齐 CLI 1.17+），不引入 Node `@opencode-ai/sdk` |
+| 会话 | OntoMind `session_metadata.opencode_session_id` 映射远端 session |
+| Fallback | Serve 不可用时回退 `opencode run --format json` |
+| 权限 | v1 默认 `OPENCODE_PERMISSION={"*":"allow"}`；`permission.asked` 仍可落审批并回写 Serve |
+
+### 新增文件
+- `backend/app/services/agent_platform/opencode_serve_manager.py`
+- `backend/app/services/agent_platform/opencode_session_bridge.py`
+
+### 修改文件
+- `backend/app/services/agent_platform/opencode_chat.py` — Serve 优先 stream
+- `backend/app/services/agent_platform/run.py` — meta/checkpoint、取消 abort、审批落库
+- `backend/app/services/agent_platform/approval.py` — 回写 OpenCode permission
+- `backend/app/services/agent_platform/node_service.py` — 暴露 `opencode_serve` 状态（无密码）
+- `backend/app/api/v1/agent_platform/nodes.py` — `POST .../opencode-serve/ensure`
+- `backend/app/core/config.py` — `OPENCODE_SERVE_*` / `OPENCODE_MIN_VERSION`
+- `frontend/.../ChatWorkspacePage.tsx`、`AgentChatPanel.tsx`、`timelineReducer.ts`
+- `AGENTS.md`、`backend/requirements.txt` 注释
+
+### API 端点
+- `POST /api/v1/agent-platform/nodes/{node_id}/opencode-serve/ensure`
+
+### 验证
+- 本机 CLI 1.17.18；ensure → health；bridge prompt「PONG」收到 text 事件 exit=0
+
+## [2026-07-24] 对话工作台切换为 SDK 直连（Wave 1-3 完成）
+
+### 目标
+按用户决策把 `/agent-platform/chat` 对话工作台从"后端 CLI 子进程 + 后端 SSE 桥接"架构，
+彻底切换为"前端直连本机 opencode serve (127.0.0.1:4096)"的 SDK 直连架构。
+- Vendor 起点：opencode `v1.18.4` (commit `49c69c5`)
+- 样式隔离：Tailwind Path B (`preflight:false` + `important:'.oc-scope'`)，Wave 4 启用
+- Dev spawn：`POST /api/v1/opencode/spawn` 仅 `DEBUG=True` 挂载
+- 保留 openclaw / harness 历史模块（AIBIPage / RunsPage / agent_platform 编排层仍在用），
+  只删掉 `agent_runner.py` 一个 CLI wrapper；新对话工作台走全新代码路径。
+
+### 决策
+1. **不 vendor 官方 UI 组件**（Wave 3 交付版）：第一版消息 Part 用 antd 原生渲染
+   （`features/opencode/components/MessagePart.tsx`），足够跑通 text/reasoning/tool/file 四类。
+   Wave 4 再从 opencode `packages/web/src/components/` 移植 15 个组件（≈2500 行）。
+2. **不接 `@opencode-ai/sdk`**：`features/opencode/client.ts` 自己封 fetch，接口签名与 SDK 等价，
+   方便断网 / 私有 registry 场景直接构建。切回 SDK 只需替换 `client.ts` 一个文件。
+3. `useAgentStream` / `AgentEmbedRunner` 保留（AIBIPage 嵌入用），新对话工作台完全不再引用。
+
+### 新增文件
+- `backend/app/api/v1/opencode.py` — 三端点：`/health`、`/spawn`(DEBUG)、`/session-link` (POST+GET)
+- `backend/app/db/models/opencode_session_model.py` — 业务侧 `opencode_sessions` 映射表
+- `frontend/.env.example` — `VITE_OPENCODE_URL=http://127.0.0.1:4096`
+- `frontend/src/features/opencode/`（15 文件）：
+  - `client.ts` — fetch wrapper（health/sessions/messages/prompt/permissions/find/config/agents/commands/mcp/SSE）
+  - `types.ts` — OpenCode 数据模型（OcSession/OcPart/OcMessage/OcPermission/OcEvent…）
+  - `stores/opencodeStore.ts` — Zustand，全局会话/消息/权限/流状态
+  - `hooks/useOpencodeHealth.ts` `useSessions.ts` `useMessages.ts` `useEventStream.ts`
+    `useSendPrompt.ts` `usePermissions.ts` `useAgents.ts` `useCommands.ts` `useFilesMention.ts`
+    `useProviders.ts`
+  - `components/OpencodeGuard.tsx` `HealthBanner.tsx` `ChatWorkspaceShell.tsx`
+    `SessionListSidebar.tsx` `ChatMessageList.tsx` `ChatComposer.tsx` `MessagePart.tsx`
+    `PermissionDialog.tsx`
+  - `vendor/{LICENSE, VENDOR_META.md, styles/opencode.css}` — Wave 4 vendor 目录占位
+
+### 修改文件
+- `backend/app/api/v1/router.py` — include_router `opencode_bridge` under `/opencode`
+- `backend/app/db/models/__init__.py` — 注册 `OpencodeSession`
+- `backend/schema.sql` — 追加 `opencode_sessions` 表 DDL
+- `backend/app/services/requirement_service.py` — Prompt 中的 agent_type 描述从 openclaw/harness/custom 改为 opencode
+- `frontend/src/pages/agent-platform/ChatWorkspacePage.tsx` — 完全重写为 `<OpencodeGuard><ChatWorkspaceShell/></OpencodeGuard>`
+- `AGENTS.md` — 对话工作台架构描述更新
+
+### 删除文件
+- `backend/app/services/agent_runner.py` (377 行) — CLI 子进程 wrapper，彻底废弃
+
+### API 端点
+- `GET  /api/v1/opencode/health`
+- `POST /api/v1/opencode/spawn`（仅 `settings.DEBUG=True` 挂载）
+- `POST /api/v1/opencode/session-link` — 绑定 (opencode_session_id, user_id, project_id)
+- `GET  /api/v1/opencode/session-link` — 列出当前用户绑定过的会话
+
+### 数据库
+- 新表 `opencode_sessions`：主键 + `opencode_session_id` unique + `user_id/project_id` FK + `title`
+- ⚠️ AGENTS.md 已提示：alembic 形同虚设，`app/main.py` 靠 `create_all` 自动建表；
+  上生产前需要手工执行 `backend/schema.sql` 里的 `CREATE TABLE opencode_sessions ...`。
+
+### 前置条件
+开发者需先启动本机 opencode server（否则 Guard 会显示引导页）：
+```bash
+opencode serve --port 4096 --cors http://localhost:5173
+```
+Guard 会通过 `GET /api/v1/opencode/health` 每 5s 探活；也可点击顶部 [一键启动]（仅 DEBUG 模式）。
+
+### 验证
+- `tsc --noEmit` 对新增 `features/opencode` + `ChatWorkspacePage.tsx` 零错误
+- `npm run lint` (oxlint) 对新增文件零 warning
+- `python3 -c "import app.api.v1.opencode; import app.db.models"` 通过
+- 端到端流式对话验证：**留给用户在浏览器手工验证**（需要本机启动 opencode serve 才能跑）
+
+### 未完成（Wave 4-7）
+- Wave 4：Vendor opencode v1.18.4 官方组件 + Tailwind 启用
+- Wave 5：CommandPalette / FileMention / ModelSwitcher / undo-redo-fork 高级功能
+- Wave 6：MCP/Skill/Agent 资源面板改造为 opencode SDK 数据源
+- Wave 7：更详细的启动脚本、README 更新、E2E playwright
+
+## [2026-07-24 后续] 对话工作台 `/` 命令面板 + `@` 文件面板
+
+### 目标
+用户反馈"输入斜杠没有反应"，要求 100% 复刻 opencode web 的交互体验。
+先实现最痛点的两个：`/` 命令面板 + `@` 文件搜索面板。
+
+### 决策
+1. **不搬 SolidJS 源码**：opencode `packages/app/src/components/prompt-input/` 是 SolidJS + Effect
+   (2757 行) + 自研 editor-dom + attachments，硬移植成本高。
+2. **视觉参考 + React 原生实现**：参考 opencode `slash-popover.tsx` 的视觉与交互（深色圆角卡片、
+   ↑↓ 键盘导航、Enter/Tab 选中、Esc 关闭、按 trigger 前 char + 空白规则识别 token）。
+   用 React + antd 复刻，2 个文件 ≈ 320 行。
+3. **触发规则**：光标向前扫到首个 `/` 或 `@`；trigger 前一个字符必须是空白/换行/开头
+   （防止 email @ 干扰）；token 内不能含空白。
+
+### 新增文件
+- `frontend/src/features/opencode/components/SlashPopover.tsx` — `/` 命令面板
+  - 输入 `/` 弹出前 12 条命令；`/x` 前缀过滤
+  - source badge（command/skill/mcp）
+  - 支持键盘 ↑/↓/Enter/Tab/Esc，鼠标点选，选中滚入可视区
+- `frontend/src/features/opencode/components/MentionPopover.tsx` — `@` 文件面板
+  - `@xxx` 触发 `oc.findFiles()`，debounce 200ms
+  - 文件名 + 目录路径双行显示
+  - 同样支持键盘/鼠标
+
+### 修改文件
+- `frontend/src/features/opencode/components/ChatComposer.tsx` — 深度改写
+  - 新增 `detectToken()` 光标 token 识别
+  - 集成 SlashPopover + MentionPopover
+  - popover 打开时，textarea 的 ↑↓Enter Esc Tab 让给 popover 处理
+  - 选中后 `replaceToken()` 精确替换 token 段（保留光标位置）
+  - 底部快捷键提示条加了 `/=命令` `@=文件` badge
+
+### 验证（playwright headless 冒烟）
+- 输入 `/` → 弹出 12 条命令（含 command + skill）✅
+- `/arkcli` 过滤 → 只显示 arkcli 前缀 ✅
+- ↑↓ + Enter → 选中并插入 `/name ` ✅
+- 鼠标 click → 选中 ✅
+- Esc → 关闭 popover ✅
+- 触发规则前 char 校验通过 ✅
+- `@AGENTS` → 弹出对应文件（依赖 opencode server 启动目录，非 bug）✅
+
+### 已知边界
+- `@` 文件搜索的可用文件受限于 `opencode serve` 启动时的 cwd（就是 opencode server 的 project 根）。
+  用户如果在 `/Users/sunleone` 起 server 就只能搜到该目录里的文件；在 ontomind 目录起就能搜到项目文件。
+  这是 opencode server 侧的行为，不是 UI bug。
+- 键盘导航时 popover 里的项目 scrollIntoView 已就位。
+
+### 未完成（后续 Wave）
+- 命令有 `template` / `arguments` 时应弹出参数输入框（当前只是插入 `/name `）
+- Model Switcher（`Cmd+/` 或按钮切模型）
+- Undo/Redo/Fork 消息级操作
+- Markdown + code block 高亮渲染
+- Diff viewer（session.diff 事件）
+
+## [2026-07-24 追加] 对话工作台 UI 重构 — 严格对齐 opencode v1.18.4 视觉
+
+### 目标
+用户反馈"UI 太丑，重新设计简单大方一些，严格参考 opencode web/desktop 模型"。
+彻底换掉 antd Card / Space / Splitter / Tag / List 的堆砌感，用 opencode v1.18.4 的
+`packages/ui/src/v2/styles/*` + `packages/session-ui/src/components/*.css` 里的视觉规范复刻。
+
+### 关键视觉决策 (参考 opencode source)
+- **消息布局**：`user` 右对齐圆角气泡 (max-width `min(82%, 64ch)`, radius 10px, bg `layer-1`)；
+  `assistant` 左对齐纯文本流无气泡，靠位置区分角色（严格照 `message-part.css`）
+- **色板**：完整搬 opencode v2 grey scale (grey-50..1200) + blue accent + state colors，
+  用 CSS `light-dark()` 自动跟随系统
+- **字体**：`-apple-system` sans + `SF Mono` mono，body 14px / line-height 1.65
+- **圆角**：气泡/tool card 10px，popover 12px，按钮 8px，chip 999px（pill）
+- **无 badge 满天飞**：只在 tool status 和 popover source 显示；用户消息不显示 role tag
+- **深浅色主题**：CSS 变量 + `light-dark()`，跟随系统主题
+- **工具卡片**：head (bg layer-2 + 单色 status pill) / body (mono pre with layer-deep bg)
+
+### 新增文件
+- `frontend/src/features/opencode/vendor/styles/opencode.css` — 500 行完整视觉主题
+  - v2 grey scale + blue accent + light-dark 自动切换
+  - `.oc-msg-wrap[data-role]` 用户/助手区分
+  - `.oc-part-tool` opencode 风格工具卡片
+  - `.oc-popover` 浮层 + `oc-pop-in` 动画
+  - `.oc-composer-inner` 圆角边框容器 + focus-within 边框态
+  - 全套 `.oc-btn` / `.oc-icon-btn` / `.oc-hint-chip` / `.oc-session-item`
+
+### 修改文件（视觉全部重写，不再包 antd Card/Space/Splitter/Tag/List）
+- `frontend/src/features/opencode/components/ChatWorkspaceShell.tsx` — 原生 CSS grid 2 栏
+- `frontend/src/features/opencode/components/SessionListSidebar.tsx` — 纯 div + SVG 图标
+- `frontend/src/features/opencode/components/ChatMessageList.tsx` — user 气泡 / assistant 流
+- `frontend/src/features/opencode/components/MessagePart.tsx` — 无 antd 全 css class
+- `frontend/src/features/opencode/components/ChatComposer.tsx` — 圆角容器 + textarea + toolbar
+- `frontend/src/features/opencode/components/SlashPopover.tsx` — opencode-style 命令面板
+- `frontend/src/features/opencode/components/MentionPopover.tsx` — opencode-style 文件面板
+- `frontend/src/features/opencode/components/OpencodeGuard.tsx` — 引导页视觉
+- `frontend/src/features/opencode/index.ts` — 移除已删除的 HealthBanner 导出
+- `frontend/src/pages/agent-platform/ChatWorkspacePage.tsx` — 去掉 antd PageHeader，全屏 shell
+- `frontend/src/main.tsx` — import opencode.css
+
+### 删除文件
+- `frontend/src/features/opencode/components/HealthBanner.tsx` — 引导页并入 OpencodeGuard
+
+### 验证
+- `tsc --noEmit` 零错误
+- `npm run lint` (oxlint) 新增/修改文件零告警
+- Playwright headless: 发消息 → 用户右气泡 + assistant 左流式回复 + PONG 通过 ✅
+- `/init` 弹 opencode-style popover，键盘/鼠标交互全通 ✅
+- Esc 关 popover ✅
+
+## [2026-07-24 又追加] session 清理 + 布局固定 + zen/god 联动
+
+### 三个问题
+1. 用户命令：清理 opencode 里所有 session，只留一个（并期望前端 sidebar 自动同步）
+2. UI 有"松散感"，上下能滚动 → 底部 composer 不固定
+3. Zen/God 模式对新 opencode UI 没差别
+
+### 修复
+**1. Session 清理 & 前端联动**
+- 一次性调 opencode API `DELETE /session/:id` 清 79 条 session，仅留最新一条（60 直删成功 + 19
+  子会话父删时级联；opencode server 侧只剩 1 条）
+- Store 新增 `session.deleted` SSE 事件处理 → 自动 `state.removeSession(sid)`
+- `useSessions` 新增"死绑定自愈"：`activeSessionId` 指向的 session 不在列表时，自动切到第一条或 null
+
+**2. 布局硬修**
+- 原因 1：ChatWorkspacePage 用 `position: absolute + inset:0` 撞了 antd `.ant-layout-content`
+- 原因 2：算高度按 header=64px（实际是 56px）
+- 修复：`useEffect` 挂载期改写 `.ant-layout-content` 的 margin/padding/minHeight/overflow/height
+  为固定值；shell 用严格 `flex column` + 各 slot `flexShrink:0` / `flex:1 minHeight:0`；
+  只有 `.oc-turn` 有 `overflow-y: auto`
+- 结果：`bodyH=900` = `winH`，body 不再滚；`.oc-turn.scrollH=2574 > clientH=670` 只在消息区滚动
+
+**3. Zen/God 模式**
+- `AGENTS.md` 里已有 `html[data-ui-mode="zen|god"]` 全局机制（ZenGodToggle）
+- 在 `opencode.css` 追加规则：
+  - Zen: 隐藏 `.oc-msg-meta` `.oc-hint-chip` `.oc-header-sub` `.oc-composer-toolbar-left`
+  - God: 消息 meta 蓝色高亮，暴露 `.oc-god-only` 元素（如 message id 前缀）
+- `ChatMessageList` 消息底部 meta 加 `<span class="oc-god-only">· msg_id</span>`
+
+### 修改文件
+- `frontend/src/pages/agent-platform/ChatWorkspacePage.tsx` — 完全重写高度算法
+- `frontend/src/features/opencode/components/ChatWorkspaceShell.tsx` — 严格 flex + 各 slot 定
+- `frontend/src/features/opencode/components/ChatMessageList.tsx` — 增加 `.oc-god-only` id 显示
+- `frontend/src/features/opencode/stores/opencodeStore.ts` — 新增 `session.deleted` 事件
+- `frontend/src/features/opencode/hooks/useSessions.ts` — 死绑定自愈
+- `frontend/src/features/opencode/vendor/styles/opencode.css` — `.oc-turn` 严格 100%，zen/god 规则
+
+### 验证 (playwright headless)
+- Sidebar session count = 1 ✅
+- Shell w=1440 h=844 (=viewport 900 - header 56) ✅
+- Sidebar h=844 (与 shell 齐平) ✅
+- Turn scrollH=2574 > clientH=670，只在 turn 滚 ✅
+- body scrollY=0 且 bodyH === winH，外层无滚动 ✅
+- Zen → 隐藏 hint chips；God → 显示 hint chips ✅
+- 发消息 → 1s 收到 PONG ✅
+
+## [2026-07-24 又追加 3] Plan/Build 切换 + Model 选择
+
+### 目标
+用户反馈：composer 没 Plan/Build 模式切换，也不能选/加 Model。这是 opencode 桌面版核心 UX。
+
+### 决策
+- **Agent Mode** = 从 `GET /agent` 过滤 `mode==='primary' && !HIDDEN` 得到 build / plan
+  两个 pill，横排在 composer 左下；对齐 opencode desktop 的 primary agent cycle
+- **Model** = `GET /config/providers` 拿所有 provider + model，pill 在 send 按钮左边，
+  点开 popover 分组展示、带搜索框、点选后 pill 立刻更新
+- **快捷键**：`Cmd/Ctrl + .` 循环 primary agent；`Cmd/Ctrl + M` 打开 model switcher
+- **持久化**：sessionStorage 存 `oc:currentAgent` / `oc:currentModel`
+- **未配 provider**：popover 内引导点击"打开 opencode UI" (`http://127.0.0.1:4096/`)；
+  原生 Add-Provider Dialog 下一 wave 再做
+
+### 新增文件
+- `frontend/src/features/opencode/components/AgentModeSwitcher.tsx` — Plan/Build pill group
+- `frontend/src/features/opencode/components/ModelSwitcher.tsx` — pill + popover + 搜索
+
+### 修改文件
+- `frontend/src/features/opencode/stores/opencodeStore.ts` — 新增
+  `currentAgent` / `currentModel` state、`setCurrentAgent()` / `setCurrentModel()` 及
+  sessionStorage 持久化（load/save）
+- `frontend/src/features/opencode/hooks/useSendPrompt.ts` — 发消息时读取 store
+  currentAgent + currentModel，注入 `body.agent` / `body.model`
+- `frontend/src/features/opencode/hooks/useProviders.ts` — 重写返回结构，展平 provider.models
+  从 Record→ProviderModelInfo[]
+- `frontend/src/features/opencode/client.ts` — `listProviders` 返回类型对齐 v1.17 真实 shape
+- `frontend/src/features/opencode/components/ChatComposer.tsx` — toolbar-left 挂
+  `<AgentModeSwitcher/>`，toolbar-right 挂 `<ModelSwitcher openTrigger/>`；全局监听
+  `Cmd/Ctrl+.` 循环切 primary agent，`Cmd/Ctrl+M` 弹模型面板
+- `frontend/src/features/opencode/vendor/styles/opencode.css` — 新增 `.oc-pill`
+  `.oc-mode-group` `.oc-mode-pill` `.oc-model-popover` 全套视觉；zen 只隐藏 hint chips，
+  不隐藏 mode/model switcher（核心 UX）
+- `frontend/src/features/opencode/index.ts` — 导出新组件
+
+### 验证（Playwright）
+- Build + Plan pill 渲染，默认 Build 高亮 ✅
+- 点击 / Cmd+. 快捷键切换 ✅
+- Model pill 显示 `provider/modelID`，Cmd+M 打开面板 ✅
+- 搜索 "gpt-5" 命中 12 个模型（跨 provider）✅
+- 选中后 pill 更新，发消息 body 正确携带 `agent: "plan"` + `model: {...}` ✅
+
+### 未做（下一 wave）
+- 原生 Add Provider Dialog（含 API Key / OAuth / custom endpoint）—— 现在通过跳转
+  `http://127.0.0.1:4096/` 兜底
+- Model popover 的键盘 ↑↓ 高亮 & Enter 选中（现在只支持鼠标点选和搜索）
+
+## [2026-07-24 又追加 4] 全站 UI 重设计 — Editorial Light Theme
+
+### 目标
+用户："重新设计整个项目的 UI，浅色为主，要高级、整洁、简单"。
+
+### 设计定位
+**editorial minimal**（编辑排版级极简）:
+- 象牙白 `#fafaf7` (paper) 主背景 + 深墨黛 `#1a1918` (ink) 主文字
+- 单色 accent：靛蓝墨水 `#3b52af`（indigo ink），代替以前的青蓝渐变
+- Fraunces (serif italic) 做 display / 标题；Geist Sans 做 body；JetBrains Mono 做 code
+- 边框全用 hairline `rgba(26,25,24,0.06~0.10)`；阴影极其克制（无 glow）
+- Card / Modal / Popover 都平白无渐变，靠精确排版 + 空间讲话
+- Primary Button 是**纯墨黛**背景 + 白字，不是蓝色渐变（editorial 惯例）
+
+### 修改文件
+- `frontend/src/styles/global.css` — 全面重写：
+  - 新 token（paper-00..04 / ink-100..10 / accent），保留 legacy 变量映射以兼容既有页面
+  - Fraunces + Geist + JetBrains Mono 三字体链
+  - Antd overrides 全面浅色：Layout / Menu / Card / Table / Tag / Button / Input / Select / Modal /
+    Tabs / Statistic / Pagination / Dropdown / Message / Tooltip / Alert / Splitter / Popover /
+    Radio / Checkbox / Switch / Typography
+  - `.bg-grid` 由深色 dot grid 改为极淡米色 dot 底噪
+- `frontend/src/App.tsx` — antd `algorithm: theme.defaultAlgorithm`；token 全线切浅
+- `frontend/src/components/layout/AppLayout.tsx` — Header 淡化 + Logo 改 Fraunces italic
+  "OntoMind" + mono "v0.1"；Avatar 改为墨黛 solid（不是渐变）
+- `frontend/src/features/opencode/vendor/styles/opencode.css` — 移除 `light-dark()`，硬编码浅色
+  scheme；改用 warm-ivory grey scale 替代冷灰；header + sidebar title 改为 Fraunces italic
+- 用户消息气泡：`bg-layer-2` + hairline border（不再纯 solid）
+- `.oc-header-title` 从 13px sans 改为 18px Fraunces italic
+
+### 验证 (Playwright)
+- body bg = `rgb(250,250,247)` 米白 ✅
+- body color = `rgb(26,25,24)` 墨黛 ✅
+- header bg = `rgba(250,250,247,0.85)` + blur ✅
+- font-family 首选 Geist（浏览器已加载 Google Fonts）✅
+- 发消息 → 回复 ping 正常 ✅
+- tsc + oxlint 零错误 ✅
+
+### 视觉对比
+- Before: 深色 (`#060b14`) + 蓝紫渐变 logo + Plus Jakarta Sans + 玻璃卡片阴影发光
+- After: 象牙白 (`#fafaf7`) + Fraunces italic serif logo + hairline border + editorial 排版
+
+### 未做（可后续）
+- 其他页面 (Login / Dashboard / Resources 各详情页) 使用 legacy 变量已自动继承新色；
+  但视觉密度可能还需 case-by-case 抛光
+- Dark mode 切换（当前默认强制浅色）
+- Google Fonts 加载失败降级样式（当前直接回退到 system-ui）
+
+## [2026-07-24 又追加 5] Settings 面板（Shell / 推理摘要 / 工具展开 / 新版布局）
+
+### 目标
+用户："opencode web 还有这些设置" —— Shell 选择、显示推理摘要、展开 shell 工具部分、
+展开编辑工具部分、新版布局。
+
+### 分工
+- **Shell**：opencode server 侧行为，通过 `PATCH /config` 写；auto → 传 `null`
+- 其它 4 项：纯前端偏好（localStorage `oc:ui-settings`），影响 UI 层渲染逻辑
+
+### 新增文件
+- `frontend/src/features/opencode/hooks/useOcSettings.ts` — 偏好 state（load/save/CustomEvent 广播）+
+  updateShell 顺带 PATCH /config
+- `frontend/src/features/opencode/components/SettingsDialog.tsx` — Modal 面板，Editorial Light
+  视觉：Fraunces italic 标题、hairline row 分隔、shell 分段控件、原生 antd Switch
+
+### 修改文件
+- `frontend/src/features/opencode/client.ts` — `patchConfig()` API
+- `frontend/src/features/opencode/types.ts` — `OcConfig.shell?: string | null`
+- `frontend/src/features/opencode/components/MessagePart.tsx` — reasoning part 遵循
+  `showReasoningSummaries`；tool part 按 tool name 判断是否为 shell / edit 类，配合
+  `expandShellTool` / `expandEditTool` 决定默认展开态；用户可点击 head 折叠
+- `frontend/src/features/opencode/components/ChatWorkspaceShell.tsx` — Header 右侧新增齿轮按钮，
+  点开 SettingsDialog
+- `frontend/src/features/opencode/index.ts` — 导出 SettingsDialog
+
+### 验证（Playwright）
+- 齿轮按钮存在 ✅
+- 点击弹出 Modal，5 个设置行 ✅
+- 点 "zsh" → PATCH /config 200 返回 `{shell: zsh}`（opencode v1.17.18 不持久化 shell 字段到 GET
+  响应，是 server 版本行为，UI 层已正确调用）✅
+- Toggle "显示推理摘要" 从 false → true ✅
+- localStorage 保存: `{"shell":"zsh","showReasoningSummaries":true,...}` ✅
+- 关掉 Modal 再打开，Toggle 保持 true ✅
+- 点 "自动" → PATCH `{shell:null}` ✅
+- tsc + lint 零错误 ✅
+
+### 已知问题（非本次引入）
+- 有 React 警告 "Cannot update a component while rendering" 来自 SSE store 事件，不阻塞使用，
+  后续可用 `queueMicrotask` 或 `useSyncExternalStore` 优化
+
+## [2026-07-24 大清理] 删除 4 个页面 + 所有依赖（前后端 + DB）
+
+### 目标
+用户要求删除：仪表盘、应用层、项目管理、运行记录 4 个页面，**前后端全部清干净**。
+
+### 5 项决策（均已确认）
+1. 后端 agent_platform 编排层（run/approval/session/version/migration/opencode_chat/serve_manager/session_bridge）连同前端 RunsPage 一起清；保留 agents/deployments/nodes/discoveries
+2. `opencode_sessions.project_id` 字段整个删（配合 projects 表 drop）
+3. `resources.py::/runs*` 端点 + AgentRun model/service/repo/schema 一起删
+4. AppLayout 顶部菜单去 4 项，剩 workspace / resources / perception / cognition / decision / execution / users
+5. agent_looper/test.py::/jobs* + AgentJobService + AgentRunJob + AgentJobPage 一起删
+
+### 前端删除（约 15 文件 / 2000 行）
+- 页面：`pages/dashboard/` `pages/application/` `pages/projects/`（整目录）
+- 页面：`pages/agent-platform/RunsPage.tsx` `timelineReducer.ts` `__tests__/`
+- 隐藏页：`pages/resources/AgentJobPage.tsx`（无路由，死代码）
+- 组件：`components/common/AgentEmbedRunner.tsx` + `__tests__/AgentEmbedRunner.test.tsx`
+- Hooks / Store：`hooks/useAgentStream.ts` `stores/agentPlatformStore.ts`
+
+### 前端修改
+- `services/agentPlatform.service.ts` — 重写为薄壳，只保留 agents / nodes / discoveries / deployments 相关方法（~130 行）
+- `services/index.ts` — 删 `projectsAPI` / `applicationAPI` block
+- `types/index.ts` — 删 `Project` `Requirement` `Plan` `Task` `KanbanData` `AgentRun` 5 个 interface
+- `App.tsx` — 移 4 个 imports + 4 个 route
+- `components/layout/AppLayout.tsx` — `topMenuItems` 移 4 项 + 移 icon imports
+- `components/common/CmdKOmnibar.tsx::buildNavItems` — 移 4 项 nav + "新建项目" 快捷操作
+- `components/common/index.ts` — 移 AgentEmbedRunner 导出
+- `pages/agent-platform/index.ts` — 移 RunsPage / timelineReducer 导出
+- `pages/resources/AgentDetailPage.tsx` — 删 "Job 历史" tab + AgentRun / runColumns 相关（150+ 行）
+- `pages/resources/index.tsx` — 删 running/errors 计数卡片 + `loadRunsStats`
+- `tests/visual/screenshots.spec.ts` — 移 dashboard 断言
+
+### 后端删除（约 30 文件 / 4000 行）
+- API：`api/v1/application.py` `projects.py`；`api/v1/agent_platform/runs.py, approvals.py, sessions.py`
+- Services：`agent_run_service.py` `agent_job_service.py` `agent_loop_service.py`
+  `project_service.py` `requirement_service.py`
+- Services：`agent_platform/run.py, approval.py, session.py, migration.py,
+  opencode_chat.py, opencode_serve_manager.py, opencode_session_bridge.py`
+- Repos：`agent_run_repo.py, project_repo.py, requirement_repo.py, plan_repo.py, task_repo.py`
+- Models：`agent_run_model.py, agent_run_job_model.py, project_model.py,
+  requirement_model.py, plan_model.py, task_model.py`
+- Schemas：`agent_run_schema.py, agent_loop_schema.py`
+- Tests：`tests/data_platform/test_agent_loop.py, test_agent_jobs.py, agent_platform/test_agent_platform.py`
+
+### 后端修改
+- `api/v1/router.py` — 移除 projects / application 的 include_router；改为直接 `from app.api.v1 import ...`（不含删除模块）
+- `api/v1/__init__.py` — 兼容 shim（`from app.api.v1.router import api_router`）
+- `api/v1/resources.py` — 删掉 AgentRun 端点段（`/runs*` GET/POST/PUT + stop + WebSocket）+ 相关 imports
+- `api/v1/agent_platform/__init__.py` — 只保留 nodes/discoveries/agents/deployments 4 个 sub-router
+- `api/v1/agent_platform/agents.py` — 删掉 `POST /legacy/{id}/migrate` 与 `LegacyAgentMigrationService` 引用
+- `api/v1/agent_looper/test.py` — 删 `/jobs*` 端点段（190 行）+ `AgentJobService` import
+- `db/models/agent_platform_model.py` — 只保留 `AgentVersion` + `AgentDeployment`；删掉
+  Session/Message/RunStep/RunEvent/ToolApproval/EvalSuite/EvalCase 7 个模型
+- `db/models/opencode_session_model.py` — 删 `project_id` 字段（配合 projects 表删）
+- `db/models/__init__.py` — 移除对应 imports 与 `__all__`
+- `tests/data_platform/test_data_model.py` — 删 AgentRunJob 相关断言，保留其余 11 张核心表
+
+### 数据库
+- **DROP**（14 张）：tasks / plans / requirements / eval_cases / eval_suites /
+  agent_tool_approvals / agent_run_events / agent_run_steps / agent_messages /
+  agent_sessions / agent_run_jobs / agent_runs / projects（+ opencode_sessions 的 FK to projects）
+- opencode_sessions 移除 `project_id` 列
+- 剩余 54 张表
+
+### schema.sql 同步
+- 删掉 agent_runs / projects / requirements / plans / tasks 5 段 DDL
+- opencode_sessions DDL 去掉 project_id 字段 + fk_ocsession_project 约束
+
+### 验证
+- Playwright headless：
+  - Header 菜单只剩 7 项（对话工作台 / 资源管理 / 感知层 / 认知层 / 决策层 / 执行层 / 用户管理）✅
+  - `/dashboard` / `/application` / `/projects` / `/agent-platform/runs` 全部 redirect 到 `/workspace` ✅
+  - Workspace 发送 ping → 收到回复 ✅
+- Backend `from app.main import app` 成功，203 个 route
+- `tsc --noEmit` — 我改动的文件零错误（存量老代码错误未管）
+- `npm run lint` — 我改动的文件零告警
+
+## [2026-07-24 大重构] 专家团（Expert Team）+ opencode 原生 @agent 路由
+
+### 目标
+用户要求："删除资源管理页面重建，改名'专家团'"；
+1 个专家 = 一套定制好的 opencode agent 配置；
+在线状态可控（启动/关闭）；对话工作台可选取。
+
+### 核心架构决策
+1. **Expert = opencode agent 定义**：创建/编辑专家时同步写入 `~/.config/opencode/agent/{slug}.md`
+   (YAML frontmatter + Markdown body)；opencode 启动时 discover 该 agent
+2. **对话工作台走 opencode 原生 `@agent` 路由**（不用 system prompt 伪造）：
+   - ExpertPicker 选中 → `store.currentAgent = expert.slug`
+   - `useSendPrompt` 里 body.agent 直接是 slug（不带 @）
+   - `@popover` 里选 agent → 插入 `@slug` 到 textarea
+3. **状态管理**：online = agent md 文件存在；offline = 文件不存在
+4. **Docker 保留位**：`image` 字段已建，`ExpertService._start_container` mock 逻辑就位，
+   等真正需要多实例隔离时再启用
+
+### 后端新增
+- `backend/app/db/models/expert_model.py` — Expert model：
+  role / sop / provider / model / skills / mcps / tools / agent_file_path / status
+- `backend/app/db/repositories/expert_repo.py` — Expert repo（list_ordered / get_by_slug / list_online）
+- `backend/app/schemas/expert_schema.py` — Pydantic schema
+- `backend/app/services/expert_service.py` — Expert service:
+  - `_write_agent_md(e)` 生成 opencode agent MD 文件
+  - `_remove_agent_md(e)` 删除对应文件
+  - CRUD / start / stop / seed 4 个内置专家
+  - 4 个内置专家 seed：data-analyst / frontend / backend / product-manager
+- `backend/app/api/v1/experts.py` — /api/v1/experts 完整 CRUD + start/stop + seed
+
+### 前端新增
+- `frontend/src/services/expert.service.ts` — API 客户端
+- `frontend/src/pages/experts/ExpertTeamPage.tsx` — 专家团管理页（卡片网格 + 启停 + 编辑抽屉）
+  - 结构化表单：基本信息 / 角色 & 工作流 / 模型 / Skills-MCPs-Tools / 部署端点
+  - Skills 支持从 20+ 常用 opencode skill 里选 + 自定义 tag
+  - 工具权限勾选（read/write/bash/todo）
+- `frontend/src/features/opencode/components/ExpertPicker.tsx` — Header 专家下拉
+  - 显示当前 agent（默认 Build）
+  - 列出所有在线专家；未被 opencode discover 的显示"未加载"提示
+  - 选中 → 设置 currentAgent + currentModel + 新建专属会话（标题带 emoji）
+
+### 前端修改
+- `App.tsx` — 新增 `/experts` 路由；`/agent-platform/resources` redirect 到 `/experts`
+- `AppLayout.tsx` — 菜单"资源管理"改为"专家团"
+- `CmdKOmnibar.tsx` — 快捷跳转项更新
+- `MentionPopover.tsx` — 扩展为 agents + files 两类结果：
+  - agent 项标 `agent` badge，前缀 `@`
+  - file 项标 `file` badge
+  - opencode `/agent` API 拉取所有已 discover 的 agent
+- `ChatWorkspaceShell.tsx` — Header 加入 ExpertPicker（AgentModeSwitcher 左侧）
+- `stores/opencodeStore.ts` — 新增 currentExpertId / currentSystemPrompt state
+  （后来废弃 system prompt 用法，但字段保留兼容）
+- `Login.tsx` — 从深色改成 editorial light 主题（跟 workspace 一致）
+
+### 数据库
+- 新表 `experts`（在 `schema.sql` 添加）
+- 字段：id / name / slug (unique) / avatar / description / role / sop /
+  provider / model / temperature / skills (JSON) / mcps (JSON) / tools (JSON) /
+  image / container_name / container_id / host_port / host / port / status /
+  agent_file_path / started_at / stopped_at / error_message / sort_order
+
+## [2026-07-24 后续 bug 修复]
+
+### 1. 保存专家 500 错误
+- 根因：`ExpertService` 用 `with self.db.begin()` 嵌套事务，FastAPI 的 `get_db` 已开事务
+- 修：所有 create/update/delete/start/stop 改成 `flush()` + `commit()`，无 `begin()` 嵌套
+
+### 2. 选专家后对话不知道自己身份
+- 根因 1：切专家时用的是**已有 session**，opencode `system` 只在首条消息生效
+- 修 1：ExpertPicker.select() 自动 `oc.createSession()` 新建专属会话
+- 根因 2（更本质）：用 `system` prompt 是绕路，应该用 opencode 原生 `@agent` 路由
+- 修 2：改为 `store.currentAgent = expert.slug`；`useSendPrompt` 去掉 `system` 参数
+
+### 3. @ popover 增强
+- MentionPopover 从 files-only 扩为 agents + files
+- opencode `GET /agent` 拉取已 discover 的 agent（含 build/plan/product-manager
+  及所有 seed 的专家）
+- 选中 → 直接插入 `@slug` 到 textarea，opencode 原生解析
+
+### 4. 双 @ bug
+- 现象：`@` 后选择插入 → 变成 `@@data-analyst`
+- 根因：某些场景（stale token state / IME 交互）导致 `token.triggerStart`
+  位置错位，`before.slice(0, triggerStart)` 保留了原 `@`
+- 修：`replaceToken()` 加防御 —— 如果 `replacement` 首字符是 `@`/`/` 且 `before`
+  末尾也是同一字符，吞掉 `before` 末尾那个字符
+
+### 5. opencode agent 热加载限制（架构注意）
+- opencode server 只在启动时扫描 `~/.config/opencode/agent/*.md`
+- 新增/编辑专家后需**重启 opencode** 才能通过 `@agent` 路由
+- UI 应对：ExpertPicker 里未 discover 的专家灰显 + "未加载"tag + 点击时提示重启
+
+### 验证（Playwright）
+- 保存专家：`PATCH /api/v1/experts/1` 返回 SUCCESS ✅
+- @pro Enter → `@product-manager ` (1 个 @) ✅
+- @ Enter → `@build ` ✅
+- hello @pro Enter → `hello @product-manager ` ✅
+- 鼠标点选 → 同样 1 个 @ ✅
+- 发送 `@product-manager who are you in 3 words` → 回复 "Product requirement doc." ✅
+  (opencode 原生 subagent 路由生效)

@@ -11,7 +11,6 @@ from app.schemas.agent_platform_schema import (
     VersionLoadRequest,
 )
 from app.services.agent_platform.agent import AgentService
-from app.services.agent_platform.migration import LegacyAgentMigrationService
 from app.services.agent_platform.version import VersionService, _row
 
 router = APIRouter()
@@ -19,15 +18,6 @@ router = APIRouter()
 
 def _ok(data, message: str = "操作成功"):
     return {"code": "SUCCESS", "message": message, "data": data}
-
-
-@router.post("/legacy/{legacy_config_id}/migrate")
-def migrate_legacy_agent(
-    legacy_config_id: int,
-    user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-):
-    return _ok(LegacyAgentMigrationService(db).migrate(legacy_config_id, user_id))
 
 
 @router.post("")

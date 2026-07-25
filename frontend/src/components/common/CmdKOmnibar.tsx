@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Input, Modal, Tag, Typography } from 'antd';
 import {
-  AppstoreOutlined,
   ApiOutlined,
-  DashboardOutlined,
   DatabaseOutlined,
   LogoutOutlined,
   NodeIndexOutlined,
-  ProjectOutlined,
   ReadOutlined,
   RobotOutlined,
   SearchOutlined,
@@ -42,16 +39,6 @@ interface OmnibarItem {
  */
 function buildNavItems(navigate: (to: string) => void): OmnibarItem[] {
   return [
-    {
-      id: 'nav:/dashboard',
-      label: '仪表盘',
-      hint: '/dashboard',
-      keywords: ['dashboard', 'home', '首页', 'shouye'],
-      icon: <DashboardOutlined />,
-      mode: 'nav',
-      scope: '/dashboard',
-      run: () => navigate('/dashboard'),
-    },
     {
       id: 'nav:/perception',
       label: '感知层',
@@ -93,26 +80,6 @@ function buildNavItems(navigate: (to: string) => void): OmnibarItem[] {
       run: () => navigate('/execution'),
     },
     {
-      id: 'nav:/application',
-      label: '应用层',
-      hint: '/application',
-      keywords: ['application', '应用', 'yingyong'],
-      icon: <AppstoreOutlined />,
-      mode: 'nav',
-      scope: '/application',
-      run: () => navigate('/application'),
-    },
-    {
-      id: 'nav:/projects',
-      label: '项目管理',
-      hint: '/projects',
-      keywords: ['projects', '项目', 'xiangmu'],
-      icon: <ProjectOutlined />,
-      mode: 'nav',
-      scope: '/projects',
-      run: () => navigate('/projects'),
-    },
-    {
       id: 'nav:/workspace',
       label: '对话工作台',
       hint: '/workspace',
@@ -123,14 +90,14 @@ function buildNavItems(navigate: (to: string) => void): OmnibarItem[] {
       run: () => navigate('/workspace'),
     },
     {
-      id: 'nav:/agent-platform/resources',
-      label: '资源管理',
-      hint: '/agent-platform/resources',
-      keywords: ['resources', '资源', 'ziyuan', 'agent', 'skill', 'mcp', 'node', 'ssh'],
-      icon: <SettingOutlined />,
+id: 'nav:/experts',
+      label: '专家团',
+      hint: '/experts',
+      keywords: ['experts', '专家', 'zhuantuan'],
+      icon: <RobotOutlined />,
       mode: 'nav',
-      scope: '/agent-platform',
-      run: () => navigate('/agent-platform/resources'),
+      scope: '/experts',
+      run: () => navigate('/experts'),
     },
     {
       id: 'nav:/agent-platform/runs',
@@ -318,15 +285,6 @@ function buildActionItems(
       icon: <SearchOutlined />,
       mode: 'act',
       run: () => navigate('/knowledge-base/search'),
-    },
-    {
-      id: 'act:new-project',
-      label: '新建项目',
-      hint: '/projects',
-      keywords: ['new', 'project', '新建', '项目'],
-      icon: <ProjectOutlined />,
-      mode: 'act',
-      run: () => navigate('/projects'),
     },
   ];
 }

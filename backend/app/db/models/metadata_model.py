@@ -13,7 +13,7 @@ class MetaTable(BaseModel):
         Index("ix_meta_tables_ds_db_table", "datasource_id", "database_name", "table_name", unique=True),
     )
 
-    datasource_id = Column(Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=False, comment="关联数据源 ID")
+    datasource_id = Column(Integer, nullable=False, comment="关联数据源 ID（legacy data_sources 或 dp_data_sources）")
     database_name = Column(String(128), nullable=False, comment="库名/schema 名")
     table_name = Column(String(256), nullable=False, comment="表名")
     table_type = Column(String(32), default="table", comment="类型: table / view / materialized_view")
@@ -140,7 +140,7 @@ class MetaProfile(BaseModel):
         Index("ix_meta_profiles_ds", "datasource_id"),
     )
 
-    datasource_id = Column(Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=False, comment="关联数据源 ID")
+    datasource_id = Column(Integer, nullable=False, comment="关联数据源 ID（legacy data_sources 或 dp_data_sources）")
     meta_table_id = Column(Integer, ForeignKey("meta_tables.id", ondelete="CASCADE"), nullable=False, comment="关联表元数据 ID")
     meta_column_id = Column(Integer, ForeignKey("meta_columns.id", ondelete="CASCADE"), nullable=False, comment="关联字段元数据 ID")
 

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Tooltip } from 'antd';
-import { EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 
 /**
  * T58 · Zen / God dual mode + progressive disclosure.
@@ -137,7 +136,8 @@ export function useProgressiveDisclosure(
 
 export interface ZenGodToggleProps {
   /**
-   * 是否以固定位置浮动挂载（默认 true）。false 时以内联按钮渲染，便于放进 HeaderBar。
+   * 是否以固定位置浮动挂载（默认 false — 现在推荐挂进 Header）.
+   * true 时会 fixed 到右上角；建议只在无 Header 场景使用.
    */
   floating?: boolean;
   /**
@@ -151,16 +151,41 @@ export interface ZenGodToggleProps {
 }
 
 /**
- * 全局 Zen/God 切换按钮：眼睛图标。
- * Zen=闭眼 (EyeInvisibleOutlined)，God=睁眼 (EyeOutlined)。
+ * 调色板 · 极简 line icon (editorial):
+ * 半圆 palette 主体 + 三个色点 + 拇指凹陷.
+ */
+function IconPalette({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 1.5c-3.6 0-6.5 2.6-6.5 5.8 0 3.2 2.5 5.7 5.4 5.7.7 0 1.1-.5 1.1-1 0-.3-.2-.6-.5-.9-.3-.3-.5-.6-.5-1 0-.6.5-1 1.1-1h1.5c2.4 0 4.4-1.7 4.4-4C14 3.8 11.3 1.5 8 1.5z" />
+      <circle cx="4.8" cy="6.2" r="0.9" fill={filled ? 'currentColor' : 'none'} />
+      <circle cx="8" cy="4.4" r="0.9" fill={filled ? 'currentColor' : 'none'} />
+      <circle cx="11.2" cy="6.2" r="0.9" fill={filled ? 'currentColor' : 'none'} />
+    </svg>
+  );
+}
+
+/**
+ * 全局 Zen/God 切换按钮。
+ * Zen (line-only palette) ↔ God (filled palette dots).
  */
 export function ZenGodToggle(props: ZenGodToggleProps = {}): React.ReactElement {
-  const { floating = true, style, ariaLabelPrefix = '界面模式' } = props;
+  const { floating = false, style, ariaLabelPrefix = '界面模式' } = props;
   const [mode, setMode] = useUIMode();
 
   const isGod = mode === 'god';
   const nextMode: UIMode = isGod ? 'zen' : 'god';
-  const label = isGod ? '当前 God 模式，点击切换到 Zen' : '当前 Zen 模式，点击切换到 God';
+  const label = isGod ? 'God 模式 · 点击切至 Zen' : 'Zen 模式 · 点击切至 God';
 
   const button = (
     <Tooltip title={label} placement="bottomRight">
@@ -170,7 +195,7 @@ export function ZenGodToggle(props: ZenGodToggleProps = {}): React.ReactElement 
         aria-label={`${ariaLabelPrefix}: ${isGod ? 'God' : 'Zen'}`}
         aria-pressed={isGod}
         data-ui-mode-toggle={mode}
-        icon={isGod ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+        icon={<IconPalette filled={isGod} />}
         onClick={() => setMode(nextMode)}
       />
     </Tooltip>

@@ -194,137 +194,67 @@ CREATE TABLE `mcp_configs` (
   KEY `idx_mcp_type` (`mcp_type`),
   KEY `idx_is_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='MCP 工具/服务配置表';
-
-
 -- ============================================================
--- 8. AgentRun 运行实例表
+-- 8. OpenCode 对话工作台业务映射表
 -- ============================================================
-DROP TABLE IF EXISTS `agent_runs`;
-CREATE TABLE `agent_runs` (
-  `id`              INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `agent_id`        INT           DEFAULT NULL COMMENT '关联 Agent ID',
-  `instance_id`     INT           DEFAULT NULL COMMENT '关联 Instance ID',
-  `run_name`        VARCHAR(128)  NOT NULL COMMENT '运行实例名称',
-  `status`          VARCHAR(20)   DEFAULT 'initializing' COMMENT '状态: initializing / running / error / stopped',
-  `container_id`    VARCHAR(128)  DEFAULT NULL COMMENT 'Docker 容器 ID',
-  `pid`             INT           DEFAULT NULL COMMENT '进程 PID',
-  `config_override` JSON          DEFAULT NULL COMMENT '运行时配置覆盖',
-  `env_override`    JSON          DEFAULT NULL COMMENT '运行时环境变量覆盖',
-  `started_at`      DATETIME      DEFAULT NULL COMMENT '启动时间',
-  `stopped_at`      DATETIME      DEFAULT NULL COMMENT '停止时间',
-  `exit_code`       INT           DEFAULT NULL COMMENT '退出码',
-  `error_message`   TEXT          DEFAULT NULL COMMENT '错误信息',
-  `log_offset`      INT           DEFAULT 0 COMMENT '日志偏移量',
-  `created_at`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at`      DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+-- 前端直连本机 opencode serve 拿到 session.id 后，通过
+-- POST /api/v1/opencode/session-link 把 (opencode_session_id, user_id) 落到本表，
+-- 供业务审计使用。
+-- ⚠️ 本表不是 opencode 会话数据源，opencode session 元数据/消息以 opencode server 为准。
+DROP TABLE IF EXISTS `opencode_sessions`;
+CREATE TABLE `opencode_sessions` (
+  `id`                    INT          NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `opencode_session_id`   VARCHAR(64)  NOT NULL COMMENT 'opencode server 侧的 session.id',
+  `user_id`               INT          NOT NULL COMMENT '业务侧用户',
+  `title`                 VARCHAR(255) DEFAULT NULL COMMENT '会话标题（冗余，便于列表查询）',
+  `created_at`            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`            DATETIME     DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  KEY `idx_agent_id` (`agent_id`),
-  KEY `idx_instance_id` (`instance_id`),
+  UNIQUE KEY `uq_opencode_session_id` (`opencode_session_id`),
+  KEY `idx_user_id` (`user_id`),
+  CONSTRAINT `fk_ocsession_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='OpenCode 对话工作台业务映射';
+
+
+-- ============================================================
+-- 9. 专家团（Expert Team）
+-- ============================================================
+-- 一个专家 = 一份 opencode agent 定义（~/.config/opencode/agent/{slug}.md）
+-- + 模型 / Skill / MCP / SOP 配置。
+-- 启动时生成 agent.md 文件；opencode 重启后自动 discover 该 agent。
+-- 前端 ExpertPicker 选中后注入 role+sop 为 system prompt，用 build agent 发消息。
+DROP TABLE IF EXISTS `experts`;
+CREATE TABLE `experts` (
+  `id`                    INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `name`                  VARCHAR(128)  NOT NULL COMMENT '专家显示名称',
+  `slug`                  VARCHAR(64)   NOT NULL COMMENT '唯一标识符 / opencode agent 名',
+  `avatar`                VARCHAR(256)  DEFAULT NULL COMMENT 'emoji 或 URL',
+  `description`           TEXT          DEFAULT NULL COMMENT '一句话描述',
+  `role`                  TEXT          DEFAULT NULL COMMENT '角色定位（写进 agent md）',
+  `sop`                   TEXT          DEFAULT NULL COMMENT 'SOP 工作流程',
+  `provider`              VARCHAR(64)   DEFAULT NULL COMMENT 'opencode providerID',
+  `model`                 VARCHAR(128)  DEFAULT NULL COMMENT 'opencode modelID',
+  `temperature`           VARCHAR(16)   DEFAULT NULL COMMENT '采样温度',
+  `skills`                JSON          NOT NULL COMMENT 'Skill 名称数组',
+  `mcps`                  JSON          NOT NULL COMMENT 'MCP 名称数组',
+  `tools`                 JSON          NOT NULL COMMENT '工具开关 {read,write,bash,todo}',
+  `image`                 VARCHAR(256)  DEFAULT NULL COMMENT 'Docker 镜像名（可选）',
+  `container_name`        VARCHAR(128)  DEFAULT NULL COMMENT 'Docker 容器名',
+  `container_id`          VARCHAR(64)   DEFAULT NULL COMMENT 'Docker 容器 ID',
+  `host_port`             INT           DEFAULT NULL COMMENT '本机映射端口',
+  `host`                  VARCHAR(64)   NOT NULL DEFAULT '127.0.0.1' COMMENT 'opencode 服务地址',
+  `port`                  INT           NOT NULL DEFAULT 4096 COMMENT 'opencode 服务端口',
+  `status`                VARCHAR(20)   NOT NULL DEFAULT 'offline' COMMENT 'offline / online / error',
+  `agent_file_path`       VARCHAR(512)  DEFAULT NULL COMMENT 'agent md 文件路径',
+  `started_at`            DATETIME      DEFAULT NULL,
+  `stopped_at`            DATETIME      DEFAULT NULL,
+  `error_message`         TEXT          DEFAULT NULL,
+  `sort_order`            INT           NOT NULL DEFAULT 0,
+  `created_by_user_id`    INT           DEFAULT NULL,
+  `created_at`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`            DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_expert_slug` (`slug`),
   KEY `idx_status` (`status`),
-  CONSTRAINT `fk_agent_runs_agent` FOREIGN KEY (`agent_id`) REFERENCES `agents` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_agent_runs_instance` FOREIGN KEY (`instance_id`) REFERENCES `instances` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent 运行实例追踪表';
-
-
--- ============================================================
--- 9. 项目表
--- ============================================================
-DROP TABLE IF EXISTS `projects`;
-CREATE TABLE `projects` (
-  `id`          INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `name`        VARCHAR(128)  NOT NULL COMMENT '项目名称',
-  `key`         VARCHAR(16)   NOT NULL COMMENT '项目唯一标识',
-  `description` TEXT          DEFAULT NULL COMMENT '项目描述',
-  `status`      VARCHAR(20)   DEFAULT 'active' COMMENT '状态: active / archived',
-  `icon`        VARCHAR(8)    DEFAULT NULL COMMENT 'Emoji 图标',
-  `color`       VARCHAR(7)    DEFAULT NULL COMMENT '主题色',
-  `extra`       JSON          DEFAULT NULL COMMENT '扩展字段',
-  `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at`  DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_key` (`key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目表';
-
-
--- ============================================================
--- 10. 需求表
--- ============================================================
-DROP TABLE IF EXISTS `requirements`;
-CREATE TABLE `requirements` (
-  `id`                  INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `project_id`          INT           NOT NULL COMMENT '所属项目',
-  `title`               VARCHAR(256)  NOT NULL COMMENT '需求标题',
-  `req_type`            VARCHAR(20)   DEFAULT 'feature' COMMENT '类型: feature / bug / improvement / performance',
-  `priority`            VARCHAR(4)    DEFAULT 'P2' COMMENT '优先级: P0 / P1 / P2 / P3',
-  `status`              VARCHAR(20)   DEFAULT 'pending_review' COMMENT '状态: pending_review / passed / rejected / in_progress / done',
-  `description`         TEXT          DEFAULT NULL COMMENT '详细描述',
-  `acceptance_criteria` TEXT          DEFAULT NULL COMMENT '验收标准',
-  `impact_scope`        TEXT          DEFAULT NULL COMMENT '影响范围',
-  `related_modules`     JSON          DEFAULT NULL COMMENT '关联模块列表',
-  `score_clarity`       FLOAT         DEFAULT NULL COMMENT '需求清晰度 1-10',
-  `score_feasibility`   FLOAT         DEFAULT NULL COMMENT '技术可行性 1-10',
-  `score_value`         FLOAT         DEFAULT NULL COMMENT '业务价值 1-10',
-  `score_total`         FLOAT         DEFAULT NULL COMMENT '综合评分',
-  `review_comment`      TEXT          DEFAULT NULL COMMENT 'Agent 评审意见',
-  `review_agent_id`     INT           DEFAULT NULL COMMENT '评审 Agent ID',
-  `is_decomposed`       TINYINT(1)    DEFAULT 0 COMMENT '是否已拆解',
-  `decompose_agent_id`  INT           DEFAULT NULL COMMENT '拆解 Agent ID',
-  `created_at`          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at`          DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_project_id` (`project_id`),
-  KEY `idx_status` (`status`),
-  CONSTRAINT `fk_req_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='需求表';
-
-
--- ============================================================
--- 11. 计划/迭代表
--- ============================================================
-DROP TABLE IF EXISTS `plans`;
-CREATE TABLE `plans` (
-  `id`          INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `project_id`  INT           NOT NULL COMMENT '所属项目',
-  `name`        VARCHAR(256)  NOT NULL COMMENT '计划/迭代名称',
-  `plan_type`   VARCHAR(20)   DEFAULT 'sprint' COMMENT '类型: sprint / release / milestone',
-  `goal`        TEXT          DEFAULT NULL COMMENT '迭代目标',
-  `start_date`  DATE          DEFAULT NULL COMMENT '开始日期',
-  `end_date`    DATE          DEFAULT NULL COMMENT '结束日期',
-  `status`      VARCHAR(20)   DEFAULT 'planned' COMMENT '状态: planned / active / completed / cancelled',
-  `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at`  DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_project_id` (`project_id`),
-  CONSTRAINT `fk_plan_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='计划/迭代表';
-
-
--- ============================================================
--- 12. 任务表
--- ============================================================
-DROP TABLE IF EXISTS `tasks`;
-CREATE TABLE `tasks` (
-  `id`                  INT           NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `project_id`          INT           NOT NULL COMMENT '所属项目',
-  `plan_id`             INT           DEFAULT NULL COMMENT '所属计划',
-  `requirement_id`      INT           DEFAULT NULL COMMENT '来源需求',
-  `title`               VARCHAR(256)  NOT NULL COMMENT '任务标题',
-  `description`         TEXT          DEFAULT NULL COMMENT '任务描述',
-  `status`              VARCHAR(20)   DEFAULT 'todo' COMMENT '状态: todo / in_progress / review / done',
-  `priority`            VARCHAR(4)    DEFAULT 'P2' COMMENT '优先级: P0 / P1 / P2 / P3',
-  `assignee_agent_type` VARCHAR(64)   DEFAULT NULL COMMENT '分配 Agent 类型',
-  `assignee_agent_id`   INT           DEFAULT NULL COMMENT '分配 Agent ID',
-  `estimated_hours`     FLOAT         DEFAULT NULL COMMENT '预估工时',
-  `actual_hours`        FLOAT         DEFAULT NULL COMMENT '实际工时',
-  `position`            INT           DEFAULT 0 COMMENT '看板排序',
-  `created_at`          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at`          DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_project_id` (`project_id`),
-  KEY `idx_plan_id` (`plan_id`),
-  KEY `idx_requirement_id` (`requirement_id`),
-  KEY `idx_status` (`status`),
-  CONSTRAINT `fk_task_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_task_plan` FOREIGN KEY (`plan_id`) REFERENCES `plans` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_task_req` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='任务表';
+  CONSTRAINT `fk_expert_user` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='专家团配置表';
