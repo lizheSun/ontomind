@@ -1203,3 +1203,41 @@ Guard 会通过 `GET /api/v1/opencode/health` 每 5s 探活；也可点击顶部
 - 鼠标点选 → 同样 1 个 @ ✅
 - 发送 `@product-manager who are you in 3 words` → 回复 "Product requirement doc." ✅
   (opencode 原生 subagent 路由生效)
+
+## [2026-07-25] 补交 HANDOFF.md + 刷新 AGENTS.md
+
+### 目标
+让下一位 agent 拿到仓库能 30 分钟内跑通全链路（数据库初始化 / opencode CLI / 后端 / 前端）。
+
+### 新增
+- **`HANDOFF.md`**（新 agent 冷启动 30 分钟指南）：
+  - §1 一次性初始化：装依赖、起 MySQL/Redis、建库、`.env`、`create_all` 建表、seed admin 用户 + 4 个专家
+  - §2 日常启动 3 个终端（opencode serve + uvicorn + npm dev）
+  - §3 核心架构：对话工作台/专家团/三方数据流
+  - §4 数据库真相：alembic 坏、schema.sql 不全、如何完全重置
+  - §5-6 三层架构 + 前端硬约束
+  - §7 常见问题排查表
+  - §8 手上活的接头协议（AGENT_LOG 格式）
+  - §9 参考文档索引
+  - §10 一键冒烟脚本（后端/opencode/数据库/登录列专家四步探活）
+
+### 修改
+- **`AGENTS.md`** 全量刷新：
+  - 首行加"新 agent 先读 HANDOFF.md"提示
+  - 项目一句话去掉已删的 application 层，改为"对话工作台 + 专家团"
+  - 技术栈补充 opencode CLI ≥ 1.17
+  - 常用命令改为 3 个终端方式（不再靠 docker compose）
+  - 数据库章明确 schema.sql 不包含 experts/agent_versions/agent_deployments
+  - 三层约束里补充"不用 `with self.db.begin()`"陷阱
+  - 业务域列表更新到当前 15 个真实 router 前缀
+  - 新增"对话工作台 + 专家团"章节完整描述当前架构
+  - 参考文档索引加 HANDOFF.md
+  - 常见坑速览补充：Service 事务陷阱 / opencode 不热加载 / IME 中文输入回车
+
+### 未修改
+- backend/STANDARDS.md / DESIGN_STANDARDS.md 保持（团队一致规范未变）
+- frontend/STANDARDS.md 保持
+
+### 验证
+- 手工 review HANDOFF.md 3 遍确保 §1.6 的 seed 脚本可复制粘贴直接跑
+- AGENTS.md 里所有链接指向的文件均存在
