@@ -34,3 +34,7 @@ api_router.include_router(opencode_bridge.router, prefix="/opencode", tags=["Ope
 # --- 专家团（Expert Team）---
 from app.api.v1 import experts
 api_router.include_router(experts.router, prefix="/experts", tags=["专家团"])
+
+# --- 算力调度（Compute Scheduling）---
+from app.api.v1 import compute
+api_router.include_router(compute.router, prefix="/compute", tags=["算力调度"])

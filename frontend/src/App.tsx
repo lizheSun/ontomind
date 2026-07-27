@@ -22,6 +22,7 @@ import {
   AgentStudioPage,
 } from './pages/agent-platform';
 import ExpertTeamPage from './pages/experts/ExpertTeamPage';
+import ComputePage from './pages/compute/ComputePage';
 import UsersPage from './pages/users/index';
 import DataPlatformIndex from './pages/data-platform';
 import SourcesListPage from './pages/data-platform/SourcesListPage';
@@ -124,6 +125,7 @@ export default function App() {
               <Route path="agent-platform/agents/new/studio" element={<AgentStudioPage />} />
               <Route path="agent-platform/agents/:id/studio" element={<AgentStudioPage />} />
               <Route path="experts" element={<ExpertTeamPage />} />
+              <Route path="compute" element={<ComputePage />} />
               <Route path="perception" element={<PerceptionShell />} />
               <Route path="perception-legacy" element={<PerceptionLegacyIndex />} />
               <Route path="cognition" element={<CognitionIndex />} />

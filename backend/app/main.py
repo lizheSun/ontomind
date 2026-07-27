@@ -1,5 +1,6 @@
 """FastAPI main application entry point."""
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -26,8 +27,12 @@ async def lifespan(app: FastAPI):
         seed_kb_libraries(_session)
     finally:
         _session.close()
+    # === 启动调度器（Compute Scheduling）===
+    from app.services.schedule_task_service import scheduler as _scheduler
+    _scheduler.start(asyncio.get_event_loop())
     yield
     # Shutdown: cleanup connections
+    _scheduler.stop()
 
 
 app = FastAPI(

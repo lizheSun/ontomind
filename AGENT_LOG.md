@@ -1241,3 +1241,109 @@ Guard 会通过 `GET /api/v1/opencode/health` 每 5s 探活；也可点击顶部
 ### 验证
 - 手工 review HANDOFF.md 3 遍确保 §1.6 的 seed 脚本可复制粘贴直接跑
 - AGENTS.md 里所有链接指向的文件均存在
+
+## [2026-07-27] 新增算力调度模块（Compute Scheduling）
+
+### 目标
+用户需求：新 tab「算力调度」包含两大功能
+1. Docker 服务管理（管理 opencode docker 容器）
+2. 调度管理（长时/定时任务 + 运行监控 + 实时日志）
+
+### 数据模型（4 张新表）
+- **docker_services**：一个 opencode docker 容器 = 一条记录（可关联 expert）
+  - image / container_id / host_port / opencode_args / env / volumes / status
+- **schedule_tasks**：任务定义
+  - schedule_type: manual/once/interval/cron
+  - schedule_expr: cron 表达式 / interval 秒数 / once ISO 时间戳
+  - opencode_config: {prompt, agent, model, system}
+  - enabled / status / last_run_at / next_run_at / total_runs / success_runs / failed_runs
+- **task_runs**：一次运行记录（一个 task 多个 run）
+  - trigger (manual/schedule/retry) / status / started_at / finished_at / duration_ms
+  - snapshot (任务配置快照) / exit_code / output_summary / opencode_session_id
+- **task_log_entries**：日志行（一个 run 多条 log）
+  - sequence 保证同 run 内顺序，level (info/warn/error/stdout/stderr/event)
+
+### 新增文件（后端）
+- `backend/app/db/models/docker_service_model.py`
+- `backend/app/db/models/schedule_task_model.py` (含 ScheduleTask + TaskRun + TaskLogEntry)
+- `backend/app/db/repositories/docker_service_repo.py`
+- `backend/app/db/repositories/schedule_task_repo.py`
+- `backend/app/schemas/docker_service_schema.py`
+- `backend/app/schemas/schedule_task_schema.py`
+- `backend/app/services/docker_service_service.py`
+  - Docker 可用 → 真实 `docker run/start/stop`，端口自动分配 4200-4400
+  - Docker 不可用 → mock 模式，只更新 DB 状态回退到本机 4096
+  - 定时探测 socket 同步状态
+  - `logs(tail)` 调 `docker logs --tail N`
+- `backend/app/services/schedule_task_service.py`
+  - `_run_task_worker`：后台线程执行 opencode 调用，日志实时写入 task_log_entries
+  - `_compute_next_run`：极简 interval + cron（`*/N * * * *` / `0 */N * * *`）+ once
+  - `_Scheduler`：asyncio 后台协程每 5s 扫描 due tasks 触发
+  - 手动 trigger 与调度 trigger 复用同一 worker
+- `backend/app/api/v1/compute.py` — 19 个端点：
+  - Docker services: list/get/create/patch/delete/start/stop/logs (8)
+  - Tasks: list/get/create/patch/delete/toggle/trigger (7)
+  - Runs: list_by_task/get/cancel/logs (4)
+
+### 修改文件（后端）
+- `backend/app/db/models/__init__.py` 注册 4 张新表
+- `backend/app/api/v1/router.py` include `/compute`
+- `backend/app/main.py` lifespan 里启动调度器 `scheduler.start(loop)`
+- `backend/schema.sql` 追加 4 表 DDL
+
+### 新增文件（前端）
+- `frontend/src/services/compute.service.ts` — 完整类型 + 19 个 API 方法
+- `frontend/src/pages/compute/ComputePage.tsx` — 顶层 tabs 主页
+- `frontend/src/pages/compute/DockerServicePanel.tsx` — 卡片网格 + 启停 + 编辑抽屉 + 日志 Modal
+- `frontend/src/pages/compute/ScheduleTaskPanel.tsx` — 卡片网格 + 触发 + 运行记录 Modal + 日志实时刷新 Modal
+
+### 修改文件（前端）
+- `frontend/src/App.tsx` — 加 `/compute` 路由 + import
+- `frontend/src/components/layout/AppLayout.tsx` — 顶部菜单加"算力调度"
+- `frontend/src/components/common/CmdKOmnibar.tsx` — CmdK 快捷跳转
+- `AGENTS.md` — 五层业务域列表加入 `/api/v1/compute`
+
+### 数据库
+- `experts` 表以外新增 4 张：docker_services / schedule_tasks / task_runs / task_log_entries
+- 建表通过 `Base.metadata.create_all(engine)` 自动完成
+- schema.sql 追加 4 段完整 DDL
+
+### API 端点（19 个）
+```
+GET    /api/v1/compute/docker-services
+POST   /api/v1/compute/docker-services
+GET    /api/v1/compute/docker-services/{id}
+PATCH  /api/v1/compute/docker-services/{id}
+DELETE /api/v1/compute/docker-services/{id}
+POST   /api/v1/compute/docker-services/{id}/start
+POST   /api/v1/compute/docker-services/{id}/stop
+GET    /api/v1/compute/docker-services/{id}/logs?tail=200
+
+GET    /api/v1/compute/tasks
+POST   /api/v1/compute/tasks
+GET    /api/v1/compute/tasks/{id}
+PATCH  /api/v1/compute/tasks/{id}
+DELETE /api/v1/compute/tasks/{id}
+POST   /api/v1/compute/tasks/{id}/toggle
+POST   /api/v1/compute/tasks/{id}/trigger
+
+GET    /api/v1/compute/tasks/{id}/runs
+GET    /api/v1/compute/runs/{id}
+POST   /api/v1/compute/runs/{id}/cancel
+GET    /api/v1/compute/runs/{id}/logs?since_seq=0
+```
+
+### 验证（Playwright + curl）
+- 页面：算力调度标题 / 两个 tab (Docker 服务 + 调度任务) / 添加服务按钮 ✅
+- 创建 docker service：200 ✅
+- 创建 task（manual + prompt=say hi）：200 ✅
+- 触发 task → 后台 worker 起线程调 opencode → 3.8s 完成 ✅
+- 8 行日志按 sequence 顺序追加，含 event/info/warn/stdout ✅
+- run.opencode_session_id 记录（可跳转 workspace 复盘）✅
+- run.exit_code=0, status=success, duration_ms=3780 ✅
+- tsc 零错误、oxlint 零告警 ✅
+
+### 已知限制
+- cron 表达式简化实现（只支持 `*/N * * * *` 和 `0 */N * * *`）—— 需要更完整可换 croniter
+- 日志推送用轮询（3s 一次），非真实 SSE / WebSocket —— 用户体验足够
+- Docker 未装时走 mock 模式，UI 顶部 tag 明示

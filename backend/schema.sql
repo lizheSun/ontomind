@@ -258,3 +258,116 @@ CREATE TABLE `experts` (
   KEY `idx_status` (`status`),
   CONSTRAINT `fk_expert_user` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='专家团配置表';
+
+
+-- ============================================================
+-- 10. 算力调度 — Docker 服务
+-- ============================================================
+-- 每个 opencode docker 容器 = 一个 DockerService；可关联 Expert
+DROP TABLE IF EXISTS `docker_services`;
+CREATE TABLE `docker_services` (
+  `id`                 INT           NOT NULL AUTO_INCREMENT,
+  `name`               VARCHAR(128)  NOT NULL,
+  `slug`               VARCHAR(64)   NOT NULL,
+  `expert_id`          INT           DEFAULT NULL,
+  `image`              VARCHAR(256)  NOT NULL,
+  `container_name`     VARCHAR(128)  DEFAULT NULL,
+  `container_id`       VARCHAR(64)   DEFAULT NULL,
+  `host`               VARCHAR(64)   NOT NULL DEFAULT '127.0.0.1',
+  `host_port`          INT           DEFAULT NULL,
+  `container_port`     INT           NOT NULL DEFAULT 4096,
+  `opencode_args`      JSON          NOT NULL,
+  `env`                JSON          NOT NULL,
+  `volumes`            JSON          NOT NULL,
+  `status`             VARCHAR(20)   NOT NULL DEFAULT 'stopped' COMMENT 'stopped / starting / running / error',
+  `started_at`         DATETIME      DEFAULT NULL,
+  `stopped_at`         DATETIME      DEFAULT NULL,
+  `error_message`      TEXT          DEFAULT NULL,
+  `description`        TEXT          DEFAULT NULL,
+  `created_by_user_id` INT           DEFAULT NULL,
+  `created_at`         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`         DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_ds_slug` (`slug`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `fk_ds_expert` FOREIGN KEY (`expert_id`) REFERENCES `experts` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_ds_user` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='算力调度-Docker 服务';
+
+
+-- ============================================================
+-- 11. 算力调度 — 调度任务
+-- ============================================================
+DROP TABLE IF EXISTS `schedule_tasks`;
+CREATE TABLE `schedule_tasks` (
+  `id`                 INT           NOT NULL AUTO_INCREMENT,
+  `name`               VARCHAR(128)  NOT NULL,
+  `description`        TEXT          DEFAULT NULL,
+  `task_type`          VARCHAR(32)   NOT NULL DEFAULT 'opencode',
+  `schedule_type`      VARCHAR(20)   NOT NULL DEFAULT 'manual' COMMENT 'manual / once / interval / cron',
+  `schedule_expr`      VARCHAR(256)  DEFAULT NULL,
+  `docker_service_id`  INT           DEFAULT NULL,
+  `opencode_config`    JSON          NOT NULL,
+  `env`                JSON          NOT NULL,
+  `timeout_seconds`    INT           NOT NULL DEFAULT 600,
+  `enabled`            TINYINT(1)    NOT NULL DEFAULT 1,
+  `status`             VARCHAR(20)   NOT NULL DEFAULT 'idle' COMMENT 'idle / running / paused / disabled',
+  `last_run_at`        DATETIME      DEFAULT NULL,
+  `next_run_at`        DATETIME      DEFAULT NULL,
+  `total_runs`         INT           NOT NULL DEFAULT 0,
+  `success_runs`       INT           NOT NULL DEFAULT 0,
+  `failed_runs`        INT           NOT NULL DEFAULT 0,
+  `created_by_user_id` INT           DEFAULT NULL,
+  `created_at`         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`         DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_next_run` (`next_run_at`),
+  KEY `idx_docker_service` (`docker_service_id`),
+  CONSTRAINT `fk_task_ds` FOREIGN KEY (`docker_service_id`) REFERENCES `docker_services` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_task_user` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='算力调度-任务';
+
+
+-- ============================================================
+-- 12. 算力调度 — 运行记录
+-- ============================================================
+DROP TABLE IF EXISTS `task_runs`;
+CREATE TABLE `task_runs` (
+  `id`                    INT           NOT NULL AUTO_INCREMENT,
+  `task_id`               INT           NOT NULL,
+  `trigger`               VARCHAR(20)   NOT NULL DEFAULT 'manual',
+  `status`                VARCHAR(20)   NOT NULL DEFAULT 'pending',
+  `started_at`            DATETIME      DEFAULT NULL,
+  `finished_at`           DATETIME      DEFAULT NULL,
+  `duration_ms`           INT           DEFAULT NULL,
+  `snapshot`              JSON          NOT NULL,
+  `exit_code`             INT           DEFAULT NULL,
+  `output_summary`        TEXT          DEFAULT NULL,
+  `error_message`         TEXT          DEFAULT NULL,
+  `opencode_session_id`   VARCHAR(64)   DEFAULT NULL,
+  `triggered_by_user_id`  INT           DEFAULT NULL,
+  `created_at`            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`            DATETIME      DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_task` (`task_id`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `fk_run_task` FOREIGN KEY (`task_id`) REFERENCES `schedule_tasks` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_run_user` FOREIGN KEY (`triggered_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='算力调度-运行记录';
+
+
+-- ============================================================
+-- 13. 算力调度 — 运行日志
+-- ============================================================
+DROP TABLE IF EXISTS `task_log_entries`;
+CREATE TABLE `task_log_entries` (
+  `id`         INT           NOT NULL AUTO_INCREMENT,
+  `run_id`     INT           NOT NULL,
+  `sequence`   INT           NOT NULL,
+  `level`      VARCHAR(10)   NOT NULL DEFAULT 'info',
+  `message`    TEXT          NOT NULL,
+  `created_at` DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_run` (`run_id`),
+  CONSTRAINT `fk_log_run` FOREIGN KEY (`run_id`) REFERENCES `task_runs` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='算力调度-运行日志';

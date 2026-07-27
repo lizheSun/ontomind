@@ -58,7 +58,7 @@ cd backend && pytest
 
 ## 五层业务域（router 前缀）
 
-`/api/v1/{auth, users, llm, resources, perception, cognition, decision, execution, data-platform, knowledge-base, agent-platform, agent-looper, opencode, experts}`
+`/api/v1/{auth, users, llm, resources, perception, cognition, decision, execution, data-platform, knowledge-base, agent-platform, agent-looper, opencode, experts, compute}`
 
 ⚠️ **已删除**：`/api/v1/{projects, application}` + `/api/v1/agent-platform/{runs, approvals, sessions}`。老代码里若见到相关调用是死代码。
 

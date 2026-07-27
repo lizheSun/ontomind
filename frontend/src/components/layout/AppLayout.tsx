@@ -23,6 +23,7 @@ type MenuItem = Required<MenuProps>['items'][number];
 const topMenuItems: MenuItem[] = [
   { key: '/workspace', icon: <MessageOutlined />, label: '对话工作台' },
   { key: '/experts', icon: <TeamOutlined />, label: '专家团' },
+  { key: '/compute', icon: <ThunderboltOutlined />, label: '算力调度' },
   { key: '/perception', icon: <ApiOutlined />, label: '感知层' },
   { key: '/cognition', icon: <NodeIndexOutlined />, label: '认知层' },
   { key: '/decision', icon: <ThunderboltOutlined />, label: '决策层' },
