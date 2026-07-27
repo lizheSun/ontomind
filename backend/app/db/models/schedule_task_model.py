@@ -1,48 +1,33 @@
-"""调度任务模型.
+"""调度任务模型（v2 — 命令执行 + 日志文件落盘）.
 
-一个任务 = 定时/一次性 触发的 opencode CLI 调用规则.
-- schedule_type: manual / once / interval / cron
-- 一个 ScheduleTask 有多个 TaskRun 运行记录
-- TaskRun 有多个 TaskLogEntry 日志行（可实时流式追加）
+ScheduleTask: 任务定义（shell 命令 + 日志目录 + 调度规则）
+TaskRun:      运行记录（一个任务多条），日志 = 磁盘文件而非 DB 行
+日志落盘规则: {log_dir}/{task_id}/{yyyyMMdd}/{task_id}-{HHmmss}-{seed}.log
 """
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 
 from app.db.models.base import BaseModel
 
 
 class ScheduleTask(BaseModel):
-    __tablename__ = "schedule_tasks"
+    __tablename__ = "compute_tasks"
 
     name = Column(String(128), nullable=False, comment="任务名称")
     description = Column(Text, nullable=True)
 
-    # 类型 & 调度
-    task_type = Column(String(32), nullable=False, server_default="opencode",
-                       comment="opencode / shell / http_probe（预留）")
+    command = Column(Text, nullable=False, comment="执行命令（shell），如 docker run …")
+    log_dir = Column(String(512), nullable=False, server_default="/var/log/ontomind/tasks",
+                     comment="日志根目录")
+
     schedule_type = Column(String(20), nullable=False, server_default="manual",
                            comment="manual / once / interval / cron")
     schedule_expr = Column(String(256), nullable=True,
-                           comment="cron 表达式 或 interval 秒数 或 once 的 ISO 时间戳")
+                           comment="cron 表达式 / interval 秒数 / once ISO 时间")
 
-    # 执行目标：跑在哪个 docker service
-    docker_service_id = Column(
-        Integer, ForeignKey("docker_services.id", ondelete="SET NULL"),
-        nullable=True, index=True,
-    )
-
-    # opencode 具体调用配置（system prompt / agent / message / model）
-    opencode_config = Column(JSON, nullable=False, default=dict,
-                             comment='{"agent":"data-analyst","model":"","prompt":"...","system":"..."}')
-    # 环境变量、超时
-    env = Column(JSON, nullable=False, default=dict)
-    timeout_seconds = Column(Integer, nullable=False, server_default="600")
-
-    # 状态
     enabled = Column(Boolean, nullable=False, server_default="1", comment="是否启用调度")
     status = Column(String(20), nullable=False, server_default="idle",
-                    comment="idle / running / paused / disabled")
+                    comment="idle / running（运行中禁止并发触发同一任务）")
 
-    # 运行统计
     last_run_at = Column(DateTime(timezone=True), nullable=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
     total_runs = Column(Integer, nullable=False, server_default="0")
@@ -53,41 +38,25 @@ class ScheduleTask(BaseModel):
 
 
 class TaskRun(BaseModel):
-    __tablename__ = "task_runs"
+    __tablename__ = "compute_runs"
 
-    task_id = Column(Integer, ForeignKey("schedule_tasks.id", ondelete="CASCADE"),
+    task_id = Column(Integer, ForeignKey("compute_tasks.id", ondelete="CASCADE"),
                      nullable=False, index=True)
     trigger = Column(String(20), nullable=False, server_default="manual",
-                     comment="manual / schedule / retry")
+                     comment="manual / schedule")
 
     status = Column(String(20), nullable=False, server_default="pending",
-                    comment="pending / running / success / failed / cancelled / timeout")
+                    comment="pending / running / success / failed / canceled")
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     duration_ms = Column(Integer, nullable=True)
 
-    # 执行上下文快照
-    snapshot = Column(JSON, nullable=False, default=dict, comment="任务快照（防任务后续修改）")
-    # 结果
     exit_code = Column(Integer, nullable=True)
-    output_summary = Column(Text, nullable=True, comment="最后一段输出（前端列表快速看）")
     error_message = Column(Text, nullable=True)
-
-    # opencode session id（用于跳转 workspace 查看完整对话）
-    opencode_session_id = Column(String(64), nullable=True)
+    log_file = Column(String(1024), nullable=True, comment="日志文件完整路径")
+    pid = Column(Integer, nullable=True, comment="执行进程 pid（用于停止）")
 
     triggered_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
 
-class TaskLogEntry(BaseModel):
-    __tablename__ = "task_log_entries"
-
-    run_id = Column(Integer, ForeignKey("task_runs.id", ondelete="CASCADE"),
-                    nullable=False, index=True)
-    sequence = Column(Integer, nullable=False, comment="同一 run 内的顺序")
-    level = Column(String(10), nullable=False, server_default="info",
-                   comment="info / warn / error / stdout / stderr / event")
-    message = Column(Text, nullable=False)
-
-
-__all__ = ["ScheduleTask", "TaskRun", "TaskLogEntry"]
+__all__ = ["ScheduleTask", "TaskRun"]

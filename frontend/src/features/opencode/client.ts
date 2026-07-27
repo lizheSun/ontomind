@@ -20,12 +20,18 @@ import type {
   OcSession,
 } from './types';
 
-const OPENCODE_URL: string =
+const DEFAULT_URL: string =
   (import.meta as unknown as { env?: Record<string, string> }).env
     ?.VITE_OPENCODE_URL || 'http://127.0.0.1:4096';
 
+const LOCAL_OVERRIDE_KEY = 'ontomind_opencode_url';
+
 export function opencodeBaseUrl(): string {
-  return OPENCODE_URL;
+  try {
+    const override = localStorage.getItem(LOCAL_OVERRIDE_KEY);
+    if (override) return override;
+  } catch { /* SSR */ }
+  return DEFAULT_URL;
 }
 
 /** 内部：普通 JSON fetch，抛错时带上后端消息。 */
@@ -33,7 +39,7 @@ async function req<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const url = `${OPENCODE_URL}${path}`;
+  const url = `${opencodeBaseUrl()}${path}`;
   const resp = await fetch(url, {
     ...init,
     headers: {
@@ -135,7 +141,7 @@ export function sendPrompt(id: string, body: OcPromptBody) {
 
 /** 非阻塞发送（204 No Content），后续靠 SSE 收 delta. */
 export async function sendPromptAsync(id: string, body: OcPromptBody) {
-  const url = `${OPENCODE_URL}/session/${encodeURIComponent(id)}/prompt_async`;
+  const url = `${opencodeBaseUrl()}/session/${encodeURIComponent(id)}/prompt_async`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -233,7 +239,7 @@ export function subscribeEvents(
   onEvent: (evt: OcEvent) => void,
   onError?: (err: Event) => void,
 ): EventSource {
-  const es = new EventSource(`${OPENCODE_URL}/event`);
+  const es = new EventSource(`${opencodeBaseUrl()}/event`);
   es.onmessage = (msg) => {
     try {
       const parsed = JSON.parse(msg.data) as OcEvent;

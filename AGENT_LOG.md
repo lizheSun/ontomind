@@ -1347,3 +1347,173 @@ GET    /api/v1/compute/runs/{id}/logs?since_seq=0
 - cron 表达式简化实现（只支持 `*/N * * * *` 和 `0 */N * * *`）—— 需要更完整可换 croniter
 - 日志推送用轮询（3s 一次），非真实 SSE / WebSocket —— 用户体验足够
 - Docker 未装时走 mock 模式，UI 顶部 tag 明示
+
+## [2026-07-27] 算力调度页面原型 v2（前端重构，脱离后端）
+
+### 目标
+按新交互方案重做 `/compute` 页面：**原型先行，不接后端**。页面所有数据为本地 mock 状态，操作仅在前端模拟。
+
+### 决策
+- 头部改紧凑单行（标题 + 原型 Tag + 一句话说明 + 右侧 Tabs），不再用大 hero 区
+- Docker 服务改为「节点卡片（上）+ 容器列表（下）」两层结构；节点支持本机 / SSH / Docker API(TLS) 三种挂载方式，弹窗内附两种远程方案的后端要求说明（推荐 SSH：目标节点零配置，后端走 `DOCKER_HOST=ssh://` 通道）
+- 镜像搜索直连 Docker Hub 公共 API（`hub.docker.com/v2/search/repositories`，只读无需登录），失败回退内置示例数据；搜到镜像一键创建容器
+- 调度运行改为「任务表 + 运行记录表」两张表：任务 = id/name/命令/日志目录/调度配置；日志落盘规则 `{logDir}/{taskId}/{yyyyMMdd}/{taskId}-{HHmmss}-{seed}.log`，编辑器内实时预览 `>> log 2>&1` 重定向后的完整命令
+- 手动执行任务会生成 running 记录，打开日志窗模拟流式追加（1.2s/行，18 行后自动完结并回填统计），演示实时日志体验
+- 旧实现（直连后端 compute API 的两个 Panel + service）删除，后端 `/api/v1/compute` 暂成无头 API，后续按新模型重写
+
+### 新增文件
+- `frontend/src/pages/compute/types.ts` — ComputeNode / ContainerInstance / SchedulerTask / TaskRunRecord / LogLine / HubImage
+- `frontend/src/pages/compute/mock.ts` — mock 节点/容器/任务/运行记录 + 日志生成 + buildLogFile 落盘规则
+- `frontend/src/pages/compute/LogViewer.tsx` — 公共日志视图（级别着色 + 跟随滚动）
+- `frontend/src/pages/compute/ResourcesPanel.tsx` — 节点卡片 + 容器表格 + 挂载节点/镜像搜索/创建容器/日志 4 个弹窗
+- `frontend/src/pages/compute/SchedulerPanel.tsx` — 任务表 + 编辑抽屉 + 运行记录 Modal + 日志 Modal（实时模拟）
+- `frontend/src/pages/compute/compute.css` — 紧凑头部 + 节点卡片样式
+
+### 删除文件
+- `frontend/src/pages/compute/DockerServicePanel.tsx`
+- `frontend/src/pages/compute/ScheduleTaskPanel.tsx`
+- `frontend/src/services/compute.service.ts`
+
+### 修改文件
+- `frontend/src/pages/compute/ComputePage.tsx` — 重写为紧凑头部 + 双面板（保持挂载以保留 tab 内状态）
+
+### 数据库 / API
+- 无变化（后端未动；现有 compute 后端与新原型模型不一致，留待后端阶段重写）
+
+### 验证
+- `tsc -b` compute 目录零错误（其余模块历史错误未动）
+- `oxlint src/pages/compute` 0 warnings 0 errors
+- dev server (5173) HMR 加载正常，`/compute` 可访问
+
+### 已知限制
+- 全部操作为前端模拟，刷新即还原
+- 远程节点"测试连接"为假延时；镜像搜索依赖浏览器可访问 hub.docker.com
+- 后端重写建议：节点接入先落 SSH 方案（docker CLI over SSH / SDK `use_ssh_client`），Docker API(TLS) 作为备选
+
+## [2026-07-27] 调度运行视图重设计（搜索 + 勾选过滤 + 任务/记录分离）
+
+### 目标
+调度运行 tab 美观度与可用性升级：任务管理与运行记录拆成独立视图；两个视图都有搜索与筛选能力。
+
+### 决策（frontend-design skill，延续 Editorial Light 运维账簿风）
+- 顶部段落式切换器（sched-switch，ink 底 + 等宽计数）：任务管理 / 运行记录（跨任务全局流水）
+- 任务视图：衬线大数字统计条（总数/调度中/运行中/成功率）+ 搜索（名称/命令/#ID）+ 类型/状态下拉筛选
+- 运行记录视图：搜索（#ID/日志文件/任务名）+ 任务下拉 + 触发下拉 + **状态 chips 勾选过滤**（ink 实心激活态，带实时计数）
+- 细节：运行中行左侧琥珀发丝线 + 状态脉冲点、失败行红色发丝线、命令等宽 code-chip、衬线斜体空状态插画位
+- 任务行「运行记录」动作直接跳到运行记录视图并带上任务过滤（替代原 Modal）
+- 修复 webview 告警：antd List（v6 已废弃）→ 自绘 img-results 列表；Alert message → title；隐藏 tab 面板改懒挂载（避免 display:none 下 rc 组件测量异常）
+
+### 修改文件
+- `frontend/src/pages/compute/SchedulerPanel.tsx` — 全量重写（双视图 + 双筛选体系 + 空状态组件）
+- `frontend/src/pages/compute/compute.css` — 追加 sched-switch / sched-stats / sched-toolbar / filter-chip / code-chip / run-row 发丝线 / pulse-dot / sched-empty / img-results 样式
+- `frontend/src/pages/compute/ResourcesPanel.tsx` — List→自绘列表、Alert title
+- `frontend/src/pages/compute/ComputePage.tsx` — 面板懒挂载
+
+### 验证
+- tsc compute 目录零错误；oxlint 0/0；read_lints 0
+
+## [2026-07-27] 算力调度后端实现 + 前端全量接入 API
+
+### 目标
+原型确认后，实现完整后端（模型 / Repository / Service / API 三层）+ 前端从 mock 切换到真实 API 调用。
+
+### 决策
+
+**后端架构**
+- **Docker 节点**：模型 `docker_nodes` 表（docker_hosts），支持 local / ssh / docker-api 三种连接方式。服务层用 `subprocess` 调 Docker CLI（不依赖 Python Docker SDK），SSH 远程走 `DOCKER_HOST=ssh://user@host:port` 环境变量
+- **调度任务**：模型重写为 `schedule_tasks` + `task_runs` 两张表。日志不再写 DB（删除 TaskLogEntry），改为落地磁盘文件：`{logDir}/{taskId}/{yyyyMMdd}/{taskId}-{HHmmss}-{seed}.log`。执行用 `subprocess.Popen` + `preexec_fn=os.setsid`（进程组，便于 kill）。后台线程每 15s 扫描到期任务
+- **API 端点 23 条**：节点 CRUD/测试 → 容器列表/创建/启停/删除/日志 → Docker Hub 代理搜索 → 任务 CRUD/启停/触发 → 运行记录查询/取消 → 运行日志增量读取
+- **调度器**改用类方法 `_Scheduler.start()/stop()`（原走 `scheduler.start(event_loop)` 已废弃）
+
+**前端改动**
+- 新增 `services/compute.service.ts`：完整封装 23 条 API + 数据归一化（snake_case→camelCase）
+- `ResourcesPanel.tsx`：节点/容器全部从后端加载；镜像搜索直连后端代理（再代理 Docker Hub）；操作按钮（启停/删除/日志）全部走真实 API
+- `SchedulerPanel.tsx`：任务/运行记录均从后端加载；日志弹窗增量轮询（`since_line=`，3s 刷新）；运行中自动跟随、非运行中最终拉一次并停止轮询
+- `types.ts`：`ContainerStatus` 新增 `'unknown'`，`SchedulerTask` 新增 `status` 字段
+
+### 新增文件
+- `backend/app/db/models/docker_node_model.py` — DockerHost ORM
+- `backend/app/db/repositories/docker_node_repo.py`
+- `backend/app/services/docker_node_service.py` — Docker CLI 封装 + Hub 搜索
+- `backend/app/schemas/docker_node_schema.py` — DockerHostCreate/Response, ContainerCreate/Info, NodeTestResult
+- `frontend/src/services/compute.service.ts` — 完整前端 API 封装
+
+### 重写文件
+- `backend/app/db/models/schedule_task_model.py` — ScheduleTask + TaskRun（原 ScheduleTask/TaskRun/TaskLogEntry）
+- `backend/app/db/repositories/schedule_task_repo.py`
+- `backend/app/services/schedule_task_service.py` — subprocess 执行 + 日志落盘 + _Scheduler 轮询
+- `backend/app/schemas/schedule_task_schema.py`
+- `backend/app/api/v1/compute.py` — 23 条端点
+- `frontend/src/pages/compute/ResourcesPanel.tsx` — mock→真实 API
+- `frontend/src/pages/compute/SchedulerPanel.tsx` — mock→真实 API（含增量日志轮询）
+- `frontend/src/pages/compute/ComputePage.tsx`
+
+### 删除文件
+- `backend/app/db/models/docker_service_model.py`
+- `backend/app/schemas/docker_service_schema.py`
+- `backend/app/services/docker_service_service.py`
+- `backend/app/db/repositories/docker_service_repo.py`
+
+### 修改文件
+- `backend/app/db/models/__init__.py` — 注册 DockerHost, ScheduleTask, TaskRun
+- `backend/app/main.py` — 调度器启动 `_Scheduler.start()`；移除 `import asyncio`
+- `frontend/src/pages/compute/types.ts` — ContainerStatus + SchedulerTask.status
+- `frontend/src/pages/compute/mock.ts` — mock 数据补 status 字段 + 导出 fmtDuration
+
+### 验证
+- 后端：`python -c "from app.main import app"` 加载成功，23 条 compute 路由全部注册
+- 前端：`tsc -b` compute 目录零错误（其余模块历史错误未动）
+- `oxlint src/pages/compute` — 0 errors, 1 warning（hook deps 无关）
+- `read_lints src/pages/compute` — 0 diagnostics
+
+## [2026-07-27] 算力调度三大能力：Docker 镜像管理 + 本地 OpenCode 服务 + 对话工作台选服
+
+### 目标
+1. Docker 服务增加镜像管理（列表/拉取/删除/从镜像一键创建容器带 volume 配置）
+2. 新增「本地服务」tab：OpenCode 安装检测/Web 启停/CLI 一次执行/对话工作台选服务
+3. Docker 容器创建支持目录映射 + 重启策略
+4. 对话工作台自动读取算力调度选中的 opencode 服务 URL
+
+### 决策
+
+**后端新增 11 条 API**
+- 镜像管理：`GET images` / `POST images/pull` / `DELETE images/path/{name:path}`
+- OpenCode 服务：`GET opencode/status` / `POST start-web` / `POST stop-web` / `GET web-instances` / `POST run-cli` (async) / `GET runs` / `GET runs/{id}`
+- 共 34 条 compute 路由
+
+**OpenCodeLocalService** (`backend/app/services/opencode_local_service.py`)
+- 检测安装：`shutil.which("opencode")` + `--version`
+- Web 管理：`subprocess.Popen` 后台起 serve，`psutil` 扫描运行中进程
+- CLI 执行：`asyncio.create_subprocess_exec` + 超时控制 + 输出持久化到 `/tmp/ontomind/opencode/runs/`
+- 进程间隔离：`start_new_session=True`
+
+**对话工作台选服**
+- `ontomind_opencode_url` 存入 localStorage
+- `opencodeBaseUrl()` 优先读取 localStorage，其次 VITE_OPENCODE_URL 环境变量
+- 算力调度「本地服务」tab 中可选择运行中的 web 实例 → 对话工作台自动切换
+
+**Docker 容器创建增强**
+- 新增 volumes 配置：一行一个 `hostPath:containerPath`
+- 新增 restart 策略：no / always / on-failure / unless-stopped
+- 新增 `--network` / `extra_args`（后端 schema 已支持）
+
+### 新增文件
+- `backend/app/services/opencode_local_service.py`
+- `frontend/src/pages/compute/OpenCodePanel.tsx`
+
+### 重写文件
+- `frontend/src/pages/compute/ComputePage.tsx` — 从 2 tab → 3 tab（Docker 服务 / 调度运行 / 本地服务）
+- `frontend/src/pages/compute/ResourcesPanel.tsx` — 节点详情增加「容器/镜像管理」tab 切换；创建容器增加 volumes + restart 配置
+- `frontend/src/services/compute.service.ts` — 新增镜像 API + OpenCode API 共 13 个方法
+- `frontend/src/pages/compute/types.ts` — 新增 ImageListItem / OpenCodeStatus / OpenCodeWebInstance / OpenCodeCliRun 类型
+- `frontend/src/features/opencode/client.ts` — opencodeBaseUrl() 优先读取 localStorage
+
+### 修改文件
+- `backend/app/api/v1/compute.py` — 新增 11 条端点 + 导入新 service
+- `backend/app/services/docker_node_service.py` — 新增 list_images / pull_image / remove_image + ContainerCreate volumes/restart/network/extra_args
+- `backend/app/schemas/docker_node_schema.py` — 新增 ImageInfo / PullImageRequest + ContainerCreate 新字段
+
+### 验证
+- 后端 34 条路由全部注册，python import 无错误
+- 前端 tsc -b：compute + opencode + service 目录零错误
+- oxlint：0 errors, 3 warnings（历史 hook deps）

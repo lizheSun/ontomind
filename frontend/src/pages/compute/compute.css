@@ -1,0 +1,412 @@
+/* 算力调度页 — 局部样式 */
+
+.compute-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 4px 0;
+  border-bottom: 1px solid var(--border-hairline);
+  margin-bottom: 16px;
+}
+
+.compute-header h1 {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink-100);
+  white-space: nowrap;
+}
+
+.compute-header-desc {
+  font-size: 12px;
+  color: var(--ink-40);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compute-header .compute-tabs {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.compute-header .compute-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.compute-header .compute-tabs .ant-tabs-nav::before {
+  border-bottom: none;
+}
+
+/* 节点卡片 */
+.node-card {
+  position: relative;
+  background: var(--paper-00);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 16px 18px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 148px;
+  transition: border-color .14s, box-shadow .14s;
+}
+
+.node-card:hover {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-sm);
+}
+
+.node-card--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+.node-card--offline {
+  opacity: 0.72;
+}
+
+.node-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-card-name {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink-100);
+  letter-spacing: -0.01em;
+}
+
+.node-card-status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink-60);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.node-card-addr {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-40);
+}
+
+.node-card-specs {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--ink-40);
+  flex-wrap: wrap;
+}
+
+.node-card-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+/* 分区小标题 */
+.compute-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 2px 12px;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-80);
+  letter-spacing: -0.01em;
+}
+
+.compute-section-note {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-40);
+}
+
+/* ============ 调度运行 — 视图切换 ============ */
+.sched-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.sched-head-note {
+  font-size: 12px;
+  color: var(--ink-40);
+}
+
+.sched-switch {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--paper-02);
+  border: 1px solid var(--border-hairline);
+  border-radius: 10px;
+}
+
+.sched-switch button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-60);
+  padding: 6px 14px;
+  border-radius: 8px;
+  transition: background .15s, color .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sched-switch button:hover { color: var(--ink-100); }
+
+.sched-switch button.on {
+  background: var(--ink-100);
+  color: var(--paper-00);
+}
+
+.sched-switch .n {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: .72;
+}
+
+/* ============ 统计条（editorial serif 数字） ============ */
+.sched-stats {
+  display: flex;
+  margin: 2px 0 16px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 12px;
+  background: var(--paper-00);
+  overflow: hidden;
+}
+
+.sched-stat {
+  flex: 1;
+  padding: 12px 18px 10px;
+  border-left: 1px solid var(--border-hairline);
+}
+
+.sched-stat:first-child { border-left: none; }
+
+.sched-stat-num {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink-100);
+  line-height: 1.2;
+}
+
+.sched-stat-label {
+  display: block;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-40);
+  margin-top: 2px;
+}
+
+/* ============ 筛选工具条 ============ */
+.sched-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sched-result-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-40);
+}
+
+/* ============ 状态 chips（勾选过滤） ============ */
+.sched-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sched-chips-total {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-40);
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--paper-00);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-60);
+  transition: background .14s, border-color .14s, color .14s;
+}
+
+.filter-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--ink-100);
+}
+
+.filter-chip--on {
+  background: var(--ink-100);
+  border-color: var(--ink-100);
+  color: var(--paper-00);
+}
+
+.filter-chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.filter-chip .cnt {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: .72;
+}
+
+/* ============ 命令 code-chip ============ */
+.code-chip {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: var(--paper-02);
+  border: 1px solid var(--border-hairline);
+  border-radius: 6px;
+  padding: 2px 8px;
+  display: inline-block;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: var(--ink-80);
+}
+
+/* ============ 运行记录行状态发丝线 ============ */
+.run-row--running > td:first-child {
+  box-shadow: inset 3px 0 0 0 #eab308;
+}
+
+.run-row--failed > td:first-child {
+  box-shadow: inset 3px 0 0 0 #a5361e;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}
+
+.pulse-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 2px;
+  animation: pulseDot 1.2s ease-in-out infinite;
+}
+
+/* ============ 空状态 ============ */
+.sched-empty {
+  padding: 48px 0 44px;
+  text-align: center;
+}
+
+.sched-empty-title {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink-60);
+  letter-spacing: -0.01em;
+}
+
+.sched-empty-hint {
+  font-size: 12px;
+  color: var(--ink-40);
+  margin-top: 6px;
+}
+
+/* ============ 镜像搜索结果（替代 antd List） ============ */
+.img-results {
+  max-height: 420px;
+  overflow: auto;
+  margin-top: 4px;
+}
+
+.img-result {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.img-result:last-child { border-bottom: none; }
+
+.img-result-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.img-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.img-result-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-100);
+}
+
+.img-result-desc {
+  font-size: 12px;
+  color: var(--ink-60);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.img-result-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-40);
+  white-space: nowrap;
+}
+
+.img-results-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--ink-40);
+  font-size: 13px;
+}
