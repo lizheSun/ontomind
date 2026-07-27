@@ -1517,3 +1517,10 @@ GET    /api/v1/compute/runs/{id}/logs?since_seq=0
 - 后端 34 条路由全部注册，python import 无错误
 - 前端 tsc -b：compute + opencode + service 目录零错误
 - oxlint：0 errors, 3 warnings（历史 hook deps）
+
+## [2026-07-27] 提交收尾
+
+### 提交
+- 29 files changed, 4939 insertions(+), 2058 deletions(-)
+- Commit: `e531227` — `feat(compute): 算力调度全面重构`
+- **Push 失败**：GitHub SSH connection reset（国内网络问题），待网络恢复后重试 `git push origin main`
