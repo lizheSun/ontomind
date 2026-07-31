@@ -250,7 +250,7 @@ export default function SourceFormDrawer({
       width={520}
       onClose={handleClose}
       destroyOnHidden
-      maskClosable={!submitting}
+      mask={{ closable: !submitting }}
       extra={
         <Space>
           <Button onClick={handleClose} disabled={submitting}>

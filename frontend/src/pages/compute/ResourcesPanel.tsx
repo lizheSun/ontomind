@@ -6,17 +6,29 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   App, Alert, Button, Empty, Form, Input, Modal, Popconfirm,
-  Radio, Space, Spin, Table, Tag, Tooltip, Typography,
+  Radio, Select, Space, Spin, Table, Tag, Tooltip, Typography,
 } from 'antd';
 import {
-  ApiOutlined, CloudServerOutlined, CloudDownloadOutlined, DeleteOutlined,
+  ApiOutlined, CloudServerOutlined, CloudDownloadOutlined, CodeOutlined,
+  ConsoleSqlOutlined, DeleteOutlined, EditOutlined,
   FileTextOutlined, InboxOutlined, PlayCircleOutlined, PlusOutlined,
-  PoweroffOutlined, ReloadOutlined, RocketOutlined,
+  PoweroffOutlined, ReloadOutlined, RocketOutlined, SaveOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import LogViewer from './LogViewer';
+import TemplatesPanel from './TemplatesPanel';
+import TerminalDrawer from './TerminalDrawer';
+import ExecCommandModal from './ExecCommandModal';
+import ContainerConfigFields, {
+  emptyConfig, parseEnvs, parsePorts, parsePortsFromContainer, parseVolumes,
+  parseVolumesFromContainer, serializeEnvs, serializePorts, serializeVolumes,
+  type ContainerConfig,
+} from './ContainerConfigFields';
 import { fmtDateTime } from './mock';
-import type { ComputeNode, ConnType, ContainerInstance, HubImage, ImageListItem, LogLine } from './types';
+import type {
+  ComputeNode, ConnType, ContainerInstance, ContainerTemplate,
+  HubImage, ImageListItem, LogLine,
+} from './types';
 import * as srv from '../../services/compute.service';
 
 const { Text } = Typography;
@@ -51,8 +63,8 @@ interface NodeFormValues {
 
 interface CreateFormValues {
   name: string;
-  portsText?: string;
-  envText?: string;
+  commandText?: string;
+  templateId?: number;
 }
 
 export default function ResourcesPanel() {
@@ -68,13 +80,15 @@ export default function ResourcesPanel() {
   const [operatingCid, setOperatingCid] = useState<string | null>(null);
   const [mountingLocal, setMountingLocal] = useState(false);
   // 镜像管理
-  const [detailTab, setDetailTab] = useState<'containers' | 'images'>('containers');
+  const [detailTab, setDetailTab] = useState<'containers' | 'images' | 'templates'>('containers');
   const [images, setImages] = useState<ImageListItem[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [pullingImage, setPullingImage] = useState('');
   // 创建容器表单
-  const [volumesText, setVolumesText] = useState('');
-  const [restartPolicy, setRestartPolicy] = useState('no');
+  const [containerConfig, setContainerConfig] = useState<ContainerConfig>(emptyConfig);
+  const [commandText, setCommandText] = useState('');
+  // 模板
+  const [templates, setTemplates] = useState<ContainerTemplate[]>([]);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -82,15 +96,21 @@ export default function ResourcesPanel() {
   const [searching, setSearching] = useState(false);
   const [usedBackendError, setUsedBackendError] = useState(false);
 
-  const [createFor, setCreateFor] = useState<{ image: string } | null>(null);
+  const [createFor, setCreateFor] = useState<{
+    image: string;
+    /** 若存在则本次创建为「重新配置」，会先停止并删除该容器 */
+    replacing?: ContainerInstance;
+  } | null>(null);
   const [logsModal, setLogsModal] = useState<{ name: string; lines: LogLine[] } | null>(null);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  // 终端 / 执行命令
+  const [terminalFor, setTerminalFor] = useState<ContainerInstance | null>(null);
+  const [execFor, setExecFor] = useState<ContainerInstance | null>(null);
 
   const [nodeForm] = Form.useForm<NodeFormValues>();
   const [createForm] = Form.useForm<CreateFormValues>();
   const watchConn = Form.useWatch('connType', nodeForm) ?? 'ssh';
   const watchCreateName = Form.useWatch('name', createForm);
-  const watchCreatePorts = Form.useWatch('portsText', createForm);
 
   const selectedNodeObj = nodes.find((n) => n.id === selectedNode);
   const nodeContainers = containers.filter((c) => c.nodeId === selectedNode);
@@ -231,11 +251,21 @@ export default function ResourcesPanel() {
   const pickImage = (img: HubImage) => {
     setSearchOpen(false);
     setCreateFor({ image: img.name });
+    const isOpencode = img.name.includes('opencode');
+    const defaultCmd = isOpencode ? 'opencode web --port 4096' : '';
     createForm.setFieldsValue({
       name: img.name.replace(/[/.:]+/g, '-').replace(/^-+|-+$/g, '') || 'container',
-      portsText: img.name.includes('opencode') ? '4096:4096' : '',
-      envText: '',
+      commandText: defaultCmd,
+      templateId: undefined,
     });
+    setContainerConfig({
+      ports: isOpencode ? [{ hostPort: '4096', containerPort: '4096', protocol: 'tcp' }] : [],
+      envs: [],
+      volumes: [],
+      network: 'bridge',
+      restartPolicy: isOpencode ? 'unless-stopped' : 'no',
+    });
+    setCommandText(defaultCmd);
   };
 
   // ===== 容器操作 =====
@@ -243,24 +273,69 @@ export default function ResourcesPanel() {
   const submitCreate = async () => {
     const v = await createForm.validateFields();
     if (!createFor || selectedNode == null) return;
-    const ports = (v.portsText || '').split('\n').map((s: string) => s.trim()).filter(Boolean);
-    const envVars = (v.envText || '').split('\n').map((s: string) => s.trim()).filter(Boolean);
-    const vols = (volumesText || '').split('\n').map((s: string) => s.trim()).filter(Boolean);
+    const isHost = containerConfig.network === 'host';
+    const ports = isHost ? [] : serializePorts(containerConfig.ports);
+    const envVars = serializeEnvs(containerConfig.envs);
+    const vols = serializeVolumes(containerConfig.volumes);
     try {
+      // 若为「重新配置」，先停止 + 删除旧容器（Docker 不支持热改端口/网络/挂载）
+      if (createFor.replacing) {
+        const old = createFor.replacing;
+        try {
+          if (old.status === 'running') {
+            await srv.stopContainer(selectedNode, old.id);
+          }
+        } catch {
+          // 停止失败继续尝试强制删除
+        }
+        await srv.removeContainer(selectedNode, old.id, true);
+        setContainers((prev) => prev.filter((x) => x.id !== old.id));
+      }
       const c = await srv.createContainer(selectedNode, {
         name: v.name, image: createFor.image, ports, env_vars: envVars,
         volumes: vols.length > 0 ? vols : undefined,
-        restart_policy: restartPolicy !== 'no' ? restartPolicy : undefined,
+        restart_policy: containerConfig.restartPolicy !== 'no' ? containerConfig.restartPolicy : undefined,
+        network: containerConfig.network !== 'bridge' ? containerConfig.network : undefined,
+        command: commandText || undefined,
       });
       setContainers((prev) => [...prev, c]);
+      // 重新配置成功后立即启动（如原容器在跑）
+      if (createFor.replacing && createFor.replacing.status === 'running') {
+        try {
+          await srv.startContainer(selectedNode, c.id);
+          setContainers((prev) => prev.map((x) => (x.id === c.id ? { ...x, status: 'running' } : x)));
+        } catch {
+          // 启动失败不阻塞流程
+        }
+      }
+      const wasReconfig = !!createFor.replacing;
       setCreateFor(null);
-      setVolumesText('');
-      setRestartPolicy('no');
-      message.success(`容器 ${v.name} 已创建`);
+      setContainerConfig(emptyConfig());
+      setCommandText('');
+      message.success(wasReconfig ? `容器 ${v.name} 已按新配置重建` : `容器 ${v.name} 已创建`);
     } catch (e: any) {
       const msg = e?.response?.data?.message ?? e?.message ?? '创建失败';
       message.error(msg);
     }
+  };
+
+  // 「重新配置」入口：用现有容器的配置回填 Modal，提交后会 stop+remove+recreate
+  const openReconfigure = (c: ContainerInstance) => {
+    setCreateFor({ image: c.image, replacing: c });
+    createForm.setFieldsValue({
+      name: c.name,
+      commandText: '',
+      templateId: undefined,
+    });
+    const network = c.network && c.network !== 'default' ? c.network : 'bridge';
+    setContainerConfig({
+      ports: network === 'host' ? [] : parsePortsFromContainer(c.ports),
+      envs: [], // docker ps 不返回 env，保留为空由用户重新指定
+      volumes: parseVolumesFromContainer(c.volumes),
+      network,
+      restartPolicy: 'no',
+    });
+    setCommandText('');
   };
 
   const doStart = async (c: ContainerInstance) => {
@@ -348,11 +423,11 @@ export default function ResourcesPanel() {
     setCreateFor({ image: fullName });
     createForm.setFieldsValue({
       name: (img.repository || img.id.split(':')[0] || 'container').replace(/[/.:]+/g, '-'),
-      portsText: '',
-      envText: '',
+      commandText: '',
+      templateId: undefined,
     });
-    setVolumesText('');
-    setRestartPolicy('no');
+    setContainerConfig(emptyConfig());
+    setCommandText('');
   };
 
   const showLogs = async (c: ContainerInstance) => {
@@ -382,6 +457,69 @@ export default function ResourcesPanel() {
       loadImages();
     }
   }, [selectedNode, detailTab]);
+
+  // ===== 模板 =====
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      setTemplates(await srv.fetchTemplates());
+    } catch {
+      // 静默
+    }
+  }, []);
+
+  useEffect(() => {
+    if (detailTab === 'templates') void loadTemplates();
+  }, [detailTab, loadTemplates]);
+
+  const applyTemplate = (t: ContainerTemplate) => {
+    // 从模板回填创建容器表单
+    setCreateFor({ image: t.image });
+    createForm.setFieldsValue({
+      name: t.name.replace(/[^a-zA-Z0-9_.-]/g, '-').toLowerCase() || 'container',
+      commandText: t.command || '',
+      templateId: t.id,
+    });
+    setContainerConfig({
+      ports: parsePorts(t.ports),
+      envs: parseEnvs(t.env_vars),
+      volumes: parseVolumes(t.volumes),
+      network: t.network || 'bridge',
+      restartPolicy: t.restart_policy || 'no',
+    });
+    setCommandText(t.command || '');
+    setDetailTab('containers');
+  };
+
+  const saveAsTemplate = async () => {
+    const v = await createForm.validateFields().catch(() => null);
+    if (!v || !createFor) {
+      message.warning('请先填写镜像与名称');
+      return;
+    }
+    const name = window.prompt('模板名称', v.name);
+    if (!name) return;
+    const isHost = containerConfig.network === 'host';
+    const ports = isHost ? [] : serializePorts(containerConfig.ports);
+    const envVars = serializeEnvs(containerConfig.envs);
+    const vols = serializeVolumes(containerConfig.volumes);
+    try {
+      const created = await srv.createTemplate({
+        name,
+        image: createFor.image,
+        command: commandText || undefined,
+        ports,
+        env_vars: envVars,
+        volumes: vols,
+        restart_policy: containerConfig.restartPolicy !== 'no' ? containerConfig.restartPolicy : undefined,
+        network: containerConfig.network !== 'bridge' ? containerConfig.network : undefined,
+      });
+      setTemplates((prev) => [...prev, created]);
+      message.success(`已保存为模板「${name}」`);
+    } catch (e: any) {
+      message.error(e?.response?.data?.message ?? '保存失败');
+    }
+  };
 
   // ===== 容器表格 =====
 
@@ -419,6 +557,22 @@ export default function ResourcesPanel() {
       render: (v: string) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{v || '-'}</span>,
     },
     {
+      title: '网络', dataIndex: 'network', key: 'network', width: 80,
+      render: (v: string) => (
+        <Tag style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>{v || '-'}</Tag>
+      ),
+    },
+    {
+      title: '挂载', dataIndex: 'volumes', key: 'volumes', ellipsis: true,
+      render: (v: string) => v ? (
+        <Tooltip title={v} overlayStyle={{ maxWidth: 480 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-60)', cursor: 'default' }}>
+            {v}
+          </span>
+        </Tooltip>
+      ) : <span style={{ color: 'var(--ink-30)' }}>-</span>,
+    },
+    {
       title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 140,
       render: (v: string | Date) => (
         <span style={{ fontSize: 12, color: 'var(--ink-40)' }}>
@@ -427,7 +581,7 @@ export default function ResourcesPanel() {
       ),
     },
     {
-      title: '操作', key: 'actions', width: 150,
+      title: '操作', key: 'actions', width: 230,
       render: (_, c) => (
         <Space size={2}>
           {c.status === 'running' ? (
@@ -441,9 +595,29 @@ export default function ResourcesPanel() {
                       icon={<PlayCircleOutlined />} onClick={() => doStart(c)} />
             </Tooltip>
           )}
+          <Tooltip title={c.status === 'running' ? '终端' : '启动后可用'}>
+            <Button size="small" type="text" disabled={c.status !== 'running'}
+                    icon={<ConsoleSqlOutlined />} onClick={() => { console.log('[Terminal] button clicked, container:', c.name, c.id, 'status:', c.status); setTerminalFor(c); }} />
+          </Tooltip>
+          <Tooltip title={c.status === 'running' ? '执行命令' : '启动后可用'}>
+            <Button size="small" type="text" disabled={c.status !== 'running'}
+                    icon={<CodeOutlined />} onClick={() => setExecFor(c)} />
+          </Tooltip>
           <Tooltip title="日志">
             <Button size="small" type="text" icon={<FileTextOutlined />} onClick={() => void showLogs(c)} />
           </Tooltip>
+          <Popconfirm
+            title={
+              c.status === 'running'
+                ? '重新配置将停止并删除该容器，再按新配置重建（容器内数据会随之丢失，除非有持久化挂载）。继续？'
+                : '重新配置将删除该容器并按新配置重建，继续？'
+            }
+            onConfirm={() => openReconfigure(c)}
+          >
+            <Tooltip title="重新配置端口/网络/挂载">
+              <Button size="small" type="text" icon={<EditOutlined />} />
+            </Tooltip>
+          </Popconfirm>
           <Popconfirm
             title={c.status === 'running' ? '容器运行中，将强制删除（-f）。继续？' : `删除容器 ${c.name}？`}
             onConfirm={() => doRemove(c)}
@@ -587,6 +761,10 @@ export default function ResourcesPanel() {
                 onClick={() => setDetailTab('images')}>
                 <InboxOutlined /> 镜像管理
               </Button>
+              <Button size="small" type={detailTab === 'templates' ? 'primary' : 'default'} ghost
+                onClick={() => setDetailTab('templates')}>
+                <SaveOutlined /> 模板 <span style={{ opacity: 0.6 }}>{templates.length}</span>
+              </Button>
             </Space>
           </div>
 
@@ -620,6 +798,10 @@ export default function ResourcesPanel() {
                 locale={{ emptyText: <Empty description="暂无镜像，在上方搜索框拉取新镜像" /> }}
               />
             </div>
+          )}
+
+          {detailTab === 'templates' && (
+            <TemplatesPanel onUseTemplate={applyTemplate} />
           )}
         </>
       )}
@@ -733,54 +915,74 @@ export default function ResourcesPanel() {
 
       {/* 创建容器 Modal */}
       <Modal
-        title="创建容器"
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 40 }}>
+            <span>{createFor?.replacing ? `重新配置容器 · ${createFor.replacing.name}` : '创建容器'}</span>
+            <Button size="small" type="text" icon={<SaveOutlined />} onClick={() => void saveAsTemplate()}>
+              另存为模板
+            </Button>
+          </div>
+        }
         open={!!createFor}
         onCancel={() => setCreateFor(null)}
         onOk={() => void submitCreate()}
-        okText="创建"
+        okText={createFor?.replacing ? '停止并重建' : '创建'}
         width={560}
         destroyOnHidden
       >
+        {createFor?.replacing && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="Docker 不支持热改端口/网络/挂载"
+            description="提交后会先停止并删除现有容器，再按新配置重建。容器 rootfs 内的数据会丢失（挂载卷/命名卷不受影响）。"
+          />
+        )}
         <Space size={8} style={{ marginBottom: 16 }} wrap>
           <Tag icon={<CloudServerOutlined />}>{selectedNodeObj?.name}</Tag>
           <Tag style={{ fontFamily: 'var(--font-mono)' }}>{createFor?.image}</Tag>
         </Space>
         <Form form={createForm} layout="vertical">
+          {templates.length > 0 && (
+            <Form.Item name="templateId" label="从模板填充">
+              <Select
+                allowClear
+                placeholder="选择模板快速填充配置"
+                options={templates.map((t) => ({ value: t.id, label: `${t.name} · ${t.image}` }))}
+                onChange={(val) => {
+                  const t = templates.find((x) => x.id === val);
+                  if (t) applyTemplate(t);
+                }}
+              />
+            </Form.Item>
+          )}
           <Form.Item name="name" label="容器名称" rules={[{ required: true, message: '请输入容器名称' }]}>
             <Input style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5 }} />
           </Form.Item>
-          <Form.Item name="portsText" label="端口映射（一行一个，hostPort:containerPort）">
-            <Input.TextArea rows={2} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} placeholder="4096:4096" />
-          </Form.Item>
-          <Form.Item name="envText" label="环境变量（一行一个，KEY=VALUE）">
-            <Input.TextArea rows={3} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} placeholder="OPENCODE_LOG_LEVEL=info" />
-          </Form.Item>
-          <Form.Item label="目录映射（一行一个，hostPath:containerPath）">
-            <Input.TextArea
-              rows={2} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
-              placeholder="/data/app:/app"
-              value={volumesText}
-              onChange={e => setVolumesText(e.target.value)}
+          <Form.Item label="启动命令（覆盖镜像 CMD）" tooltip="追加在镜像名之后，如 opencode web --port 4096">
+            <Input
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5 }}
+              placeholder="opencode web --port 4096"
+              value={commandText}
+              onChange={(e) => setCommandText(e.target.value)}
             />
           </Form.Item>
-          <Form.Item label="重启策略">
-            <Radio.Group value={restartPolicy} onChange={e => setRestartPolicy(e.target.value)}>
-              <Radio.Button value="no">不重启</Radio.Button>
-              <Radio.Button value="always">始终</Radio.Button>
-              <Radio.Button value="on-failure">失败时</Radio.Button>
-              <Radio.Button value="unless-stopped">除非手动停止</Radio.Button>
-            </Radio.Group>
-          </Form.Item>
+          <ContainerConfigFields value={containerConfig} onChange={setContainerConfig} />
           <div style={{
+            marginTop: 12,
             fontSize: 11, color: 'var(--ink-40)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all',
           }}>
             预览：docker run -d --name {watchCreateName || '<name>'}
-            {watchCreatePorts
-              ? ' -p ' + watchCreatePorts.split('\n').map((s: string) => s.trim()).filter(Boolean).join(' -p ')
-              : ''}
-            {volumesText.split('\n').map((s: string) => s.trim()).filter(Boolean).map((v: string) => ` -v ${v}`).join('')}
-            {restartPolicy !== 'no' ? ` --restart ${restartPolicy}` : ''}
+            {containerConfig.network === 'host'
+              ? ''
+              : serializePorts(containerConfig.ports).map((p) => ` -p ${p}`).join('')}
+            {serializeVolumes(containerConfig.volumes).map((v) => ` -v ${v}`).join('')}
+            {serializeEnvs(containerConfig.envs).map((e) => ` -e ${e}`).join('')}
+            {containerConfig.network !== 'bridge' ? ` --network ${containerConfig.network}` : ''}
+            {containerConfig.restartPolicy !== 'no' ? ` --restart ${containerConfig.restartPolicy}` : ''}
             {' '}{createFor?.image}
+            {commandText ? ` ${commandText}` : ''}
           </div>
         </Form>
       </Modal>
@@ -797,6 +999,23 @@ export default function ResourcesPanel() {
           <LogViewer lines={logsModal?.lines ?? []} />
         )}
       </Modal>
+
+      {/* 容器交互终端 Drawer */}
+      <TerminalDrawer
+        open={!!terminalFor}
+        onClose={() => setTerminalFor(null)}
+        node={selectedNodeObj ?? null}
+        container={terminalFor}
+      />
+
+      {/* 容器内一次性命令执行 Modal */}
+      <ExecCommandModal
+        open={!!execFor}
+        onClose={() => setExecFor(null)}
+        nodeId={selectedNode}
+        cid={execFor?.id ?? null}
+        containerName={execFor?.name}
+      />
     </div>
   );
 }

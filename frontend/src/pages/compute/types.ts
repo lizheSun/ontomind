@@ -28,6 +28,10 @@ export interface ContainerInstance {
   status: ContainerStatus;
   ports: string;
   createdAt: Date;
+  /** Docker 网络模式，如 bridge / host / none */
+  network?: string;
+  /** 目录/卷挂载（格式化字符串），如 /host:/container, vol-name → /data */
+  volumes?: string;
 }
 
 export type ScheduleType = 'manual' | 'once' | 'interval' | 'cron';
@@ -125,4 +129,32 @@ export interface OpenCodeCliRun {
   output: string;
   started_at: number;
   finished_at?: number;
+}
+
+/** 容器模板（可复用的容器创建配置） */
+export interface ContainerTemplate {
+  id: number;
+  name: string;
+  image: string;
+  description?: string;
+  long_description?: string;
+  icon?: string;
+  category?: string;
+  /** 默认启动命令，覆盖镜像 CMD */
+  command?: string;
+  ports: string[];
+  env_vars: string[];
+  volumes: string[];
+  restart_policy?: string;
+  network?: string;
+  extra_args?: string;
+  is_builtin: boolean;
+  sort_order: number;
+}
+
+/** 容器内一次性命令执行结果 */
+export interface ExecResult {
+  exit_code: number;
+  stdout: string;
+  stderr: string;
 }

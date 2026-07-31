@@ -471,13 +471,13 @@ export function CmdKOmnibar({ open: controlledOpen, onOpenChange }: CmdKOmnibarP
       onCancel={close}
       footer={null}
       closable={false}
-      destroyOnClose
+      destroyOnHidden
       width={640}
       styles={{
         body: { padding: 0, background: '#0a0f1f' },
       }}
       style={{ top: 96 }}
-      maskClosable
+      mask={{ closable: true }}
     >
       <div
         style={{

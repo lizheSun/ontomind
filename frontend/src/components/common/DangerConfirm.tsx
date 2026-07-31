@@ -25,6 +25,6 @@ export const DangerConfirm = (opts: DangerConfirmOptions): void => {
     onOk: opts.onOk,
     onCancel: opts.onCancel,
     centered: true,
-    maskClosable: false,
+    mask: { closable: false },
   });
 };

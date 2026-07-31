@@ -88,7 +88,7 @@ export default function SmartAddModal({
       cancelText="取消"
       width={640}
       destroyOnHidden
-      maskClosable={!loading}
+      mask={{ closable: !loading }}
     >
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Alert

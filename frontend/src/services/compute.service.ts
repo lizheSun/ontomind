@@ -5,6 +5,8 @@ import api from './api';
 import type {
   ComputeNode,
   ContainerInstance,
+  ContainerTemplate,
+  ExecResult,
   HubImage,
   ImageListItem,
   OpenCodeStatus,
@@ -68,6 +70,8 @@ export async function createContainer(
     name: string; image: string; ports?: string[];
     env_vars?: string[]; volumes?: string[]; expert_slug?: string;
     restart_policy?: string; network?: string; extra_args?: string;
+    /** 启动命令，覆盖镜像 CMD，如 "opencode web --port 4096" */
+    command?: string;
   },
 ): Promise<ContainerInstance> {
   const { data } = await api.post<ApiResponse<any>>(`/compute/nodes/${nodeId}/containers`, payload);
@@ -236,6 +240,8 @@ function normalizeContainer(raw: any): ContainerInstance {
     status: raw.status,
     ports: raw.ports ?? '',
     createdAt: raw.createdAt ?? raw.created_at ?? '',
+    network: raw.network ?? undefined,
+    volumes: raw.volumes ?? undefined,
   };
 }
 
@@ -329,4 +335,80 @@ export async function getOpenCodeRuns(limit: number = 20): Promise<OpenCodeCliRu
 export async function getOpenCodeRun(runId: number): Promise<OpenCodeCliRun> {
   const { data } = await api.get<ApiResponse<OpenCodeCliRun>>(`/compute/opencode/runs/${runId}`);
   return data.data;
+}
+
+// ====================================================================
+// 容器内一次性命令执行（非交互 console）
+// ====================================================================
+
+export async function execContainerCommand(
+  nodeId: number,
+  cid: string,
+  payload: { command: string; workdir?: string; timeout?: number },
+): Promise<ExecResult> {
+  const { data } = await api.post<ApiResponse<ExecResult>>(
+    `/compute/nodes/${nodeId}/containers/${cid}/exec`,
+    payload,
+  );
+  return data.data;
+}
+
+// ====================================================================
+// 容器交互终端 WebSocket URL
+// ====================================================================
+
+/** 推导终端 WebSocket URL：把 API base 的 http(s) 换成 ws(s)，追加终端路径. */
+export function terminalWsUrl(
+  nodeId: number,
+  cid: string,
+  shell?: string,
+): string {
+  const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+  const wsBase = base.replace(/^http/, 'ws');
+  const params = shell ? `?shell=${encodeURIComponent(shell)}` : '';
+  return `${wsBase}/compute/nodes/${nodeId}/containers/${cid}/terminal${params}`;
+}
+
+// ====================================================================
+// 容器模板（Container Templates）
+// ====================================================================
+
+export async function fetchTemplates(): Promise<ContainerTemplate[]> {
+  const { data } = await api.get<ApiResponse<any[]>>('/compute/templates');
+  return (data.data ?? []).map(normalizeTemplate);
+}
+
+export async function createTemplate(payload: Omit<ContainerTemplate, 'id' | 'is_builtin' | 'sort_order'>): Promise<ContainerTemplate> {
+  const { data } = await api.post<ApiResponse<any>>('/compute/templates', payload);
+  return normalizeTemplate(data.data);
+}
+
+export async function updateTemplate(templateId: number, payload: Partial<Omit<ContainerTemplate, 'id' | 'is_builtin'>>): Promise<ContainerTemplate> {
+  const { data } = await api.patch<ApiResponse<any>>(`/compute/templates/${templateId}`, payload);
+  return normalizeTemplate(data.data);
+}
+
+export async function deleteTemplate(templateId: number): Promise<void> {
+  await api.delete(`/compute/templates/${templateId}`);
+}
+
+function normalizeTemplate(raw: any): ContainerTemplate {
+  return {
+    id: raw.id,
+    name: raw.name,
+    image: raw.image,
+    description: raw.description ?? undefined,
+    long_description: raw.long_description ?? undefined,
+    icon: raw.icon ?? undefined,
+    category: raw.category ?? undefined,
+    command: raw.command ?? undefined,
+    ports: raw.ports ?? [],
+    env_vars: raw.env_vars ?? [],
+    volumes: raw.volumes ?? [],
+    restart_policy: raw.restart_policy ?? undefined,
+    network: raw.network ?? undefined,
+    extra_args: raw.extra_args ?? undefined,
+    is_builtin: raw.is_builtin ?? false,
+    sort_order: raw.sort_order ?? 0,
+  };
 }

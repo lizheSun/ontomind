@@ -52,6 +52,28 @@ class ContainerCreate(BaseModel):
     env_vars: List[str] = Field(default_factory=list, description="KEY=VALUE")
     volumes: List[str] = Field(default_factory=list, description="hostPath:containerPath")
     expert_slug: Optional[str] = Field(default=None, max_length=128)
+    restart_policy: Optional[str] = Field(default=None, pattern=r"^(no|always|on-failure|unless-stopped)$")
+    network: Optional[str] = Field(default=None, max_length=64)
+    # docker run flags，追加在 image 之前，如 "--privileged --gpus all"
+    extra_args: Optional[str] = Field(default=None, max_length=512, description="docker run 额外参数（置于镜像名之前）")
+    # 启动命令，覆盖镜像 CMD，追加在 image 之后，如 "opencode web --port 4096"
+    command: Optional[str] = Field(default=None, max_length=512, description="启动命令，覆盖镜像 CMD")
+
+
+# ---------------------------------------------------------------------------
+# 容器内一次性命令执行
+# ---------------------------------------------------------------------------
+
+class ExecRequest(BaseModel):
+    command: str = Field(..., min_length=1, max_length=2048, description="要执行的命令，如 'ls -la' 或 'opencode --version'")
+    workdir: Optional[str] = Field(default=None, max_length=512, description="工作目录（容器内绝对路径）")
+    timeout: int = Field(default=30, ge=1, le=300, description="超时秒数")
+
+
+class ExecResult(BaseModel):
+    exit_code: int
+    stdout: str
+    stderr: str
 
 
 class ContainerInfo(BaseModel):
@@ -63,6 +85,8 @@ class ContainerInfo(BaseModel):
     status: str
     ports: str = ""
     createdAt: str = ""
+    network: str = ""
+    volumes: str = ""
 
 
 # ---------------------------------------------------------------------------

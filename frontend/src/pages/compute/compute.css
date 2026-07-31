@@ -410,3 +410,263 @@
   color: var(--ink-40);
   font-size: 13px;
 }
+
+/* ============ 容器模板卡片网格 ============ */
+.tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.tpl-card {
+  position: relative;
+  background: var(--paper-00);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 16px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 168px;
+  transition: border-color .14s, box-shadow .14s, transform .14s;
+  overflow: hidden;
+}
+
+.tpl-card:hover {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+
+.tpl-builtin-ribbon {
+  position: absolute;
+  top: 10px;
+  right: -28px;
+  transform: rotate(38deg);
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 2px 32px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+
+.tpl-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tpl-name {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-100);
+  letter-spacing: -0.01em;
+}
+
+.tpl-image {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-60);
+  background: var(--paper-02);
+  border: 1px solid var(--border-hairline);
+  border-radius: 6px;
+  padding: 3px 8px;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-desc {
+  font-size: 12px;
+  color: var(--ink-60);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tpl-command {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border-radius: 6px;
+  padding: 4px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-command-prompt {
+  color: var(--ink-40);
+  margin-right: 4px;
+}
+
+.tpl-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-height: 22px;
+}
+
+.tpl-actions {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+/* ============ 模板详细说明（展开/收起） ============ */
+.tpl-long-desc {
+  margin-top: 2px;
+}
+.tpl-long-desc-toggle {
+  padding: 0;
+  font-size: 12px;
+  height: auto;
+  color: var(--accent);
+}
+.tpl-long-desc-content {
+  margin-top: 6px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 380px;
+  overflow-y: auto;
+}
+.tpl-long-desc-pre {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: var(--font-mono), Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-80);
+  background: var(--paper-02);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* ============ 终端 Drawer ============ */
+.term-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--ink-60);
+}
+
+.term-drawer-shell {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-tint);
+  padding: 1px 8px;
+  border-radius: 4px;
+}
+
+.term-drawer-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.term-container {
+  background: #16171f;
+  border-radius: 8px;
+  padding: 10px 12px;
+  height: calc(100vh - 120px);
+  min-height: 420px;
+}
+
+.term-container .xterm {
+  height: 100%;
+}
+
+.term-container .xterm-viewport {
+  background-color: transparent !important;
+}
+
+/* ============ 执行命令 Modal ============ */
+.exec-output {
+  background: #16171f;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #c8cdf0;
+  line-height: 1.55;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ============ 容器配置字段（端口/环境/挂载 结构化行编辑） ============ */
+.cfg-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.cfg-block {
+  border: 1px solid var(--border-hairline);
+  border-radius: 10px;
+  background: var(--paper-00);
+  padding: 10px 12px 12px;
+}
+
+.cfg-block--inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.cfg-block-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.cfg-block-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-80);
+}
+
+.cfg-block-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cfg-block-body--disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.cfg-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cfg-sep {
+  color: var(--ink-40);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 0 2px;
+}
+

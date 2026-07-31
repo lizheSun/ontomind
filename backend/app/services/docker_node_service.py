@@ -8,6 +8,7 @@
 import json
 import logging
 import os
+import shlex
 import subprocess
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -19,7 +20,8 @@ from app.core.exceptions import BusinessException, NotFoundException, Validation
 from app.db.models.docker_node_model import DockerHost
 from app.db.repositories.docker_node_repo import DockerNodeRepository
 from app.schemas.docker_node_schema import (
-    ContainerCreate, ContainerInfo, DockerHostCreate, DockerHostResponse, NodeTestResult,
+    ContainerCreate, ContainerInfo, DockerHostCreate, DockerHostResponse, ExecRequest,
+    ExecResult, NodeTestResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -269,6 +271,7 @@ class DockerNodeService:
         if code != 0:
             raise BusinessException(f"无法列出容器: {stderr}", code="DOCKER_ERROR")
         result: List[ContainerInfo] = []
+        container_ids: List[str] = []
         for line in stdout.strip().split("\n"):
             if not line.strip():
                 continue
@@ -276,6 +279,7 @@ class DockerNodeService:
             if len(parts) < 6:
                 continue
             cid, name, image, status_str, ports, created, labels = parts
+            container_ids.append(cid)
             # 解析状态
             status_label = "unknown"
             if status_str.startswith("Up "):
@@ -305,6 +309,49 @@ class DockerNodeService:
                 ports=ports if ports else "",
                 createdAt=created,
             ))
+
+        # 批量 docker inspect 获取网络 + 挂载信息
+        if container_ids:
+            inspect_fmt = "{{.Id}}|{{.HostConfig.NetworkMode}}|{{json .Mounts}}"
+            code2, stdout2, _ = _run_docker(
+                node, ["inspect", "--format", inspect_fmt] + container_ids, timeout=20,
+            )
+            if code2 == 0:
+                id_to_info: Dict[str, Dict[str, str]] = {}
+                for line in stdout2.strip().split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        raw_id, network_mode, mounts_json = line.split("|", 2)
+                    except ValueError:
+                        continue
+                    volumes_str = ""
+                    if mounts_json and mounts_json != "null":
+                        try:
+                            mounts = json.loads(mounts_json)
+                            parts_v: List[str] = []
+                            for m in mounts:
+                                src = m.get("Source", "")
+                                dst = m.get("Destination", "")
+                                mode = m.get("Mode", "")
+                                t = m.get("Type", "bind")
+                                if t == "bind":
+                                    parts_v.append(f"{src}:{dst}" + (f":{mode}" if mode else ""))
+                                elif t == "volume":
+                                    parts_v.append(f"{src}→{dst}" + (f"({mode})" if mode else ""))
+                            volumes_str = ", ".join(parts_v)
+                        except (json.JSONDecodeError, KeyError):
+                            volumes_str = ""
+                    id_to_info[raw_id] = {"network": network_mode, "volumes": volumes_str}
+
+                # 回填到 result
+                for c in result:
+                    info = id_to_info.get(c.id)
+                    if info:
+                        c.network = info["network"]
+                        c.volumes = info["volumes"]
+
         return result
 
     # ---- 容器操作 ----
@@ -400,9 +447,19 @@ class DockerNodeService:
             args.extend(["--restart", payload.restart_policy])
         if payload.network:
             args.extend(["--network", payload.network])
-        args.append(payload.image)
+        # extra_args 是 docker run flags，必须放在镜像名之前，如 --privileged --gpus all
         if payload.extra_args:
-            args.extend(payload.extra_args.strip().split())
+            try:
+                args.extend(shlex.split(payload.extra_args))
+            except ValueError as e:
+                raise ValidationException(f"extra_args 解析失败: {e}", code="EXTRA_ARGS_INVALID")
+        args.append(payload.image)
+        # command 覆盖镜像 CMD，追加在镜像名之后，如 "opencode web --port 4096"
+        if payload.command:
+            try:
+                args.extend(shlex.split(payload.command))
+            except ValueError as e:
+                raise ValidationException(f"command 解析失败: {e}", code="COMMAND_INVALID")
         code, stdout, stderr = _run_docker(node, args, timeout=60)
         if code != 0:
             raise BusinessException(f"创建容器失败: {stderr}", code="DOCKER_CREATE_ERROR")
@@ -418,3 +475,34 @@ class DockerNodeService:
             ports=", ".join(payload.ports or []),
             createdAt="",
         )
+
+    # ---- 容器内一次性命令执行 ----
+
+    def exec_in_container(self, node_id: int, cid: str, payload: ExecRequest) -> ExecResult:
+        """在运行中的容器内执行一次性命令（非交互），返回退出码与输出."""
+        node = self.repo.get_by_id(node_id)
+        if not node:
+            raise NotFoundException(f"节点 ID={node_id} 不存在")
+        try:
+            cmd_parts = shlex.split(payload.command)
+        except ValueError as e:
+            raise ValidationException(f"command 解析失败: {e}", code="COMMAND_INVALID")
+        if not cmd_parts:
+            raise ValidationException("命令不能为空", code="COMMAND_EMPTY")
+        args = ["exec"]
+        if payload.workdir:
+            args.extend(["-w", payload.workdir])
+        args.append(cid)
+        args.extend(cmd_parts)
+        code, stdout, stderr = _run_docker(node, args, timeout=payload.timeout)
+        return ExecResult(exit_code=code, stdout=stdout, stderr=stderr)
+
+    def detect_shell(self, node: DockerHost, cid: str) -> str:
+        """探测容器可用的 shell：优先 bash，否则退回 sh。用于交互终端."""
+        # 通过 sh -c 检测 bash 是否存在，成功输出即用 bash
+        code, stdout, _ = _run_docker(
+            node, ["exec", cid, "sh", "-c", "command -v bash"], timeout=10,
+        )
+        if code == 0 and stdout.strip():
+            return "bash"
+        return "sh"

@@ -1,23 +1,46 @@
 """算力调度 API — 节点管理 / 镜像管理 / 容器管理 / Docker Hub 搜索 / 调度任务 / 运行记录 / 日志 / 本地 OpenCode 服务."""
+import asyncio
+import base64
+import fcntl
+import json
+import os
+import pty
+import struct
+import subprocess
+import termios
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.schemas.docker_node_schema import (
     ContainerCreate, ContainerInfo, DockerHostCreate, DockerHostResponse,
-    ImageInfo, NodeTestResult, PullImageRequest,
+    ExecRequest, ExecResult, ImageInfo, NodeTestResult, PullImageRequest,
 )
 from app.schemas.schedule_task_schema import (
     ScheduleTaskCreate, ScheduleTaskResponse, ScheduleTaskUpdate,
     TaskRunResponse,
 )
-from app.services.docker_node_service import DockerNodeService
+from app.schemas.container_template_schema import (
+    TemplateCreate, TemplateResponse, TemplateUpdate,
+)
+from app.services.docker_node_service import DockerNodeService, _docker_env
 from app.services.opencode_local_service import OpenCodeLocalService
 from app.services.schedule_task_service import ScheduleTaskService
+from app.services.container_template_service import ContainerTemplateService
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# pty 终端 helper
+# ---------------------------------------------------------------------------
+
+def _set_winsize(fd: int, cols: int, rows: int) -> None:
+    """设置伪终端窗口大小（ioctl TIOCSWINSZ）."""
+    winsize = struct.pack("HHHH", rows, cols, 0, 0)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
 
 
 # =========================================================================
@@ -108,6 +131,168 @@ def container_logs(
     svc = DockerNodeService(db)
     logs = svc.container_logs(node_id, cid, tail=tail, since=since)
     return {"code": "SUCCESS", "message": "ok", "data": logs}
+
+
+# =========================================================================
+# 容器内一次性命令执行（非交互 console）
+# =========================================================================
+
+@router.post("/nodes/{node_id}/containers/{cid}/exec", response_model=Dict[str, object])
+def exec_in_container(
+    node_id: int, cid: str, payload: ExecRequest, db: Session = Depends(get_db),
+):
+    """在运行中的容器内执行一次性命令，返回 exit_code / stdout / stderr."""
+    svc = DockerNodeService(db)
+    result = svc.exec_in_container(node_id, cid, payload)
+    return {"code": "SUCCESS", "message": "ok", "data": result.model_dump()}
+
+
+# =========================================================================
+# 容器交互式终端（WebSocket + pty + docker exec -it）
+# =========================================================================
+
+@router.websocket("/nodes/{node_id}/containers/{cid}/terminal")
+async def container_terminal(
+    websocket: WebSocket,
+    node_id: int,
+    cid: str,
+    shell: Optional[str] = Query(None, description="指定 shell，留空自动探测 bash/sh"),
+):
+    """容器交互式终端。
+
+    协议（文本帧 JSON）：
+      前端→后端: {"type":"stdin","data":"<str>"} | {"type":"resize","cols":int,"rows":int}
+      后端→前端: {"type":"ready","shell":"bash"} | {"type":"output","data":"<base64>"}
+                 | {"type":"exit","code":int} | {"type":"error","content":"<str>"}
+
+    后端用 pty.openpty 起伪终端，docker exec -it 透传 TTY，
+    local/ssh/docker-api 三种节点天然兼容（DOCKER_HOST 环境变量透传）。
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    await websocket.accept()
+    db = SessionLocal()
+    proc: Optional[subprocess.Popen] = None
+    master_fd: Optional[int] = None
+    slave_fd: Optional[int] = None
+    pump_task: Optional[asyncio.Task] = None
+
+    try:
+        svc = DockerNodeService(db)
+        node = svc.repo.get_by_id(node_id)
+        if not node:
+            await websocket.send_text(json.dumps(
+                {"type": "error", "content": f"节点 ID={node_id} 不存在"}))
+            return
+
+        # 探测 shell
+        try:
+            chosen_shell = shell or svc.detect_shell(node, cid)
+        except Exception as e:
+            await websocket.send_text(json.dumps(
+                {"type": "error", "content": f"shell 探测失败: {e}"}))
+            return
+
+        # 创建 pty
+        master_fd, slave_fd = pty.openpty()
+        _set_winsize(master_fd, 80, 24)
+
+        env = _docker_env(node)
+        cmd = ["docker", "exec", "-it", cid, chosen_shell]
+        logger.info(f"[terminal] node={node.name} cid={cid} shell={chosen_shell}")
+        proc = subprocess.Popen(
+            cmd, env=env,
+            stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+            start_new_session=True,
+        )
+        # 父进程关闭 slave，只保留 master 读写
+        os.close(slave_fd)
+        slave_fd = None
+
+        await websocket.send_text(json.dumps({"type": "ready", "shell": chosen_shell}))
+
+        loop = asyncio.get_event_loop()
+
+        async def pump_out() -> None:
+            """从 master_fd 读输出并推送到 WebSocket."""
+            while True:
+                try:
+                    data = await loop.run_in_executor(None, os.read, master_fd, 65536)
+                except OSError:
+                    break  # master 已关闭
+                if not data:
+                    break
+                await websocket.send_text(json.dumps({
+                    "type": "output",
+                    "data": base64.b64encode(data).decode("ascii"),
+                }))
+
+        pump_task = asyncio.create_task(pump_out())
+
+        # 主循环：接收前端输入
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            mtype = msg.get("type")
+            if mtype == "stdin":
+                try:
+                    os.write(master_fd, msg.get("data", "").encode("utf-8"))
+                except OSError:
+                    break
+            elif mtype == "resize":
+                try:
+                    _set_winsize(
+                        master_fd,
+                        int(msg.get("cols", 80)),
+                        int(msg.get("rows", 24)),
+                    )
+                except (OSError, ValueError):
+                    pass
+
+        # 等待输出泵结束
+        if pump_task and not pump_task.done():
+            try:
+                await asyncio.wait_for(pump_task, timeout=1.0)
+            except asyncio.TimeoutError:
+                pump_task.cancel()
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"[terminal] 异常: {e}")
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "content": str(e)}))
+        except Exception:
+            pass
+    finally:
+        # 清理输出泵
+        if pump_task and not pump_task.done():
+            pump_task.cancel()
+        # 清理子进程
+        if proc is not None:
+            try:
+                proc.terminate()
+                await asyncio.sleep(0.3)
+                if proc.poll() is None:
+                    proc.kill()
+            except Exception:
+                pass
+        # 清理 fd
+        for fd in (master_fd, slave_fd):
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+        db.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 # =========================================================================
@@ -329,3 +514,35 @@ def opencode_list_runs(limit: int = Query(20)):
 def opencode_get_run(run_id: int):
     svc = OpenCodeLocalService()
     return {"code": "SUCCESS", "message": "ok", "data": svc.get_run(run_id)}
+
+
+# =========================================================================
+# 容器模板（Container Templates）— 可复用的容器创建配置
+# =========================================================================
+
+@router.get("/templates", response_model=Dict[str, object])
+def list_templates(db: Session = Depends(get_db)):
+    svc = ContainerTemplateService(db)
+    items = svc.list_templates()
+    return {"code": "SUCCESS", "message": "ok", "data": [t.model_dump() for t in items]}
+
+
+@router.post("/templates", response_model=Dict[str, object])
+def create_template(payload: TemplateCreate, db: Session = Depends(get_db)):
+    svc = ContainerTemplateService(db)
+    t = svc.create_template(payload)
+    return {"code": "SUCCESS", "message": "模板创建成功", "data": t.model_dump()}
+
+
+@router.patch("/templates/{template_id}", response_model=Dict[str, object])
+def update_template(template_id: int, payload: TemplateUpdate, db: Session = Depends(get_db)):
+    svc = ContainerTemplateService(db)
+    t = svc.update_template(template_id, payload)
+    return {"code": "SUCCESS", "message": "模板已更新", "data": t.model_dump()}
+
+
+@router.delete("/templates/{template_id}", response_model=Dict[str, object])
+def delete_template(template_id: int, db: Session = Depends(get_db)):
+    svc = ContainerTemplateService(db)
+    svc.delete_template(template_id)
+    return {"code": "SUCCESS", "message": "模板已删除", "data": None}
