@@ -9,7 +9,6 @@ venv/
 # IDE
 .idea/
 .vscode/
-.codebuddy/
 *.swp
 *.swo
 
@@ -67,3 +66,13 @@ uploads_data/
 
 # Vite cache
 .vite/
+
+# 本地 opencode 客户端配置（不入库，避免覆盖他人）
+/config.json
+
+# 本地下载的 node 二进制（不要入库）
+node-v*.tar.*
+node-v*/
+
+# Codebuddy 计划文件
+.codebuddy/
