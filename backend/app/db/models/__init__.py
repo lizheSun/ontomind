@@ -56,10 +56,12 @@ from app.db.models.agent_platform_model import AgentVersion, AgentDeployment
 
 # --- 专家团（Expert Team）---
 from app.db.models.expert_model import Expert
+from app.db.models.agent_relation_model import AgentRelation, assert_no_cycle
 
 # --- 算力调度（Compute）---
 from app.db.models.docker_node_model import DockerHost
 from app.db.models.schedule_task_model import ScheduleTask, TaskRun
+from app.db.models.container_template_model import ContainerTemplate
 
 # Backwards-compat alias: 旧代码继续 import MCPConfig（已重命名为 MCP）
 MCPConfig = MCP
@@ -82,4 +84,6 @@ __all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaPr
            "OpencodeSession",
            "AgentVersion", "AgentDeployment",
            "Expert",
-           "DockerHost", "ScheduleTask", "TaskRun"]
+           "AgentRelation",
+           "DockerHost", "ScheduleTask", "TaskRun",
+           "ContainerTemplate"]

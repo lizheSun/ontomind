@@ -57,6 +57,19 @@ class Skill(BaseModel):
         server_default="1",
         comment="是否启用",
     )
+    # === OALP v1.0 新增 ===
+    folder_path = Column(
+        String(512), nullable=True,
+        comment="如果是文件夹上传，记录目录（如 ~/.config/opencode/skills/<name>）",
+    )
+    is_loaded = Column(
+        Boolean, nullable=False, server_default="0",
+        comment="是否已同步到 ~/.config/opencode/skills/（true 时 opencode 可发现）",
+    )
+    auto_description = Column(
+        Text, nullable=True,
+        comment="LLM 生成的人话描述（功能 / 何时用 / 输入输出 / 适用场景）",
+    )
 
     def to_response_dict(self) -> dict:
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}

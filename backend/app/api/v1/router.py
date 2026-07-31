@@ -35,6 +35,14 @@ api_router.include_router(opencode_bridge.router, prefix="/opencode", tags=["Ope
 from app.api.v1 import experts
 api_router.include_router(experts.router, prefix="/experts", tags=["专家团"])
 
+# --- 专家团 — Skill/MCP 资源管理子路由（OALP） ---
+from app.api.v1 import expert_skill_mcp
+api_router.include_router(
+    expert_skill_mcp.router,
+    prefix="/experts/skill-mcp",
+    tags=["专家团资源管理"],
+)
+
 # --- 算力调度（Compute Scheduling）---
 from app.api.v1 import compute
 api_router.include_router(compute.router, prefix="/compute", tags=["算力调度"])

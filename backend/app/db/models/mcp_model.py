@@ -5,7 +5,7 @@
 """
 from enum import Enum
 
-from sqlalchemy import Column, String, Boolean, JSON
+from sqlalchemy import Column, DateTime, String, Boolean, JSON, Text
 from app.db.models.base import BaseModel
 
 
@@ -46,6 +46,19 @@ class MCP(BaseModel):
         nullable=False,
         server_default="1",
         comment="是否启用",
+    )
+    # === OALP v1.0 新增 ===
+    auto_description = Column(
+        Text, nullable=True,
+        comment="LLM 生成的人话描述（功能 / 何时用 / 输入输出 / 适用场景）",
+    )
+    tools_manifest_json = Column(
+        JSON, nullable=True,
+        comment="从 opencode /mcp 拉到的工具清单缓存",
+    )
+    last_synced_at = Column(
+        DateTime(timezone=True), nullable=True,
+        comment="最近一次从 opencode 同步时间",
     )
 
     def to_response_dict(self) -> dict:

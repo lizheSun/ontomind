@@ -1524,3 +1524,143 @@ GET    /api/v1/compute/runs/{id}/logs?since_seq=0
 - 29 files changed, 4939 insertions(+), 2058 deletions(-)
 - Commit: `e531227` — `feat(compute): 算力调度全面重构`
 - **Push 失败**：GitHub SSH connection reset（国内网络问题），待网络恢复后重试 `git push origin main`
+
+## [2026-07-29] 容器三件套：启动命令 + Console 终端 + 镜像模板
+
+### 目标
+算力调度页扩展容器管理三大能力：
+1. 镜像默认启动命令（docker run 覆盖 CMD，无需 Dockerfile）
+2. 容器 Console：xterm.js 交互终端（WS+pty）+ 一次性命令执行
+3. 镜像模板系统：CRUD + 内置 opencode 模板 + 创建容器一键填充
+
+### 决策
+- **拒绝 Dockerfile 路线**：`docker run <image> <command>` 原生覆盖 CMD，配置存模板而非镜像，镜像保持干净、配置随时可调
+- **Console 双形态**：完整 xterm.js 终端（WS+pty，支持 bash/sh 探测+resize）+ 轻量一次性 exec REST API
+- **pty 桥接**：pty.openpty + docker exec -it，对 local/ssh/docker-api 三种节点天然兼容（DOCKER_HOST 透传 TTY）
+- **模板内置保护**：is_builtin 字段保护内置模板不可删/不可改名
+- **修复 extra_args 语义**：从 image 之后（误当 CMD）移到 image 之前（正确 docker run flags）；新增 command 字段追加 image 之后
+
+### 新增文件
+- backend: `container_template_model.py` / `container_template_repo.py` / `container_template_schema.py` / `container_template_service.py` / `seed_compute.py`
+- frontend: `TemplatesPanel.tsx` / `TerminalDrawer.tsx` / `ExecCommandModal.tsx`
+
+### 修改文件
+- `backend/app/schemas/docker_node_schema.py` — ContainerCreate +command 字段；+ExecRequest/ExecResult
+- `backend/app/services/docker_node_service.py` — create_container 修正 extra_args/command 顺序（shlex）；+exec_in_container +detect_shell
+- `backend/app/api/v1/compute.py` — +POST /exec、+WS /terminal（pty 桥接）、+模板 CRUD 4 端点
+- `backend/app/db/models/__init__.py` — 注册 ContainerTemplate
+- `backend/app/main.py` — lifespan 接入 seed_container_templates
+- `frontend/src/services/compute.service.ts` — +execContainerCommand +terminalWsUrl +模板 CRUD 4 方法
+- `frontend/src/pages/compute/types.ts` — +ContainerTemplate +ExecResult
+- `frontend/src/pages/compute/ResourcesPanel.tsx` — 创建 Modal 加模板选择/启动命令/另存模板；容器行加终端/执行命令按钮；+模板 Tab
+- `frontend/src/pages/compute/compute.css` — +模板卡片/终端/执行输出样式
+
+### API 端点
+- `POST /api/v1/compute/nodes/{nid}/containers/{cid}/exec` — 一次性命令执行
+- `WS  /api/v1/compute/nodes/{nid}/containers/{cid}/terminal` — 交互终端
+- `GET/POST /api/v1/compute/templates` — 模板列表/创建
+- `PATCH/DELETE /api/v1/compute/templates/{id}` — 模板更新/删除
+
+### 数据库
+- 新表 `container_templates`（靠 create_all 自动建表）：name/image/command/ports(JSON)/env_vars(JSON)/volumes(JSON)/restart_policy/network/extra_args/is_builtin/sort_order
+- 内置 seed：OpenCode 模板（image=sst/opencode:latest, command=`opencode web --port 4096`, ports=4096:4096, restart=unless-stopped）
+
+### 验证
+- 后端：模板 API 返回内置 OpenCode 模板（command/ports/is_builtin 正确）；CRUD + 内置保护测试通过（删内置抛 BusinessException，ORM 无污染）；exec/WS 端点已注册
+- 前端：tsc -b 无新增错误（预存无关错误不计）；oxlint 0 errors；@xterm/xterm + @xterm/addon-fit 已安装
+- 端到端 preview：算力调度页正常打开
+
+---
+
+## 2026-07-31
+
+### Agent: 主开发 Agent（OALP v1.0 — 专家团 / 多 Agent 协同 / 容器化 / AI 一键生成 / Skill+MCP 管理）
+
+### 目标
+基于 [opencode 1.17+ Agent 协议](https://opencode.ai/docs/agents/) 把专家团升级为完整多 Agent 协同平台：
+1. 容器部署时自动注入 expert（agent md + skills + opencode.json）到 opencode 容器
+2. expert 元数据对齐 opencode 协议（OALP v1.0），用 MySQL 存储
+3. 一句话 LLM 自动生成专家草稿
+4. 专家团页面管理 skill/mcp（discover / 加载 / LLM 解读 / 文件夹上传）
+5. 选 expert 时从 DB 动态选 skill/mcp（不再硬编码）
+
+### 调研结论（opencode 官方，无"loop 引擎"产品级概念）
+- 多 Agent 协同 = primary → subagent（`@` 引用 / `task` 工具）→ 子返回文本 → 主继续
+- 没有 "loop 引擎" 原语；loop 由 LLM 自身推理驱动，受 `steps` + `subagent_depth` 约束
+- "evals hook" = plugin event 总线：`tool.execute.before/after` / `session.idle` / `permission.asked` / `experimental.session.compacting`
+- 协议 frontmatter 关键字段：`mode` / `steps` / `permission` / `permission.task`（glob→action）/ `tools` / `model` / `temperature` / `top_p`
+
+### 决策
+- **DB 是 source of truth**，`~/.config/opencode/agent/{slug}.md` 是 sync 产物
+- **permission.task 不进 agent md**（避免每次保存反查关系），单独由 `sync_expert_relations_to_opencode` 合并到 `opencode.json` 的 `agent.{slug}.permission.task`
+- **schema 增量迁移**：`create_all` 只对全新表生效；已有表加列用 `app/db/schema_patch.py` 的 `add_column_if_missing`（捕获 1060 重复列错误做幂等）
+- **evals_json 字段先只读展示**，本期不连 LLM judge（决策确认）
+- **新容器模板 `opencode-agent`**（区别于通用 `OpenCode`）：用 `opencode serve` 而非 `web`，挂载由 deploy 函数运行时注入
+- **容器注入只 mount 必要文件**：`{agent_dir}` + `{skill_dir}` + `opencode.json` 三个 bind，不动其他命名 volume
+
+### 新增文件
+- backend: `db/models/agent_relation_model.py`（AgentRelation + assert_no_cycle）/`db/schema_patch.py`（幂等加列 helper）/`api/v1/expert_skill_mcp.py`（discover/load/upload/summarize 子路由）
+- 修改文件（按层）：
+
+### 修改文件
+- `backend/app/db/models/expert_model.py` — +OALP 字段（mode/subagent_depth/max_steps/system_prompt/permission_json/hooks_json/evals_json/version/container_template_id/bind_skills_to_container/top_p）
+- `backend/app/db/models/skill_model.py` — +folder_path/is_loaded/auto_description
+- `backend/app/db/models/mcp_model.py` — +auto_description/tools_manifest_json/last_synced_at（import 加 Text）
+- `backend/app/db/models/__init__.py` — 注册 AgentRelation + assert_no_cycle
+- `backend/app/db/seed_compute.py` — +内置 opencode-agent 模板（image=sst/opencode、command=`opencode serve`）
+- `backend/app/services/expert_service.py` — 重写：_build_frontmatter（OALP 全集）/ _render_frontmatter_yaml（嵌套 dict/list）/ sync_expert_relations_to_opencode（合并 task 到 opencode.json）/ AgentRelationService / auto_draft_expert（LLM + fallback）/ clone_expert / deploy_expert_container（mount 注入 + health check）
+- `backend/app/schemas/expert_schema.py` — +mode/subagent_depth/max_steps/system_prompt/permission/hooks/evals/container_template_id/bind_skills_to_container/top_p + ExpertAutoDraftResponse + ExpertDeployContainerRequest + ExpertCloneRequest + AgentRelationCreate
+- `backend/app/api/v1/experts.py` — 重写：+auto-draft /clone /deploy-container /relations CRUD 端点
+- `backend/app/api/v1/router.py` — 注册 `/experts/skill-mcp` 子路由
+- `backend/app/main.py` — lifespan 接入 OALP schema 补丁 + seed_default_experts
+- `frontend/src/services/expert.service.ts` — 重写：Expert OALP 全集类型 + 全部 OALP 端点
+- `frontend/src/pages/experts/ExpertTeamPage.tsx` — 重写为 3 Tab（专家 / Skills / MCPs）+ AI 一键生成 Modal + 部署容器 Drawer + 关系管理 Drawer
+
+### API 端点（OALP v1.0）
+- `POST /api/v1/experts/auto-draft` — 一句话 LLM 生成草稿（response_model 扁平返回）
+- `POST /api/v1/experts/{id}/clone` — 复制专家
+- `POST /api/v1/experts/{id}/deploy-container` — 拉起 opencode 容器并注入（node_id + container_template_id + host_port + extra_env + auto_start）
+- `GET  /api/v1/experts/relations/all` — 全部关系
+- `GET  /api/v1/experts/{id}/relations` — 指定专家的关系
+- `POST /api/v1/experts/relations` — 建关系（DFS 反环）
+- `DELETE /api/v1/experts/relations/{id}` — 删关系
+- `GET  /api/v1/experts/skill-mcp/skills/discover` — 扫 opencode + claude + .agents 的 SKILL.md
+- `POST /api/v1/experts/skill-mcp/skills/load-from-opencode` — 全部 upsert 到 skills 表
+- `POST /api/v1/experts/skill-mcp/skills/upload-folder` — zip 上传 + 扫 SKILL.md
+- `POST /api/v1/experts/skill-mcp/skills/{id}/summarize` — LLM 解读
+- `GET  /api/v1/experts/skill-mcp/mcps/discover` — 从 opencode.json 读 mcp 节
+- `POST /api/v1/experts/skill-mcp/mcps/load-from-opencode` — upsert 到 mcps 表
+- `POST /api/v1/experts/skill-mcp/mcps/{id}/summarize` — LLM 解读
+- `GET  /api/v1/experts/skill-mcp/agents/list-local` — 列出本机 agent/*.md
+
+### 数据库
+- 新表 `agent_relations`（靠 create_all 自动建表）：parent_expert_id / child_expert_id / relation / condition / sort_order + unique(parent, child)
+- `experts` 表加 11 列：`top_p`/`mode`/`subagent_depth`/`max_steps`/`system_prompt`/`permission_json`/`hooks_json`/`evals_json`/`version`/`container_template_id`/`bind_skills_to_container`（通过 `db/schema_patch.py` 幂等 ALTER）
+- `skills` 表加 3 列：`folder_path`/`is_loaded`/`auto_description`
+- `mcps` 表加 3 列：`auto_description`/`tools_manifest_json`/`last_synced_at`
+- 内置 seed：4 个专家（data-analyst / frontend / backend / product-manager）+ 3 条演示关系（pm→fe/be/da）+ 1 个 opencode-agent 容器模板
+
+### 验证
+- 后端启动 + schema 补丁幂等：成功（已加列的表跳过，未加列的 ADD）
+- 启动后 seed 4 个内置专家 + 演示关系：成功
+- HTTP e2e（用 `oalp_admin`/`Oalp123!` 跑）：
+  - `POST /experts/seed` → 已 seed 0（幂等）
+  - `GET  /experts` → 6 个专家（4 内置 + 1 xiaohua + 1 test-oalp），全部 OALP 字段填充
+  - `POST /experts` (with permission) → 写入磁盘 md 含完整 frontmatter
+  - `POST /experts/relations` → 自动合并到 `opencode.json` 的 `product-manager.permission.task = {test-oalp: allow, *: deny, test-rel: allow}`（保留旧规则不覆盖）
+  - `GET  /experts/relations/all` → 3 条
+  - `POST /experts/relations` 构造环 → 400 `AGENT_RELATION_CYCLE`
+  - `GET  /experts/skill-mcp/skills/discover` → 42 个 SKILL.md
+  - `POST /experts/skill-mcp/skills/load-from-opencode` → 新增 20 / 更新 69
+  - `GET  /experts/skill-mcp/mcps/discover` → 3 个 MCP（dataPro-search / mcp-server-askecho-search-infinity / openviking-controlplane）
+  - `POST /experts/{id}/deploy-container` (无 docker node) → 404 友好
+  - `POST /experts/auto-draft` → 200（LLM 不可用走 fallback 也填好）
+  - `POST /experts/{id}/clone` → 新 slug `data-analyst-copy`
+- 前端：`npm run build` 我引入的 ExpertTeamPage 错误 = 0（剩余 13 个 TS 错误是仓库原有，与本次无关）
+- 前端 lint（oxlint）：我引入的 ExpertTeamPage 错误 = 0
+- pytest 现有测试：68 passed（1 deselected，是仓库原有 agent_platform websocket 鉴权测试，与本次无关）
+
+### 已知遗留（未做）
+- 真正的"主 agent 跑通调用子 agent"留给 Agent Looper 那条线（本期只做关系持久化 + opencode.json 同步）
+- evals 字段仅展示，UI 上没接 eval runner
+- LLM 解读的 prompt 用的中文硬编码，多语言切换未做
