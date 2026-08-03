@@ -1,4 +1,10 @@
-"""FastAPI main application entry point."""
+"""FastAPI main application entry point.
+
+当前形态（2026-08-03 深度精简后）：
+- **AIDE** — iframe 嵌入 opencode Web UI（前端默认落地页）
+- **用户管理** — 用户 / 角色 / 权限 / 审计
+- 后端只有 3 个路由域：`/api/v1/{auth, users, opencode}`，4 张数据表
+"""
 
 from contextlib import asynccontextmanager
 
@@ -9,63 +15,22 @@ from app.core.config import settings, validate_production_security
 from app.api.v1.router import api_router
 from app.core.exceptions import add_exception_handlers
 from app.db.session import engine, Base
-import app.db.models  # noqa: import all models for table discovery
+import app.db.models  # noqa: F401 — import all models for table discovery
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup / shutdown lifecycle."""
     validate_production_security()
-    # Startup: create tables if not exist (dev convenience)
+    # 建表（dev 便利）：只剩 users / roles / user_roles / audit_logs
     Base.metadata.create_all(bind=engine)
-    # === OALP v1.0 schema 补丁：已有表加列 ===
-    from app.db.session import SessionLocal
-    from app.db.schema_patch import apply_oalp_patches
-    _session = SessionLocal()
-    try:
-        changes = apply_oalp_patches(_session)
-        if changes:
-            from loguru import logger
-            logger.info(f"[main.lifespan] OALP schema 补丁已应用: {changes}")
-    finally:
-        _session.close()
-    # === Knowledge Base seed (T07) ===
-    from app.db.session import SessionLocal
-    from app.db.seed_kb import seed_kb_libraries
-    _session = SessionLocal()
-    try:
-        seed_kb_libraries(_session)
-    finally:
-        _session.close()
-    # === Compute seed：内置容器模板（opencode 等）===
-    from app.db.seed_compute import seed_container_templates
-    _session = SessionLocal()
-    try:
-        seed_container_templates(_session)
-    finally:
-        _session.close()
-    # === 专家团 seed（OALP v1.0）：内置 4 个专家 + 演示关系 ===
-    from app.services.expert_service import seed_default_experts
-    _session = SessionLocal()
-    try:
-        added = seed_default_experts(_session)
-        if added:
-            from loguru import logger
-            logger.info(f"[main.lifespan] 已 seed {added} 个 OALP 内置专家")
-    finally:
-        _session.close()
-    # === 启动调度器（Compute Scheduling）===
-    from app.services.schedule_task_service import _Scheduler
-    _Scheduler.start()
     yield
-    # Shutdown: cleanup connections
-    _Scheduler.stop()
 
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="AI驱动本体自动构建平台 — 五层架构后端服务",
+    description="AI Agent 工作平台 — AIDE（opencode Web UI 嵌入）+ 用户管理",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",

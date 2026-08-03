@@ -22,7 +22,7 @@ interface UserState {
   clearError: () => void;
 }
 
-export const useUserStore = create<UserState>((set, get) => ({
+export const useUserStore = create<UserState>((set) => ({
   // 初始状态
   currentUser: null,
   users: [],

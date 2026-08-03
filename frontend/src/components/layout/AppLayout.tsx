@@ -3,31 +3,21 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Avatar, Dropdown, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
-  ApiOutlined,
-  NodeIndexOutlined,
-  ThunderboltOutlined,
-  SendOutlined,
   SettingOutlined,
   UserOutlined,
   LogoutOutlined,
-  TeamOutlined,
-  MessageOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import useUserStore from '../../stores/userStore';
 import { ZenGodToggle } from '../common';
+import AideHost from './AideHost';
 
 const { Header, Content } = Layout;
 
 type MenuItem = Required<MenuProps>['items'][number];
 
 const topMenuItems: MenuItem[] = [
-  { key: '/workspace', icon: <MessageOutlined />, label: '对话工作台' },
-  { key: '/experts', icon: <TeamOutlined />, label: '专家团' },
-  { key: '/compute', icon: <ThunderboltOutlined />, label: '算力调度' },
-  { key: '/perception', icon: <ApiOutlined />, label: '感知层' },
-  { key: '/cognition', icon: <NodeIndexOutlined />, label: '认知层' },
-  { key: '/decision', icon: <ThunderboltOutlined />, label: '决策层' },
-  { key: '/execution', icon: <SendOutlined />, label: '执行层' },
+  { key: '/aide', icon: <CodeOutlined />, label: 'AIDE' },
   { key: '/users', icon: <SettingOutlined />, label: '用户管理' },
 ];
 
@@ -42,11 +32,10 @@ export default function AppLayout() {
   }, [currentUser, fetchCurrentUser]);
 
   const segments = location.pathname.split('/').filter(Boolean);
-  const selectedKey = (() => {
-    if (segments.length === 0) return '/workspace';
-    if (segments[0] === 'agent-platform') return `/${segments[0]}/${segments[1] || 'resources'}`;
-    return `/${segments[0]}`;
-  })();
+  const selectedKey = segments.length === 0 ? '/aide' : `/${segments[0]}`;
+
+  /** 需要铺满可用区（无 Content margin / 无 page-enter transform）的路由 */
+  const isFullBleed = segments[0] === 'aide';
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -220,12 +209,21 @@ export default function AppLayout() {
         </div>
       </Header>
 
-      {/* 内容区 */}
-      <Content style={{ margin: 24, minHeight: 280 }}>
-        <div className="page-enter">
+      {/* 内容区 —— AIDE 走全幅无内边距（iframe 需要铺满 + 全屏不被 transform 困住） */}
+      {isFullBleed ? (
+        <Content style={{ margin: 0, minHeight: 0 }}>
           <Outlet />
-        </div>
-      </Content>
+        </Content>
+      ) : (
+        <Content style={{ margin: 24, minHeight: 280 }}>
+          <div className="page-enter">
+            <Outlet />
+          </div>
+        </Content>
+      )}
+      {/* AIDE iframe 常驻宿主 —— 挂在路由外层，切走路由不卸载，
+          避免每次进 /aide 都重新加载 opencode UI（只用 display 切显隐）。 */}
+      <AideHost />
     </Layout>
   );
 }

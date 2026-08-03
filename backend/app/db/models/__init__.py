@@ -1,89 +1,36 @@
-"""ORM models."""
+"""ORM models.
+
+当前只剩 4 张表（2026-08-03 深度精简后）：
+- users       用户
+- roles       角色
+- user_roles  用户-角色关联
+- audit_logs  审计日志
+
+🗑️ 已删除的 model（2026-08-03 分两批清理）：
+
+**第一批**（五层业务域 + resources + agent-looper/platform）：
+- 感知层：DataSource / MetaTable / MetaColumn / MetaProfile
+- 认知层：OntologyVersion / OntologyClass / OntologyProperty
+          / OntologyRelationship / OntologyConstraint
+- 资源管理：Instance / Agent / Credential
+- T44 平台：ComputeNode / AgentContainer / NodeContainer / ContainerAgent
+            / ContainerSkill / ContainerMCP / AgentSkill / AgentMCP
+            / NodeConnection / DiscoveryRun / DiscoveryItem
+- Agent Looper：AgentLooperConfig / AgentLooperVersion / AgentLooperTestRun
+- Agent Platform：AgentVersion / AgentDeployment
+- 对话工作台：OpencodeSession
+
+**第二批**（专家团 + 算力调度 + 数据平台 + 知识库 + LLM）：
+- 专家团：Expert / AgentRelation / Skill / MCP
+- 算力调度：DockerHost / ScheduleTask / TaskRun / ContainerTemplate
+- 数据平台：DpDataSource / DpSqlQuery / DpQueryHistory
+            / DpChatSession / DpChatMessage
+- 知识库：KbLibrary / KbDataAsset / KbCodeRepo / KbDocument / KbExperience / KbTag
+- LLM 配置：LLMConfig
+"""
+
 from app.db.models.user_model import User
-from app.db.models.llm_config_model import LLMConfig
-from app.db.models.data_source_model import DataSource
-from app.db.models.metadata_model import MetaTable, MetaColumn, MetaProfile
-from app.db.models.ontology_model import (
-    OntologyVersion, OntologyClass, OntologyProperty,
-    OntologyRelationship, OntologyConstraint,
-)
-from app.db.models.instance_model import Instance
-from app.db.models.agent_model import Agent
-from app.db.models.skill_model import Skill
-from app.db.models.mcp_model import MCP
-
-# --- Data Platform (T06) ---
-from app.db.models.dp_data_source_model import DpDataSource
-from app.db.models.dp_sql_query_model import DpSqlQuery
-from app.db.models.dp_query_history_model import DpQueryHistory
-from app.db.models.dp_chat_session_model import DpChatSession
-from app.db.models.dp_chat_message_model import DpChatMessage
-
-# --- Knowledge Base (T07) ---
-from app.db.models.kb_library_model import KbLibrary
-from app.db.models.kb_data_asset_model import KbDataAsset
-from app.db.models.kb_code_repo_model import KbCodeRepo
-from app.db.models.kb_document_model import KbDocument
-from app.db.models.kb_experience_model import KbExperience
-from app.db.models.kb_tag_model import KbTag
-
-# --- Agent Looper (T34) ---
-from app.db.models.agent_looper_config_model import AgentLooperConfig
-from app.db.models.agent_looper_version_model import AgentLooperVersion
-from app.db.models.agent_looper_test_run_model import AgentLooperTestRun
-
-# --- Agent Resource Platform (T44) — 5 核心 + 7 关联 ---
-from app.db.models.compute_node_model import ComputeNode
-from app.db.models.agent_container_model import AgentContainer
-from app.db.models.node_container_model import NodeContainer
-from app.db.models.container_agent_model import ContainerAgent
-from app.db.models.container_skill_model import ContainerSkill
-from app.db.models.container_mcp_model import ContainerMCP
-from app.db.models.agent_skill_model import AgentSkill
-from app.db.models.agent_mcp_model import AgentMCP
-from app.db.models.credential_model import Credential
-from app.db.models.audit_log_model import AuditLog
 from app.db.models.role_model import Role, UserRole
-from app.db.models.node_connection_model import NodeConnection
-from app.db.models.discovery_run_model import DiscoveryRun
-from app.db.models.discovery_item_model import DiscoveryItem
+from app.db.models.audit_log_model import AuditLog
 
-# --- OpenCode 对话工作台（SDK 直连）业务侧映射 ---
-from app.db.models.opencode_session_model import OpencodeSession
-
-# --- Agent Platform 保留：版本配置快照 + 部署记录 ---
-from app.db.models.agent_platform_model import AgentVersion, AgentDeployment
-
-# --- 专家团（Expert Team）---
-from app.db.models.expert_model import Expert
-from app.db.models.agent_relation_model import AgentRelation, assert_no_cycle
-
-# --- 算力调度（Compute）---
-from app.db.models.docker_node_model import DockerHost
-from app.db.models.schedule_task_model import ScheduleTask, TaskRun
-from app.db.models.container_template_model import ContainerTemplate
-
-# Backwards-compat alias: 旧代码继续 import MCPConfig（已重命名为 MCP）
-MCPConfig = MCP
-
-__all__ = ["User", "LLMConfig", "DataSource", "MetaTable", "MetaColumn", "MetaProfile",
-           "OntologyVersion", "OntologyClass", "OntologyProperty",
-           "OntologyRelationship", "OntologyConstraint",
-           "Instance", "Agent", "Skill", "MCP", "MCPConfig",
-           "DpDataSource", "DpSqlQuery", "DpQueryHistory",
-           "DpChatSession", "DpChatMessage",
-           "KbLibrary", "KbDataAsset", "KbCodeRepo",
-           "KbDocument", "KbExperience", "KbTag",
-           "AgentLooperConfig", "AgentLooperVersion", "AgentLooperTestRun",
-           # T44
-           "ComputeNode", "AgentContainer",
-           "NodeContainer", "ContainerAgent", "ContainerSkill", "ContainerMCP",
-           "AgentSkill", "AgentMCP",
-           "Credential", "AuditLog", "Role", "UserRole",
-           "NodeConnection", "DiscoveryRun", "DiscoveryItem",
-           "OpencodeSession",
-           "AgentVersion", "AgentDeployment",
-           "Expert",
-           "AgentRelation",
-           "DockerHost", "ScheduleTask", "TaskRun",
-           "ContainerTemplate"]
+__all__ = ["User", "Role", "UserRole", "AuditLog"]

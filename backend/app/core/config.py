@@ -1,6 +1,9 @@
-"""Application configuration loaded from environment variables."""
+"""Application configuration loaded from environment variables.
 
-from cryptography.fernet import Fernet
+2026-08-03 深度精简：项目只剩 AIDE + 用户管理，原来五层业务域 / 专家团 /
+算力调度 / 数据平台 / 知识库 / Agent Looper 的配置项已全部删除。
+"""
+
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -38,81 +41,48 @@ class Settings(BaseSettings):
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
-
     # JWT Auth
     SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    # === 感知层加密（T01 新增） ===
-    FERNET_KEY: Optional[str] = None  # 逗号分隔 = MultiFernet 轮换
-
-    # CORS
+    # CORS — 加前端端口时改这里
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
     ]
 
-    # AI / LLM
-    OPENAI_API_KEY: Optional[str] = None
-    OPENAI_BASE_URL: Optional[str] = None
-    LLM_MODEL: str = "gpt-4o"
+    # === AIDE / opencode ===
+    # AIDE 页面 iframe 嵌入 opencode Web UI。
+    # opencode ≥ 1.18 的 `serve` 已内置 Web UI，默认复用 4096；
+    # 老版本 serve 无 UI 时后端会拉起独立 `opencode web`（4097）兜底。
+    OPENCODE_HOST: str = "127.0.0.1"
+    OPENCODE_PORT: int = 4096       # serve（优先复用）
+    OPENCODE_WEB_PORT: int = 4097   # 独立 web（兜底）
 
-    # File Upload
-    UPLOAD_DIR: str = "./uploads"
-    MAX_UPLOAD_SIZE_MB: int = 50
-
-    # === Agent Looper (T34/T35/T36) ===
-    AGENT_CONFIG_PATH: str = "~/.config/opencode/agents"
-    AGENT_LOOPER_TEST_RUNS_TTL_DAYS: int = 30
-
-    # === Agent Resource Platform (T44) / Opencode Config Discovery (T46) ===
-    OPENCODE_CONFIG_PATH: str = "~/.config/opencode"
-
-    # === OpenCode Serve（对话工作台长驻引擎，对齐 CLI 1.17+）===
-    OPENCODE_SERVE_ENABLED: bool = True
-    OPENCODE_SERVE_HOST: str = "127.0.0.1"
-    OPENCODE_SERVE_PORT: int = 4096
-    OPENCODE_SERVE_PASSWORD: str = "ontomind-dev"
-    OPENCODE_SERVE_USERNAME: str = "opencode"
-    OPENCODE_MIN_VERSION: str = "1.17.0"
-    OPENCODE_SERVE_START_TIMEOUT_SECONDS: float = 30.0
-    # chat 优先走 serve；失败时回退 `opencode run --format json`
-    OPENCODE_CHAT_PREFER_SERVE: bool = True
-
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        # 忽略 .env 里的历史遗留项（如已删模块的 FERNET_KEY / REDIS_URL /
+        # OPENAI_API_KEY / AGENT_CONFIG_PATH 等），避免启动时报 extra_forbidden
+        "extra": "ignore",
+    }
 
 
 settings = Settings()
 
 
 def validate_production_security(config: Settings = settings) -> None:
-    """Fail startup when production is using missing/default security keys."""
+    """Fail startup when production is using a missing/default SECRET_KEY."""
     if config.ENVIRONMENT.strip().lower() not in {"production", "prod"}:
         return
 
-    errors: list[str] = []
     if not config.SECRET_KEY or config.SECRET_KEY == DEFAULT_SECRET_KEY:
-        errors.append("SECRET_KEY 仍为默认值")
-
-    raw_fernet = (config.FERNET_KEY or "").strip()
-    if not raw_fernet:
-        errors.append("FERNET_KEY 未配置")
-    else:
-        try:
-            keys = [part.strip() for part in raw_fernet.split(",") if part.strip()]
-            if not keys:
-                raise ValueError("no Fernet keys")
-            for key in keys:
-                Fernet(key.encode("ascii"))
-        except (ValueError, TypeError):
-            errors.append("FERNET_KEY 格式无效")
-
-    if errors:
-        raise RuntimeError("生产环境安全配置校验失败: " + "；".join(errors))
+        raise RuntimeError(
+            "生产环境安全配置校验失败: SECRET_KEY 仍为默认值"
+            "（用 `openssl rand -hex 32` 生成后写进 .env）"
+        )
 
 
 __all__ = [

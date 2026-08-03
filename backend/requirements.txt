@@ -1,51 +1,42 @@
-# FastAPI Core
+# ============================================================
+# OntoMind Backend Requirements
+#
+# 2026-08-03 深度精简：项目只剩 AIDE（opencode Web UI 嵌入）+ 用户管理，
+# 后端 3 个路由域 / 4 张表。原来五层业务域 / 专家团 / 算力调度 /
+# 数据平台 / 知识库 / Agent Looper 的依赖已全部移除。
+#
+# 移除清单：alembic（本就不可用）/ aiomysql / redis / langchain /
+#   langchain-openai / openai / numpy / pandas / celery / rdflib /
+#   asyncssh / sqlglot / sqlparse / sse-starlette
+# ============================================================
+
+# --- FastAPI Core ---
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.3
 pydantic-settings==2.7.0
-
-# Database
-sqlalchemy==2.0.36
-alembic==1.14.0
-pymysql==1.1.1
-cryptography==44.0.0
-aiomysql==0.2.0
-
-# Redis (缓存)
-redis==5.2.1
-
-# Authentication
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
 python-multipart==0.0.18
 
-# AI/ML
-langchain==0.3.14
-langchain-openai==0.2.14
-openai==1.58.1
-numpy==2.2.0
-pandas==2.2.3
+# --- Database ---
+sqlalchemy==2.0.36
+pymysql==1.1.1
 
-# Task Queue
-celery==5.4.0
+# --- Authentication ---
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 
-# Utils
+# --- HTTP client（AIDE 探活 opencode serve/web）---
 httpx==0.28.1
-# OpenCode 对话路径：Python 用 httpx 调 opencode serve（对齐本机 CLI >=1.17），
-# 不引入 Node `@opencode-ai/sdk`；CLI 版本由 OPENCODE_MIN_VERSION 校验。
-python-dotenv==1.0.1
-loguru==0.7.3
-rdflib==7.0.0
-asyncssh==2.21.1
 
-# Dev
+# --- 进程管理（AIDE 扫描 `opencode web` 进程；缺失时代码会优雅降级）---
+psutil==6.1.1
+
+# --- Utils ---
+python-dotenv==1.0.1
+
+# --- Dev ---
 pytest==8.3.4
 pytest-asyncio==0.24.0
 pytest-cov==7.1.0
 black==24.10.0
 ruff==0.8.4
-
-# --- SQL guard + streaming (added by T01) ---
-sqlglot==30.12.0
-sqlparse==0.5.5
-sse-starlette==2.4.1

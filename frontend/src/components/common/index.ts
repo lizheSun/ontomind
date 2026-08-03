@@ -1,27 +1,14 @@
-export { PageHeader } from './PageHeader';
+/**
+ * 通用组件（2026-08-03 深度精简后只剩 4 个）
+ *
+ * 🗑️ 已删除的组件（随四模块下线成为孤儿）：
+ * - `SqlEditor` / `ResultGrid` / `SchemaTree` / `DataTable` / `monaco-setup`
+ *   （数据平台专用，拖着 monaco-editor 6.9MB worker）
+ * - `AgentChatPanel` / `AgentPicker`（对话工作台 / Agent Looper 专用）
+ * - `PageHeader` / `SectionTitle` / `StatCard` / `TagPill` / `DangerConfirm`（无人引用）
+ */
 export { GlassPanel } from './GlassPanel';
-export { StatCard } from './StatCard';
 export { EmptyState } from './EmptyState';
-export { SectionTitle } from './SectionTitle';
-export { TagPill } from './TagPill';
-export { DangerConfirm } from './DangerConfirm';
-export { SqlEditor } from './SqlEditor';
-export type { SqlEditorProps } from './SqlEditor';
-export type { SchemaHint, SupportedDialect } from './monaco-setup';
-export { ResultGrid } from './ResultGrid';
-export type { ResultGridProps } from './ResultGrid';
-export { SchemaTree } from './SchemaTree';
-export type {
-  SchemaTreeProps,
-  SchemaTreeData,
-  SchemaDatabase,
-  SchemaTable,
-  SchemaColumn,
-} from './SchemaTree';
-export { DataTable } from './DataTable';
-export type { DataTableProps } from './DataTable';
-export { default as AgentPicker } from './AgentPicker';
-export type { AgentPickerProps } from './AgentPicker';
 export { CmdKOmnibar } from './CmdKOmnibar';
 export type { CmdKOmnibarProps } from './CmdKOmnibar';
 export {
@@ -31,11 +18,3 @@ export {
   setUIMode,
 } from './ZenGodToggle';
 export type { UIMode, ZenGodToggleProps } from './ZenGodToggle';
-export { default as AgentChatPanel } from './AgentChatPanel';
-export type {
-  AgentChatPanelProps,
-  AgentChatMessage,
-  AgentChatPart,
-  AgentChatRole,
-  AgentToolPartStatus,
-} from './AgentChatPanel';
