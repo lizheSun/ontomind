@@ -1,0 +1,77 @@
+/**
+ * AideHost — AIDE iframe 的全局常驻宿主
+ *
+ * 为什么需要它：
+ *   React Router 切走路由会卸载页面组件，iframe 随之销毁；再回到 /aide 时
+ *   opencode UI 得从零重新加载（拉 JS bundle、建 SSE、恢复 session 列表），
+ *   这就是「每次进 AIDE 都在加载」的根因。
+ *
+ * 做法：
+ *   把 iframe 挂在 AppLayout 里（跟路由同级、常驻不卸载），只用 CSS
+ *   `display: none` 控制显隐。切走时 iframe 仍在后台活着（SSE 不断），
+ *   切回来是「瞬间显示」而不是「重新加载」。
+ *
+ * 定位：
+ *   在 /aide 时 fixed 覆盖内容区（Header 56 + AIDE 工具条 40 = top 96）；
+ *   全屏时 top 降到 40（只留工具条）。工具条本身仍由 AidePage 渲染。
+ */
+import { useEffect, useRef } from 'react';
+import { useAideStore } from '../../stores/aideStore';
+
+/** AppLayout Header 高度 */
+const HEADER_H = 56;
+/** AIDE 工具条高度 */
+const TOOLBAR_H = 40;
+
+export default function AideHost() {
+  const embedUrl = useAideStore((s) => s.embedUrl);
+  const mounted = useAideStore((s) => s.mounted);
+  const visible = useAideStore((s) => s.visible);
+  const fullscreen = useAideStore((s) => s.fullscreen);
+  const reloadToken = useAideStore((s) => s.reloadToken);
+  const setLoaded = useAideStore((s) => s.setLoaded);
+
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // reloadToken 变化时手动 reload（不换 key，避免整个 DOM 节点重建）
+  const lastTokenRef = useRef(reloadToken);
+  useEffect(() => {
+    if (lastTokenRef.current === reloadToken) return;
+    lastTokenRef.current = reloadToken;
+    const el = iframeRef.current;
+    if (!el || !embedUrl) return;
+    setLoaded(false);
+    // 用 src 重设触发重载（contentWindow.location.reload() 跨域会抛）
+    el.src = embedUrl;
+  }, [reloadToken, embedUrl, setLoaded]);
+
+  // 没进过 AIDE 就完全不渲染（避免影响其它页面首屏）
+  if (!mounted || !embedUrl) return null;
+
+  const top = fullscreen ? TOOLBAR_H : HEADER_H + TOOLBAR_H;
+
+  return (
+    <iframe
+      ref={iframeRef}
+      src={embedUrl}
+      title="AIDE — opencode"
+      onLoad={() => setLoaded(true)}
+      style={{
+        position: 'fixed',
+        top,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: `calc(100vh - ${top}px)`,
+        border: 'none',
+        display: visible ? 'block' : 'none',
+        background: '#fff',
+        // 全屏时盖住 antd Drawer/Modal 之下、但在页面内容之上
+        zIndex: fullscreen ? 1000 : 1,
+      }}
+      allow="clipboard-read; clipboard-write; fullscreen"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
+    />
+  );
+}

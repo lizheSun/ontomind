@@ -19,9 +19,23 @@ function formatApiError(err: any, fallback: string): string {
   }
   const messageStr = err?.response?.data?.message;
   if (typeof messageStr === 'string') return messageStr;
-  if (err?.message === 'Network Error') {
-    return '无法连接后端服务，请确认后端已启动且 CORS 配置正确';
+
+  // 无 response = 网络层失败。api.ts 已自动重试 3 次（指数退避）仍失败才到这。
+  // 开发时最常见的原因是后端 `uvicorn --reload` 正在热重载（1~3s 窗口）。
+  if (!err?.response) {
+    const base =
+      import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
+      return `请求超时（30s）。后端 ${base} 可能负载过高或卡住。`;
+    }
+    return (
+      `连不上后端 ${base}（已自动重试 3 次）。请检查：\n` +
+      `1. 后端是否在跑：cd backend && uvicorn app.main:app --reload --port 8000\n` +
+      `2. 若刚改过后端代码，--reload 热重载需 1~3 秒，稍等再试\n` +
+      `3. 端口是否被占用：lsof -iTCP:8000 -sTCP:LISTEN`
+    );
   }
+
   return err?.message || fallback;
 }
 
@@ -51,8 +65,13 @@ export default function Login() {
     } catch (err: any) {
       notification.error({
         message: '登录失败',
-        description: formatApiError(err, '请检查用户名和密码'),
+        description: (
+          <span style={{ whiteSpace: 'pre-line', fontSize: 12.5, lineHeight: 1.7 }}>
+            {formatApiError(err, '请检查用户名和密码')}
+          </span>
+        ),
         placement: 'top',
+        duration: 8,
       });
     } finally {
       setLoading(false);
@@ -73,8 +92,13 @@ export default function Login() {
     } catch (err: any) {
       notification.error({
         message: '注册失败',
-        description: formatApiError(err, '注册失败，请稍后重试'),
+        description: (
+          <span style={{ whiteSpace: 'pre-line', fontSize: 12.5, lineHeight: 1.7 }}>
+            {formatApiError(err, '注册失败，请稍后重试')}
+          </span>
+        ),
         placement: 'top',
+        duration: 8,
       });
     } finally {
       setLoading(false);
