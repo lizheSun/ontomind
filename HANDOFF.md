@@ -1,138 +1,102 @@
-# HANDOFF · 新 Agent 冷启动指南
+# HANDOFF — 新 Agent 冷启动指南
 
-> 目标：任何新 agent 拿到这份文档 + 仓库，**30 分钟内**能跑起对话工作台、专家团、感知/认知全链路。
+> 目标：任何新 agent 拿到这份文档 + 仓库，**15 分钟内**能把项目跑起来并开始改代码。
+
+---
+
+## 0 · TL;DR — 这个项目现在是什么
+
+**OntoMind = AI Agent 工作平台**，当前只有 **2 个模块**：
+
+| 模块 | 路由 | 说明 |
+|---|---|---|
+| **AIDE** | `/aide`（默认落地页） | iframe 嵌入 opencode 官方 Web UI |
+| **用户管理** | `/users` | 用户 / 角色 / 权限 / 审计 |
+
+规模：
+- 后端 **3 个路由域**（`/api/v1/{auth, users, opencode}`）、**11 个端点**、**4 张表**
+- 前端 **2 个页面**、8 个 npm 依赖、构建产物 **1.1MB**
+- 测试：`pytest` **25 passed / 0 failed**；`npm run build` **0 error**
+
+> 🗑️ **2026-08-03 分两批大清理**：删掉了对话工作台、五层业务域（感知/认知/决策/执行）、
+> 资源管理、Agent Looper、Agent Platform、专家团、算力调度、数据平台、知识库、LLM 配置，
+> 连带 **DROP 88 张数据库表**。完整清单见 [AGENT_LOG.md](./AGENT_LOG.md) 与
+> [AGENTS.md](./AGENTS.md#已删除清单老代码里见到即死代码勿再引用)。
 >
-> 假设：macOS/Linux 开发机，已装 Python 3.12+、Node 22+、MySQL 8、Redis 7、Docker（可选）、
-> **opencode CLI ≥ 1.17**（`curl -fsSL https://opencode.ai/install | bash`）。
+> **老代码/老文档里提到这些模块的都是死代码，不要试图恢复或引用。**
 
-## 0 · 项目定位（30 秒理解）
+---
 
-- **OntoMind** = AI 驱动的本体自动构建平台，五层业务架构（perception / cognition / decision / execution / application）
-- **当前活跃模块**：对话工作台（前端 SDK 直连 opencode serve）+ 专家团（管理 opencode agent 配置）+ 感知层（数据源→元数据→本体）
-- **已删除模块**：dashboard / application / projects / runs 4 个页面 + 后端配套；老 `agent_platform/run,approval,session` 编排层
-- **技术栈**：FastAPI 0.115 + SQLAlchemy 2.0 + MySQL 8 + Pydantic v2 · React 19 + antd v6 + Vite 8 + Zustand 5
+## 1 · 环境准备
 
-## 1 · 一次性初始化（新机器第一次）
+### 1.1 依赖版本（易猜错，别装错）
 
-### 1.1 安装依赖
+| 组件 | 版本 | 备注 |
+|---|---|---|
+| Python | 3.12+ | |
+| Node | 20+ | |
+| MySQL | 8 | |
+| **opencode CLI** | **≥ 1.18** | AIDE 硬依赖；1.18 起 `serve` 内置 Web UI |
+| FastAPI | 0.115 | |
+| SQLAlchemy | **2.0** | DeclarativeBase 风格 |
+| Pydantic | **v2** | |
+| React | **19** | |
+| Vite | **8** | |
+| **antd** | **v6** | 不是 v5！API 有 breaking change |
+
+### 1.2 装 opencode CLI（AIDE 必需）
 
 ```bash
-# 后端
-cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# 前端
-cd ../frontend
-npm install
-
-# opencode CLI（专家团 + 对话工作台必需）
 curl -fsSL https://opencode.ai/install | bash
-opencode --version   # 应 ≥ 1.17
+opencode --version   # 必须 ≥ 1.18
 ```
 
-### 1.2 起 MySQL / Redis
+### 1.3 后端依赖
 
 ```bash
-# 简单方式：本机已装 MySQL 8 + Redis 7 直接跑
-mysql.server start
-redis-server --daemonize yes
-
-# 或用 docker compose（如果仓库有 compose 文件；无则跳过）
-docker compose up -d mysql redis   # 只启依赖，不启 backend
+cd backend
+pip install -r requirements.txt
 ```
 
-### 1.3 创建数据库 + 用户
+### 1.4 前端依赖
 
 ```bash
-mysql -uroot -e "CREATE DATABASE IF NOT EXISTS ontomind DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+cd frontend
+npm install
 ```
 
-⚠️ 默认连接：`root` / 空密码 / `127.0.0.1:3306`。**用别的账号请改 `backend/.env`**。
+### 1.5 数据库
 
-### 1.4 配置 `.env`
+```sql
+CREATE DATABASE IF NOT EXISTS ontomind
+  DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
 
-```bash
-# 后端 backend/.env
-cat > backend/.env <<EOF
-DB_USER=root
-DB_PASSWORD=
+建表**不用手动跑 SQL** —— 后端启动时 `Base.metadata.create_all()` 会自动建那 4 张表。
+`backend/schema.sql` 只是 ORM 导出的参考文档。
+
+### 1.6 `.env`
+
+`backend/.env`：
+
+```ini
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=ontomind
+DB_PASSWORD=你的密码
 DB_NAME=ontomind
-SECRET_KEY=$(openssl rand -hex 32)
-FERNET_KEY=u4-7Q3fuoXMKKtNINjtZx4XzFynNyT9FST3hs_LI004=
-DEBUG=true
-EOF
 
-# 前端 frontend/.env（也可用 .env.example 直接复制）
-cat > frontend/.env <<EOF
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-VITE_OPENCODE_URL=http://127.0.0.1:4096
-EOF
+SECRET_KEY=用 openssl rand -hex 32 生成
 ```
 
-**Fernet 密钥**：`.env.example` 里那个可以直接用于开发；生产必换（`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`）。
+> `Settings.model_config` 设了 `"extra": "ignore"`，所以 `.env` 里的历史遗留项
+> （`FERNET_KEY` / `REDIS_URL` / `OPENAI_API_KEY` 等）不会导致启动失败，可以不清。
 
-### 1.5 建表（关键步骤）
+---
 
-⚠️ **不要用 alembic**（本仓库 alembic 目前坏的，见"数据库"章）。用两种方式之一：
+## 2 · 启动（3 个终端）
 
-**方式 A · 自动建表（推荐）**：让 `app.main` 启动时的 `Base.metadata.create_all(engine)` 帮你建所有表。
-
-```bash
-cd backend && source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
-# 启动日志里能看到 "create_all done" / 或至少无报错
-```
-
-**方式 B · 直接跑 schema.sql**（更快、更彻底）：
-
-```bash
-mysql -uroot ontomind < backend/schema.sql
-```
-
-⚠️ `backend/schema.sql` 已同步到最新结构（54 张表），但 `agent_versions` / `agent_deployments` / `experts` 等**只在 create_all 里定义**，不在 schema.sql 里。**首选方式 A**，跑一次 uvicorn 之后表就齐了。
-
-### 1.6 初始化用户 + 内置专家
-
-```bash
-cd backend && source .venv/bin/activate
-
-# 1. 创建 admin 用户（如果已存在跳过）
-python3 << 'PY'
-from app.db.session import SessionLocal
-from app.db.models.user_model import User
-from app.core.security import get_password_hash
-db = SessionLocal()
-u = db.query(User).filter_by(username='admin').first()
-if not u:
-    u = User(username='admin', email='admin@local', password_hash=get_password_hash('admin123'), is_active=True)
-    db.add(u); db.commit()
-    print('admin created (pw=admin123)')
-else:
-    u.password_hash = get_password_hash('admin123')
-    db.commit()
-    print('admin password reset to admin123')
-db.close()
-PY
-
-# 2. 注入 4 个内置专家（data-analyst / frontend / backend / product-manager）
-python3 << 'PY'
-from app.db.session import SessionLocal
-from app.services.expert_service import seed_default_experts
-db = SessionLocal()
-n = seed_default_experts(db)
-print(f'seeded {n} experts')
-db.close()
-PY
-
-# 3. 检查 opencode agent 文件是否生成
-ls ~/.config/opencode/agent/
-# 应看到：backend.md  data-analyst.md  frontend.md  product-manager.md
-```
-
-## 2 · 日常启动（3 个终端）
-
-**终端 1 · opencode serve**（专家团 + 对话工作台的核心依赖）
+**终端 1 · opencode**（AIDE 的核心依赖，**必须带 `--cors`**）
 
 ```bash
 opencode serve --port 4096 --cors http://localhost:5173
@@ -141,183 +105,189 @@ opencode serve --port 4096 --cors http://localhost:5173
 **终端 2 · 后端**
 
 ```bash
-cd backend && source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
-# http://localhost:8000/api/docs
+cd backend && uvicorn app.main:app --reload --port 8000
+# API 文档：http://localhost:8000/api/docs
 ```
 
 **终端 3 · 前端**
 
 ```bash
 cd frontend && npm run dev
-# http://localhost:5173
-# 登录：admin / admin123
+# → http://localhost:5173
 ```
 
-**验证**：浏览器打开 `/workspace`，发一条消息应能收到 AI 回复。
+**验证**：浏览器打开 `http://localhost:5173`，登录后自动进 `/aide`，
+工具条应显示「**已连接 · 复用 serve**」，下方 iframe 里能看到 opencode 官方 UI。
 
-## 3 · 核心架构（新 agent 必读）
+---
 
-### 3.1 对话工作台走 opencode 原生
+## 3 · 核心架构（必读）
 
-- 前端 `features/opencode/client.ts` 是纯 fetch wrapper（与 `@opencode-ai/sdk` 等价），
-  直接调 `http://127.0.0.1:4096/*`（opencode serve）
-- 后端只做 3 件事（`api/v1/opencode.py`）：
-  1. `GET /health` — 探活
-  2. `POST /spawn` — dev-only 一键拉起 opencode CLI
-  3. `POST /session-link` — 把 opencode session_id 落到业务侧 `opencode_sessions` 表
-- 消息 / 事件流全走 opencode 直连，**后端不做转发**
+### 3.1 AIDE = iframe 嵌 opencode 官方 UI
 
-### 3.2 专家团 = opencode agent 配置管理
+**关键事实**：opencode ≥ 1.18 的 `serve` 已内置完整 Web UI —— `GET /` 直接返回 HTML，
+且响应头**没有 `X-Frame-Options`，CSP 也没有 `frame-ancestors`** → 可以直接 iframe。
 
-**核心公式**：**1 个专家 = 1 个 `~/.config/opencode/agent/{slug}.md` 文件**
+所以我们**复用同一个 `serve(4096)` 进程**，零额外开销、无反向代理跳转。
 
-- 数据表：`experts`（`backend/app/db/models/expert_model.py`）
-- 创建/编辑专家：`ExpertService._write_agent_md(e)` 生成对应 md 文件
-- 启动 = 写文件；关闭 = 删文件
-- 对话工作台切专家 → `store.currentAgent = expert.slug` → 请求 body.agent = slug
-- opencode 收到 body.agent 直接走原生路由（用户可 `@slug` 触发）
+前端 3 个文件：
 
-⚠️ **opencode 不热加载 agent 目录**！新增/编辑专家后需 `Ctrl+C` 重启 `opencode serve`
-才能被 `GET /agent` 发现。UI 已提示（未加载的专家有橙色小圆点）。
+| 文件 | 职责 |
+|---|---|
+| `pages/aide/AidePage.tsx` | 只管工具条 + 未就绪引导 |
+| `components/layout/AideHost.tsx` | **iframe 常驻宿主** |
+| `stores/aideStore.ts` | 两者共享状态（status 落 sessionStorage） |
 
-### 3.3 前端 → 后端 → opencode 三方数据流
+⚠️⚠️ **`AideHost` 必须挂在 `AppLayout` 里、跟路由同级，绝对不能放进 `<Route>`**：
+React Router 切走路由会卸载组件，iframe 一销毁 opencode UI 就得重下 bundle + 重建 SSE。
+实测「切走再回来」耗时 **2076ms → 112ms（18.5x）**，iframe 请求数 **11 → 0**。
+切走时只做 `display: none`，iframe 在后台继续活着。
+
+后端 3 个端点（`api/v1/opencode.py`）：
 
 ```
-浏览器 ── HTTP + SSE ─→ opencode:4096          (session/message/event/agent)
+GET  /api/v1/opencode/web/status   探活 + 决策 embed_url；?fast=1 走 ~2ms 快路径
+POST /api/v1/opencode/web/start    拉起独立 opencode web(4097)，serve 无 UI 时兜底
+POST /api/v1/opencode/web/stop     停掉独立 opencode web
+```
+
+⚠️ `opencode --version` 是 500ms 的子进程调用，`serve` 是否带 UI 要发 HTTP —— **两者都有 TTL 缓存
+（10min / 60s），别删**。删了每次进 AIDE 都要多等 600ms。
+
+**iframe 内的消息/事件流平台后端完全不参与**（跨域 iframe，我们读不到也不需要读）。
+
+### 3.2 数据流
+
+```
+浏览器
+   ├── <iframe src=127.0.0.1:4096> ──→ opencode serve   (AIDE：session/message/event 全在 iframe 内)
    │
-   └── HTTP ─→ FastAPI:8000                    (登录 / 专家团 / 感知/认知/决策/执行 / 用户)
+   └── HTTP ─→ FastAPI:8000                             (登录 / 用户管理 / AIDE 探活)
                     │
-                    └── SQLAlchemy → MySQL     (ontomind 数据库)
+                    └── SQLAlchemy → MySQL              (4 张表)
 ```
 
-## 4 · 数据库真相（新 agent 最容易踩坑的地方）
+---
 
-### 4.1 Alembic 是坏的
+## 4 · 数据库
 
-- `backend/alembic/versions/` 空的，无迁移文件
-- `backend/alembic/env.py` 里 import 路径错误（`from app.models import *` 实际是 `app.db.models`）
-- **别跑 `alembic upgrade head`** — 会 ImportError
+### 4.1 只有 4 张表
+
+```
+users / roles / user_roles / audit_logs
+```
 
 ### 4.2 建表靠 `create_all`
 
-- `backend/app/main.py` 启动时 `Base.metadata.create_all(bind=engine)` 自动建缺失的表
-- **新增 ORM Model 必做 3 件事**：
-  1. 建 `app/db/models/xxx_model.py`
-  2. 到 `app/db/models/__init__.py` `from app.db.models.xxx_model import Xxx` **必须**
-  3. 到 `__all__` 加名字
-- 忘了第 2 步 → `create_all` 找不到，表不建
+`app/main.py` 启动时 `Base.metadata.create_all(bind=engine)` 自动建缺失的表。
 
-### 4.3 `schema.sql` 是参考不是权威
+**新增 ORM Model 必做 3 件事**：
+1. 建 `app/db/models/<name>_model.py`（继承 `app.db.session.Base`）
+2. 到 `app/db/models/__init__.py` `from ... import Xxx` — **忘了这步 `create_all` 发现不到，表不建**
+3. 到 `__all__` 加名字
 
-- 位置 `backend/schema.sql`（约 260 行）
-- 只手动维护了 9 张核心表；`agent_versions` / `agent_deployments` / `experts` 等**新表只靠 create_all**
-- 用 `schema.sql` 初始化后仍要跑一次 `uvicorn` 让 create_all 补齐
+### 4.3 alembic 已删除
 
-### 4.4 完整重置数据库
+`alembic/` + `alembic.ini` 于 2026-08-03 移除。原因：
+- `versions/` 一直是空的，没有任何迁移文件
+- `env.py` 的 import 路径是错的（`from app.models import *`，实际在 `app.db.models`）
+- **只有 4 张表，不需要迁移工具**
 
-```bash
-mysql -uroot -e "DROP DATABASE IF EXISTS ontomind; CREATE DATABASE ontomind DEFAULT CHARACTER SET utf8mb4;"
-cd backend && source .venv/bin/activate
-python3 -c "import app.db.models; from app.db.session import engine, Base; Base.metadata.create_all(engine); print('OK')"
-# 然后重跑 §1.6 的用户 + 专家 seed
-```
+要加列直接改 Model + 手动 `ALTER TABLE`，或写一次性脚本。
 
-### 4.5 现有 54 张表按域分组（心里有数）
+### 4.4 `schema.sql` 是导出物不是权威
 
-- **用户 & 权限**：users / roles / user_roles / credentials / audit_logs
-- **LLM**：llm_configs
-- **数据源 + 元数据**：data_sources / meta_tables / meta_columns / meta_profiles
-- **本体**：onto_versions / onto_classes / onto_properties / onto_relationships / onto_constraints
-- **资源管理（T44）**：compute_nodes / node_connections / agent_containers / agents /
-  skills / mcps / node_containers / container_agents / container_skills / container_mcps /
-  agent_skills / agent_mcps / instances / mcp_configs / discovery_runs / discovery_items
-- **Agent Looper（T34）**：agent_looper_configs / agent_looper_versions / agent_looper_test_runs
-- **Agent 版本 & 部署**：agent_versions / agent_deployments
-- **数据平台**：dp_data_sources / dp_sql_queries / dp_query_history / dp_chat_sessions / dp_chat_messages
-- **知识库**：kb_libraries / kb_data_assets / kb_code_repos / kb_documents / kb_experiences / kb_tags
-  （+ 遗留 knowledge_bases / knowledge_chunks / knowledge_documents / source_code_repos / source_code_files）
-- **OpenCode 集成**：opencode_sessions
-- **专家团**：experts
+`backend/schema.sql` 由 ORM 自动生成（文件末尾附再生成命令），只作参考文档。
+**建表权威永远是 `app/db/models/` 下的 Model。**
 
-## 5 · 三层架构硬约束（改代码前必读）
+---
+
+## 5 · 后端硬约束（改代码前必读）
 
 - 分层：`api/v1/*.py` → `services/*_service.py` → `db/repositories/*_repo.py` → `db/models/*_model.py`
-- **事务边界只在 Service 层**。Service 里用 `self.db.flush()` + `self.db.commit()`。
-  ⚠️ **不要用 `with self.db.begin()`** — 与 FastAPI `get_db` 的默认事务冲突（本仓已踩坑）
-- Repository 只能 `self.db.flush()`，不允许 commit / begin / 业务逻辑
-- API 层禁止直接查 DB / 写业务 / 抓业务异常；抛 `BusinessException(msg, code, status_code)`
-- 命名：`XxxService` / `XxxRepository` / `Xxx`(Model) / `XxxCreate|Update|Response`(Schema)
-- 统一响应 `{"code": "SUCCESS", "message": ..., "data": ...}`
-- 新增 API 路由要在 `app/api/v1/router.py` 显式 `include_router`
+- **事务边界只在 Service 层**：`self.db.flush()` + `self.db.commit()`
+  ⚠️ **不要用 `with self.db.begin()`** — 与 FastAPI `get_db` 的默认事务冲突（本仓踩过坑，会抛 `InvalidRequestError`）
+- Repository 只能 `flush()`，**不允许 commit / begin / 写业务逻辑**
+- API 层禁止直接查 DB、禁止写业务逻辑、禁止 try/except 业务异常
+  → 抛 `BusinessException(msg, code, status_code)`，让全局 handler 转成统一响应
+- 命名（严格）：`XxxService` / `XxxRepository` / `Xxx`(Model) / `XxxCreate|Update|Response`(Schema)
+- 统一响应：`{"code": "SUCCESS", "message": "...", "data": ...}`
+- 新增路由要在 `app/api/v1/router.py` 显式 `include_router`
+
+---
 
 ## 6 · 前端硬约束
 
-- **antd v6**（Form/Table/Drawer API 与 v5 有差别）
+- **antd v6**，与 v5 的 breaking change：
+  `destroyOnClose`→`destroyOnHidden`、`maskClosable`→`mask.closable`、
+  `Drawer width`→`size`、`Space direction`→`orientation`、`<Spin tip>` 独立用不生效
 - **lint 用 `oxlint`**：`npm run lint`；**不要装 eslint**
-- axios 拦截器已配 JWT + 401 → `/login`
+- `services/api.ts` 的 axios 拦截器已配：
+  - JWT 自动注入 + 401 自动跳 `/login`
+  - **网络错误自动重试**（指数退避 300/600/1200ms）—— 开发时 `uvicorn --reload` 热重载
+    有 1~3s 拒连窗口，重试让用户无感。只有 GET/HEAD/OPTIONS + `/auth/login`、`/auth/me` 重试；
+    写操作不重试，避免重复提交
+- `services/index.ts` 是空壳（`export {}`），保留只为不破坏历史 import 路径 —— 新代码直接 import 具体 service
 - 状态管理走 Zustand（一个模块一个 store）
 - Vite 环境变量前缀 `VITE_`
 
-## 7 · 常见问题快速排查
+---
+
+## 7 · 常见问题排查
 
 | 症状 | 排查 |
 |---|---|
-| 前端登录后白屏 | 检查 `SECRET_KEY` / `FERNET_KEY` 是否配好；后端启动无报错 |
-| `/workspace` 显示"opencode server 未启动" | 终端 1 起 `opencode serve --port 4096 --cors http://localhost:5173` |
-| 发消息 CORS 报错 | `opencode serve` 必须带 `--cors http://localhost:5173` |
-| 选专家后 `@agent` 不生效 | opencode 只在启动时扫 `~/.config/opencode/agent/`，重启 opencode CLI |
+| `/aide` 显示「opencode 未就绪」 | 终端 1 起 `opencode serve --port 4096 --cors http://localhost:5173` |
+| AIDE iframe 空白 / CORS 报错 | `opencode serve` 必须带 `--cors http://localhost:5173` |
+| **每次进 AIDE 都在加载** | 检查 `AideHost` 是否挂在 `AppLayout`（**不能放路由里**，否则会被卸载） |
+| 登录报「无法连接后端」 | `uvicorn --reload` 热重载有 1~3s 窗口；`api.ts` 已自动重试 3 次，稍等即可 |
+| 登录后白屏 | 检查 `SECRET_KEY` 是否配好；后端启动日志有无报错 |
 | `create_all` 未建新表 | 检查 `db/models/__init__.py` 是否 import 了新 model |
-| 保存出现 "transaction already begun" | Service 里用了 `with self.db.begin()` → 改为 `flush()` + `commit()` |
-| 前端 tsc 一堆存量错误 | AgentStudioPage / AgentLooperWizard / AgentDetailPage 等老代码问题，非本次 wave 触发 |
+| 「transaction already begun」 | Service 里用了 `with self.db.begin()` → 改成 `flush()` + `commit()` |
+| `/users` 返回 403 | 权限系统正常工作 —— 该用户没有平台管理员角色 |
+| pydantic `extra_forbidden` | `.env` 有 Settings 未声明的项；`config.py` 已设 `extra: ignore`，若报错检查是否被改回 |
 
-## 8 · 手上活的接头协议
+---
 
-- 每次做完非平凡改动，**必须追加**一段 `AGENT_LOG.md` 记录：
-  ```markdown
-  ## [YYYY-MM-DD] 标题
+## 8 · 参考文档
 
-  ### 目标
-  ### 决策
-  ### 新增文件
-  ### 修改文件
-  ### 删除文件
-  ### API 端点
-  ### 数据库
-  ### 验证
-  ```
-- 已有 900+ 行例子在 `AGENT_LOG.md` 里，照抄格式
-- Commit message 起头用一个中/英文动词（`feat:` `fix:` `refactor:` `docs:` `test:` 均可）
-
-## 9 · 参考文档索引
-
-| 文件 | 用途 |
+| 文件 | 内容 |
 |---|---|
-| `AGENTS.md` | 项目最新规范速查（本文的精简版） |
-| `AGENT_LOG.md` | 历史变更时间线（做啥前先扫一遍） |
-| `backend/STANDARDS.md` | 分层 / 事务 / 命名 完整规范 |
+| `AGENTS.md` | 项目规范速查（本文的精简版） |
+| `AGENT_LOG.md` | **历史变更时间线 — 动手前先扫一遍** |
+| `backend/STANDARDS.md` | 分层 / 事务 / 命名 / DI 完整规范 |
 | `backend/DESIGN_STANDARDS.md` | API 设计 + DB 命名 + 错误码 |
 | `frontend/STANDARDS.md` | 前端类型 / service / store 规范 |
-| `docs/project-plan.md` | 五层路线图 |
-| `frontend/src/features/opencode/vendor/VENDOR_META.md` | opencode 组件 vendor 计划 |
 
-## 10 · 一键冒烟脚本（新机器最后一步）
+---
+
+## 9 · 一键冒烟（新机器最后一步）
 
 ```bash
-# 后端 API 探活
-curl -s http://localhost:8000/api/docs > /dev/null && echo "backend OK"
+# 后端探活
+curl -s http://localhost:8000/health && echo " ← backend OK"
 
 # opencode 探活
 curl -s http://127.0.0.1:4096/global/health | grep -q healthy && echo "opencode OK"
 
-# 数据库探活
-mysql -uroot ontomind -e "SELECT COUNT(*) AS user_count FROM users; SELECT COUNT(*) AS expert_count FROM experts;"
+# 数据库探活（应输出 4 张表）
+mysql -uroot ontomind -e "SHOW TABLES;"
 
-# 登录并列专家
+# 登录 + AIDE 探活
 TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"admin123"}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["access_token"])')
-curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/experts | python3 -m json.tool | head -20
+  -d '{"username":"你的用户名","password":"你的密码"}' \
+  | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["access_token"])')
+
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/opencode/web/status?fast=1" | python3 -m json.tool | head -8
+# 期望：healthy=true, embed_source="serve"
+
+# 后端测试
+cd backend && pytest -q          # 期望 25 passed
+
+# 前端构建
+cd frontend && npm run build     # 期望 0 error
 ```
 
 **任一步失败 → 回到对应章节排查。全部通过 → 可以开工。**

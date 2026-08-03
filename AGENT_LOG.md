@@ -1664,3 +1664,756 @@ GET    /api/v1/compute/runs/{id}/logs?since_seq=0
 - 真正的"主 agent 跑通调用子 agent"留给 Agent Looper 那条线（本期只做关系持久化 + opencode.json 同步）
 - evals 字段仅展示，UI 上没接 eval runner
 - LLM 解读的 prompt 用的中文硬编码，多语言切换未做
+
+---
+
+## 2026-08-03
+
+### Agent: 主开发 Agent（AIDE — 把 opencode Web UI 嵌入平台）
+
+### 目标
+新增 `AIDE` Tab 页，把 opencode 的完整 Web UI 嵌进平台，作为「完整 IDE 体验」入口。
+要求：页面布局合理、运行流畅。
+
+### 关键调研发现（决定了实现方案）
+1. 查 [opencode web 文档](https://opencode.ai/docs/web/) — `opencode web` 提供浏览器 UI，`serve` 文档上写的是「headless HTTP server」
+2. **但实测本机 opencode 1.18.4 的 `serve` 已内置完整 Web UI**：
+   `curl http://127.0.0.1:4096/` 返回 2884 字节完整 HTML（`<title>OpenCode</title>` + manifest + favicon）
+3. **响应头没有 `X-Frame-Options`，CSP 也没有 `frame-ancestors`** → iframe 嵌入不会被浏览器拦
+   （CSP 只有 `default-src 'self'` 等，管的是 iframe 内部资源加载，不管谁能嵌它）
+
+### 决策
+- **优先复用对话工作台已有的 `serve(4096)`**，零额外进程、零额外内存、启动即用
+  → 后端 `_serves_html()` 探测 `GET /` 是否返回 `text/html` 来判断
+- **独立 `opencode web`(4097) 只作兜底**（老版本 opencode 的 serve 没 UI 时）
+- **不做反向代理**：直接 iframe `127.0.0.1:4096`，少一跳、无 WebSocket/SSE 转发损耗，最流畅
+- **iframe 而非搬 UI 源码**：opencode UI 迭代快，iframe 自动跟随升级，零维护成本
+- **AppLayout 加 full-bleed 分支**：`/aide` 路由跳过 `Content margin:24` 和 `.page-enter`
+  （后者的 `transform: translateY` 会让 `position: fixed` 全屏失效 — CSS containing block 陷阱）
+
+### 新增文件
+- `backend/app/api/v1/opencode.py` 内新增 3 端点（不是新文件，见修改文件）
+- `frontend/src/services/aide.service.ts` — AideStatus/AideStartResult 类型 + status/start/stop
+- `frontend/src/pages/aide/AidePage.tsx` — AIDE 页面（工具条 + iframe + 未就绪引导 + 全屏）
+
+### 修改文件
+- `backend/app/api/v1/opencode.py` — +`_find_web_processes()` / +`_serves_html()` / +`GET /web/status`（智能决策嵌入源）/ +`POST /web/start`（幂等，15s 轮询，注入 `OPENCODE_NO_OPEN=1` 防自动开浏览器）/ +`POST /web/stop`
+- `frontend/src/App.tsx` — import AidePage + `<Route path="aide">`
+- `frontend/src/components/layout/AppLayout.tsx` — 菜单加 `{ key: '/aide', icon: <CodeOutlined />, label: 'AIDE' }`（放在对话工作台之后）+ `isFullBleed` 分支
+
+### API 端点
+- `GET  /api/v1/opencode/web/status` — 探活 + 返回最佳 `embed_url` / `embed_source`(serve|web|none) / cli 版本 / serve+web 双端状态
+- `POST /api/v1/opencode/web/start` — 拉起独立 `opencode web`（幂等，body: port/cors/hostname）
+- `POST /api/v1/opencode/web/stop` — 停掉指定端口的 `opencode web`
+
+### 数据库
+无变更（纯运行时探测，不落库）
+
+### 页面交互设计
+- **工具条（40px）**：AIDE 标题 + 状态点（已连接/未就绪）+ 嵌入源标签（复用 serve / 独立 web）+ URL + 版本号 + 右侧 4 个按钮
+  - 重新加载 iframe（改 `key` 强制重挂）
+  - 在新窗口打开
+  - 全屏 / 退出全屏（支持 **Esc**）
+  - 启停：`embed_source === 'web'` 才给「停止」按钮（**避免误关对话工作台在用的 serve**）
+- **未就绪态**：`<Result>` 展示两种启动方式的可复制命令 + 「一键启动 opencode web」+「重新探测」；CLI 未安装时给安装命令
+- **流畅性优化**：
+  - 就绪后停止轮询（`if (status?.healthy) return`），避免无谓请求
+  - iframe `key` 固定，切 Tab 回来不重新 load
+  - iframe 加载遮罩（`iframeLoaded` 状态）
+  - `allow="clipboard-read; clipboard-write; fullscreen"` + `sandbox` 给足权限（opencode UI 要用剪贴板/弹窗/下载）
+
+### 验证
+- 后端 `GET /web/status` 实测：`healthy=True` / `embed_url='http://127.0.0.1:4096'` / `embed_source='serve'` / `serve_has_ui=True` / `version='1.18.4'` ✅
+- **Playwright e2e 全绿**（`/tmp/aide_0*.png`）：
+  - 登录 → `/aide` → `frames = 2`，第二个是 `http://127.0.0.1:4096/` ✅
+  - iframe 内真实渲染出 opencode UI：`Projects / Add project / Settings / Help / Nothing here yet / Create a session to get started` + 8 个可交互按钮 ✅
+  - 工具条：「已连接」+「复用 serve」标签都在 ✅
+  - **无双滚动条**：`hasBodyScroll = False`（`docScrollH 1000 === docClientH 1000`）✅
+  - iframe 精确铺满：`1600 × 904`，`top=96`（= 56 Header + 40 工具条），`1000 - 96 = 904` ✅
+  - 全屏：`top: 40, h: 960`（占满视口只留工具条）→ Esc 正常退出 ✅
+- 前端 `npm run build`：AIDE 相关 0 error（剩余 13 个是仓库原有，与本次无关）
+- 前端 `npm run lint`（oxlint）：AIDE 相关 0 error/warning
+- 修掉一个 antd v6 废弃警告：`<Spin tip>` → `<Spin />` + 独立 `<Text>`
+
+### 已知遗留
+- iframe 内 opencode 的主题跟平台 Editorial Light 不统一（opencode 自己的深/浅色跟随系统），后续可考虑通过 opencode `tui.json` 的 theme 或注入 CSS 变量对齐
+- 平台侧无法感知 iframe 内的 session 状态（跨域 iframe 无法读 DOM），若要打通需走 `postMessage` 协议（opencode 上游暂未提供）
+- `serve` 内置 UI 是 opencode ≥ 1.18 的行为；若降级到老版本会自动回退到独立 `opencode web` 路径（代码已兼容）
+
+---
+
+## 2026-08-03（补）
+
+### Agent: 主开发 Agent（AIDE 性能优化 — 根治"每次进来都在加载"）
+
+### 问题
+用户反馈：「为什么每次进 AIDE 总是会加载 opencode UI，很慢」
+
+### 根因定位（实测数据，不是猜）
+分三层量化：
+
+**A. 后端 `/web/status` 端点 600ms**
+```
+[1] subprocess opencode --version :  504.2 ms   ← 占 85%
+[2] psutil process_iter (611 procs):  50.3 ms
+[3] port_open 4096                :   3.5 ms
+[4] GET 4096/ (serves_html)       : 105.3 ms
+>>> 合计 ≈ 663 ms，curl 实测 0.56~0.60s
+```
+
+**B. 前端 iframe 每次都重建（真正主因）**
+React Router 切走路由会卸载 `AidePage`，iframe 随之从 DOM 移除；
+再回 `/aide` 时 opencode UI 得从零重来：重下 11 个 JS/CSS bundle、
+重建 SSE 连接、重新拉 session 列表 → 每次 2 秒白屏。
+
+**C. 首屏必须等接口返回才渲染** → 叠加 600ms 空等
+
+### 决策与修法
+
+**后端（`opencode.py`）**
+- `_cli_version()` 加 10min TTL 缓存 —— CLI 版本在进程生命周期内不会变，504ms → 0ms
+- `_serves_html()` 加 60s TTL 缓存 + 改用 `HEAD`（不传 body，比 GET 快），4xx 时回退 GET
+- `_find_web_processes()`（50ms psutil 遍历）改成**只在 `?detail=1` 才跑**，默认不跑
+- 新增 `?fast=1` 快路径：只做端口探活（~4ms），跳过 HTML 探测和版本查询，给前端轮询用
+- `/web/start` `/web/stop` 成功后主动清 `_HTML_CACHE`，避免返回失效的嵌入源
+
+**前端（架构调整）**
+- 新增 `components/layout/AideHost.tsx` —— iframe 常驻宿主，**挂在 `AppLayout` 里**（跟路由同级），
+  切走路由只做 `display: none`，iframe 不卸载、SSE 不断
+- 新增 `stores/aideStore.ts` —— iframe 在 AppLayout、控制它的工具条在 AidePage，
+  两者非父子关系，用 zustand 共享状态
+  - `mounted`：进过一次就永久 true
+  - `visible`：当前是否在 /aide（仅控制 display）
+  - `reloadToken`：递增触发手动 reload（改 `el.src` 而非换 key，避免 DOM 节点重建）
+  - status 结果落 `sessionStorage`，**首屏直接渲染 + iframe 立刻开始加载，不等接口**
+- `AidePage.tsx` 瘦身为「工具条 + 未就绪引导」，iframe 交给 AideHost
+  - 全屏时工具条 `zIndex: 1001` 盖在 iframe(1000) 上，`pointerEvents: 'none'` 让 iframe 可点
+  - 首次探测用 full（拿 version/cli_path），之后全部走 `fast=1`
+- `aide.service.ts` — `status()` 支持 `{ fast, detail }` 参数
+
+### 修改文件
+- `backend/app/api/v1/opencode.py` — +`_VERSION_CACHE`/`_HTML_CACHE`/`_cli_version()`；`_serves_html()` 加缓存+HEAD；`web_status()` 加 `fast`/`detail` 参数；启停后清缓存
+- `frontend/src/components/layout/AideHost.tsx` — **新增**
+- `frontend/src/stores/aideStore.ts` — **新增**
+- `frontend/src/pages/aide/AidePage.tsx` — 重写（去掉 iframe，改用 store）
+- `frontend/src/services/aide.service.ts` — `status()` 加 fast/detail
+- `frontend/src/components/layout/AppLayout.tsx` — 挂载 `<AideHost />`
+
+### 验证（Playwright e2e，`/tmp/aide_perf.png`）
+
+⚠️ **测试坑**：一开始用 `page.goto()` 测「切走再回来」，结果 `iframe exists = False`，
+误判优化无效。原因是 `goto` 是**整页导航**（整个 SPA 重新加载），
+而真实用户点导航菜单走的是**客户端路由**。改成 `page.click('.ant-menu-item:has-text("专家团")')` 后才测准。
+
+| 指标 | 优化前 | 优化后 | 提升 |
+|---|---|---|---|
+| 二次进入 iframe 就绪 | 2076 ms | **112 ms** | **18.5x** |
+| 二次进入 iframe 请求数 | 11 个 | **0 个** | 完全复用 |
+| 切走后 iframe 状态 | 被销毁 | `display:none` 存活 | — |
+| `/web/status`（缓存热） | 600 ms | **2 ms** | **300x** |
+| `/web/status?fast=1`（含网络） | — | 13~21 ms | — |
+| 布局回归 | — | `hasBodyScroll=False`, `1600×904`, `top=96` | 无回归 |
+
+- 前端 `npx tsc -b`：AIDE 相关 0 error
+- 前端 `npm run lint`：AIDE 相关 0 问题
+
+### 已知遗留
+- 首次进入仍需 ~2s（opencode UI 自身的 bundle 加载时间，非本平台可控）；
+  若要再压，需 opencode 上游支持 SSR 或 service worker 预缓存
+- 整页刷新（F5）时 iframe 仍会重载 —— 浏览器行为，无法规避；
+  但 `sessionStorage` 缓存让 iframe 少等 600ms 接口，能提前开始加载
+
+---
+
+## 2026-08-03（补 2）
+
+### Agent: 主开发 Agent（修「无法连接后端服务」— 加网络错误自动重试）
+
+### 现象
+用户报错：`无法连接后端服务，请确认后端已启动且 CORS 配置正确`
+
+### 诊断过程（先量化，不猜）
+
+**第一步：确认后端到底行不行**
+```
+lsof -iTCP:8000  → python3.1 78433 LISTEN ✅ 在跑
+curl /health     → {"status":"healthy"} HTTP 200 / 0.023s ✅
+curl OPTIONS 预检 → access-control-allow-origin: http://localhost:5173 ✅
+curl GET 带 Origin → 200 + 正确 CORS 头 ✅
+```
+**后端和 CORS 完全正常。**
+
+**第二步：Playwright 走真实浏览器复现**
+```
+9 个 API 调用全部 200：
+  200 POST /auth/login    200 GET /auth/me       200 GET /opencode/health
+  200 GET /experts        200 GET /opencode/web/status
+AIDE 页面正常显示：已连接 / 复用 serve / v1.18.4
+唯一失败：GET http://127.0.0.1:4096/event :: net::ERR_ABORTED
+  ← 这是 iframe 内 opencode 自己的 SSE，跟我们后端无关
+```
+
+**第三步：定位文案来源**
+```
+grep -rn "无法连接" frontend/src
+  → pages/Login.tsx:23   ← 是【登录页】的提示，不是 AIDE
+```
+
+**第四步：找到真正根因**
+```
+ps -p 78433 -o lstart=,etime=
+  → Mon Aug 3 11:18:33 2026   etime=03:37
+```
+后端进程只活了 **3 分 37 秒** —— 因为我前面在改 `opencode.py`，
+`uvicorn --reload` 触发了热重载。**热重载期间有 1~3 秒窗口会 ECONNREFUSED**，
+用户恰好在这个窗口点了登录 → axios 抛 `Network Error` → 弹出那句提示。
+
+**不是配置问题，是开发时热重载的固有时序窗口。**
+
+### 决策
+既然是必然存在的时序窗口，就让前端自己扛住，而不是把锅甩给用户：
+1. **网络层失败自动重试**（有 HTTP 响应的 4xx/5xx 一律不重试，避免重复提交）
+2. **重试白名单**：GET/HEAD/OPTIONS 天然幂等可重试；
+   POST 默认不重试，但 `/auth/login` `/auth/me` 是纯查询语义，显式加白名单
+3. **指数退避** 300/600/1200ms —— 总窗口 2.1s，刚好覆盖 uvicorn 热重载时间
+4. **错误提示改成可执行的排查步骤**，而不是笼统说"CORS 配置不对"（本来就没错）
+
+### 修改文件
+- `frontend/src/services/api.ts` — 重写响应拦截器：
+  - `shouldRetry()`：只重试无 response 的网络错误 + 幂等方法/白名单路径
+  - 指数退避重试，`__retryCount` 挂在 config 上防无限循环
+  - 401 处理加防护：已在 `/login` 就不再跳转，避免无限刷新
+- `frontend/src/pages/Login.tsx` — `formatApiError()` 区分场景：
+  - 超时（ECONNABORTED）→ 提示负载过高
+  - 网络失败 → 给出 3 步可执行排查（含具体命令），并说明已自动重试过
+  - notification 加 `whiteSpace: 'pre-line'` 让多行提示正常换行，`duration: 8` 给足阅读时间
+
+### 验证（Playwright e2e）
+
+**场景 1：后端未启动时登录，中途拉起后端**
+```
+准备：kill -9 后端，确认 8000 端口空
+点登录 → 1.2s 后后台拉起后端
+控制台：
+  [api] 网络失败，300ms 后重试 (1/3): POST /auth/login
+  [api] 网络失败，600ms 后重试 (2/3): POST /auth/login
+  [api] 网络失败，1200ms 后重试 (3/3): POST /auth/login
+结果：url = http://localhost:5173/workspace
+✅ 自动重试成功 —— 后端恢复后登录自动完成，用户全程无感
+```
+
+**场景 2：后端真的挂了（不重启）**
+```
+重试 3 次后停止，弹出提示：
+  连不上后端 http://localhost:8000/api/v1（已自动重试 3 次）。请检查：
+  1. 后端是否在跑：cd backend && uvicorn app.main:app --reload --port 8000
+  2. 若刚改过后端代码，--reload 热重载需 1~3 秒，稍等再试
+  3. 端口是否被占用：lsof -iTCP:8000 -sTCP:LISTEN
+✅ 提示清晰可执行，不再误导用户查 CORS
+```
+
+- `npx tsc -b`：api.ts / Login.tsx 相关 0 error
+- `npm run lint`：api.ts / Login.tsx 相关 0 问题
+- 后端已恢复运行（`/health` 200）
+
+### 副作用说明
+- 全站所有走 `services/api.ts` 的请求都获得了网络重试能力（GET 类自动生效）
+- POST/PATCH/PUT/DELETE 默认**不重试**，不会产生重复写入
+- 重试日志用 `console.warn` 打印，便于开发时观察，不影响用户
+
+---
+
+## 2026-08-03（补 3）
+
+### Agent: 主开发 Agent（下线「对话工作台」— 前后端彻底删除）
+
+### 目标
+对话工作台功能不再需要，前后端删除干净。能力已由 AIDE（iframe 嵌 opencode 官方 UI）承接。
+
+### 删前盘点（避免删漏/删错）
+```
+frontend:
+  features/opencode/**                    31 个文件，只被 ChatWorkspacePage 引用（自闭环）
+  pages/agent-platform/ChatWorkspacePage.tsx
+  main.tsx                                引了 vendor/styles/opencode.css
+  App.tsx / AppLayout.tsx / CmdKOmnibar.tsx / AgentStudioPage.tsx / ResourcesConsolePage.tsx
+                                          共 10 处 /workspace 引用
+backend:
+  api/v1/opencode.py                      /health /spawn /session-link 三个端点（仅工作台用）
+  db/models/opencode_session_model.py
+  db/models/__init__.py                   注册 + __all__
+  schema.sql                              第 8 节 opencode_sessions 建表
+  MySQL                                   opencode_sessions 表（9 行数据）
+```
+**关键确认**：AIDE 只用 `/opencode/web/*`，跟被删的三个端点零交集；
+`features/opencode` 里的 `ExpertPicker` 只被 `ChatWorkspaceShell` 用，专家团页面不依赖它。
+
+### 决策
+- **`/workspace` 路由保留为重定向**（`<Navigate to="/aide" replace />`），
+  老书签/外链不会 404
+- **默认落地页从 `/workspace` 改成 `/aide`**（`<Route index>` + `AppLayout.selectedKey`）
+- CmdK 面板的「对话工作台」项换成「AIDE」；顺手删掉指向死路由的「运行记录」（`/agent-platform/runs` 早已下线）
+- `ResourcesConsolePage`（已不在路由里的死代码）里的 `/workspace` 跳转也改指 `/aide`，避免留脏引用
+- **MySQL 表直接 DROP**（9 行历史数据无保留价值，纯审计映射）
+- `schema.sql` 删掉第 8 节后，把 9~13 节编号重排为 8~12，保持连续
+
+### 删除文件
+- `frontend/src/features/opencode/`（**整目录 31 个文件**：client.ts / types.ts / index.ts /
+  13 个 components / 11 个 hooks / stores/opencodeStore.ts / vendor/{LICENSE,opencode.css,VENDOR_META.md}）
+- `frontend/src/pages/agent-platform/ChatWorkspacePage.tsx`
+- `backend/app/db/models/opencode_session_model.py`
+
+### 修改文件
+- `frontend/src/main.tsx` — 去掉 `import './features/opencode/vendor/styles/opencode.css'`
+- `frontend/src/App.tsx` — 去掉 ChatWorkspacePage import；`<Route index>` 改指 `/aide`；
+  `workspace` 改成 `<Navigate to="/aide" replace />`
+- `frontend/src/components/layout/AppLayout.tsx` — 删「对话工作台」菜单项 + `MessageOutlined` import；
+  `selectedKey` 默认值 `/workspace` → `/aide`
+- `frontend/src/components/common/CmdKOmnibar.tsx` — 「对话工作台」项换成「AIDE」；删「运行记录」死项
+- `frontend/src/pages/agent-platform/index.ts` — 去掉 ChatWorkspacePage 导出
+- `frontend/src/pages/agent-platform/AgentStudioPage.tsx` — 「前往对话工作台」→「前往 AIDE」
+- `frontend/src/pages/agent-platform/ResourcesConsolePage.tsx` — 2 处跳转改指 `/aide`
+- `backend/app/api/v1/opencode.py` — **526 行 → 348 行**，只保留 `/web/{status,start,stop}`；
+  清掉 `get_db` / `Session` / `OpencodeSession` / `settings` 等不再需要的 import
+- `backend/app/db/models/__init__.py` — 去掉 OpencodeSession import + `__all__` 条目
+- `backend/schema.sql` — 删第 8 节 opencode_sessions 建表（22 行），9~13 节编号重排为 8~12
+- `AGENTS.md` — 「对话工作台 + 专家团」章节重写为「AIDE + 专家团」；补已删端点清单；
+  清 2 行过期内容（vendor 计划、ChatComposer 输入法说明）
+- `HANDOFF.md` — 10 处更新：目标/活跃模块/CLI 版本/终端说明/验证步骤/3.1 整节重写/
+  数据流图/数据表清单/排查表/冒烟脚本加 AIDE 探活
+
+### 数据库
+- `DROP TABLE opencode_sessions`（含 9 行历史数据）
+- `schema.sql` 同步删除建表语句
+- ⚠️ `task_runs.opencode_session_id` 字段**保留** —— 那是算力调度记录 opencode 任务用的独立字段，与本次无关
+
+### API 端点变更
+- ❌ `GET  /api/v1/opencode/health`
+- ❌ `POST /api/v1/opencode/spawn`
+- ❌ `POST /api/v1/opencode/session-link`
+- ❌ `GET  /api/v1/opencode/session-link`
+- ✅ 保留 `GET /api/v1/opencode/web/status` / `POST /web/start` / `POST /web/stop`
+
+### 验证
+**后端**
+```
+GET /opencode/web/status  -> 200  healthy=True src=serve   ✅ 保留端点正常
+GET /opencode/health      -> 404  ✅
+GET /opencode/session-link-> 404  ✅
+GET /opencode/spawn       -> 404  ✅
+后端启动无错误（bcrypt 警告是仓库既有问题）
+pytest: 68 passed, 1 deselected  ← 与删除前完全一致，无回归
+```
+
+**前端**
+```
+npm run build: 14 个 error 全是仓库原有（AgentStudioPage/TemplatesPanel/perception/
+               AgentDetailPage/AgentLooperWizard/userStore），无「找不到模块」类删漏错误
+npm run lint : 只有既有 warning
+grep -rn "/workspace" frontend/src  -> 无残留
+```
+
+**Playwright e2e 回归全绿**（`/tmp/after_delete.png`）
+```
+1) 登录后默认落地页 = http://localhost:5173/aide            ✅
+2) 顶部菜单 = [AIDE, 专家团, 算力调度, 感知层, 认知层,
+              决策层, 执行层, 用户管理]                      ✅ 无「对话工作台」
+3) 访问老链接 /workspace → 自动跳 /aide                      ✅
+4) AIDE 页面：含「AIDE / 已连接 / 复用 serve」，
+   iframe 指向 http://127.0.0.1:4096/                        ✅
+5) 专家团：正常渲染，14 个专家卡片匹配                        ✅
+6) CmdK 面板已无「对话工作台」                                ✅
+页面错误：仅 2 个 antd 既有废弃警告
+失败请求：仅 iframe 内 opencode 自己的 SSE（正常）
+```
+
+### 代码量变化
+- 前端：删 32 个文件
+- 后端：删 1 个文件，`opencode.py` 瘦身 178 行（526 → 348）
+- schema.sql：删 22 行
+
+---
+
+## 2026-08-03（补 4）
+
+### Agent: 主开发 Agent（大清理 — 删除五层业务域 + resources + agent-looper/platform）
+
+### 目标
+感知层 / 认知层 / 决策层 / 执行层全部删除，前后端 + 数据库表都要干净。
+
+### 删前盘点发现的 3 个关键交叉点（不是无脑删）
+
+**1. 数据平台的「元数据」页完全依赖感知层**
+```
+/data-platform/metadata（仍在导航里活着）是从感知层 verbatim port 过来的：
+  前端 12 处调 perceptionAPI
+  后端 8 个 /api/v1/perception/* 端点
+  MetadataService + metadata_repo + MetaTable/MetaColumn/MetaProfile
+  4 张表：meta_tables(3007) / meta_columns(83451!) / meta_profiles(11) / data_sources(2)
+```
+→ 用户决策：**元数据能力也一起删干净**
+
+**2. instances/agents 被 /api/v1/resources 大量使用**
+```
+resources.py 46 个端点，其中 29 处是 skills/mcps —— 而专家团页面正在用
+（resourcesAPI.listSkills / listMCPs）
+```
+→ 用户决策：**全删 resources，skills/mcps 搬到 experts 下**
+
+**3. Agent Looper 的 3 个页面挂在 /resources 下**
+→ 用户决策：**一起删掉**
+
+### 决策
+- **先搬迁再删除**：skills/mcps 的 13 个 CRUD/sync 端点先搬到
+  `/api/v1/experts/skill-mcp/*`（原文件 21 个端点），再删 resources.py
+- **前端 resourcesAPI 彻底废弃**：`expert.service.ts` 补 `listSkills/createSkill/.../syncMCPs`
+  等 13 个方法，ExpertTeamPage 改用 expertService
+- **所有已删路由保留为重定向**（`<Navigate>`），老书签/外链不 404：
+  `/workspace|/perception|/cognition|/decision|/execution` → `/aide`；
+  `/resources/*|/agent-platform/*` → `/experts`；`/data-platform/metadata` → `/data-platform`
+- **schema.sql 从 ORM 自动重生**：原文件表名大量过期（`mcp_configs`/`docker_services`/
+  `schedule_tasks` 早已改名）且只覆盖 12 张表 → 改成用 `CreateTable` 从
+  `Base.metadata.sorted_tables` 导出，并在头部写清 24 张保留表 + 39 张已删表清单
+- **3 个跨模块外键去掉但保留列**（标 DEPRECATED），避免与历史数据不一致：
+  `kb_data_assets.ref_meta_table_id` / `ref_data_source_id` / `dp_chat_sessions.agent_looper_config_id`
+- **role_service / audit_log_service 保留**：被 `core/authorization.py` 用（llm.py 的权限校验依赖）
+
+### 删除文件（后端 58 个）
+- **API（7）**：`api/v1/{perception,cognition,decision,execution,resources}.py`
+  + `api/v1/agent_looper/`（4 文件）+ `api/v1/agent_platform/`（6 文件）
+- **Service（21）**：`services/agent_platform/`（10 文件）+ `agent_container_discovery_service`
+  / `agent_discovery` / `agent_looper_{discovery,service,writer}_service` / `agent_service`
+  / `data_source_service` / `instance_service` / `metadata_service` / `ontology_service`
+  / `credential_service`
+- **Repository（7）**：`agent_looper_repo` / `agent_platform_repo` / `agent_repo`
+  / `data_source_repo` / `instance_repo` / `metadata_repo` / `credential_repo`
+- **Model（21）**：`data_source` / `metadata` / `ontology` / `instance` / `agent`
+  / `compute_node` / `agent_container` / `node_container` / `container_agent`
+  / `container_skill` / `container_mcp` / `agent_skill` / `agent_mcp` / `node_connection`
+  / `discovery_run` / `discovery_item` / `agent_platform` / `agent_looper_{config,version,test_run}`
+  / `credential`
+- **Schema（8）**：`agent_looper` / `agent_platform` / `agent` / `data_source` / `instance`
+  / `metadata` / `credential` / `project`
+- **测试（9）**：`tests/agent_platform/`（1）+ `test_agent_looper_*`（4）
+  / `test_compute_node` / `test_node_container_discovery` / `test_naming_migration`
+  / `test_agent_platform_wave0`
+- **孤儿脚本（1）**：`app/scripts/purge_test_runs.py`
+
+### 删除文件（前端）
+- **页面目录（6）**：`pages/{perception,cognition,decision,execution,resources,agent-platform}/`
+- **单页（1）**：`pages/data-platform/MetadataPage.tsx`（依赖感知层）
+- **Service（3）**：`services/{resourcesAPI,agentPlatform.service,agentLooper.service}.ts`
+- **组件（2）**：`components/common/AgentPicker.tsx` + 其测试（依赖已删 service，已成孤儿）
+
+### 修改文件
+- `backend/app/api/v1/expert_skill_mcp.py` — **+13 个 skills/mcps CRUD/sync 端点**（493→660 行，共 21 端点）
+- `backend/app/api/v1/router.py` — 重写：只注册 8 个模块，头部写清已删路由清单
+- `backend/app/db/models/__init__.py` — 重写：24 个 model，头部写清已删 model 清单
+- `backend/app/db/models/kb_data_asset_model.py` — 2 个外键去约束保留列（DEPRECATED）
+- `backend/app/db/models/dp_chat_session_model.py` — `agent_looper_config_id` 去外键（DEPRECATED）
+- `backend/schema.sql` — **从 ORM 自动重生**（609 行 / 24 张表 + 完整已删清单）
+- `backend/tests/data_platform/test_opencode_sync.py` — 3 处 `app.api.v1.resources`
+  改成 `expert_skill_mcp`；异常类型 `HTTPException` → `BusinessException`
+- `frontend/src/services/expert.service.ts` — +`SkillRow`/`McpRow` 类型 + 13 个 CRUD 方法
+- `frontend/src/services/index.ts` — 重写：删 `resourcesAPI`/`perceptionAPI`/`cognitionAPI`
+  /`decisionAPI`/`executionAPI`，只留 `llmAPI`+`authAPI`，头部写清迁移指引
+- `frontend/src/App.tsx` — 重写：8 个活跃路由 + 8 条重定向
+- `frontend/src/components/layout/AppLayout.tsx` — 菜单 6 项（AIDE/专家团/算力调度/数据平台/知识库/用户管理）；
+  `selectedKey` 简化（agent-platform 分支已删）
+- `frontend/src/components/common/CmdKOmnibar.tsx` — 删 7 个指向死路由的 nav 项 + 4 个未用图标
+- `frontend/src/components/common/index.ts` — 去掉 AgentPicker 导出
+- `frontend/src/pages/experts/ExpertTeamPage.tsx` — `resourcesAPI` → `expertService`；`MCPConfig` → `McpRow`
+- `frontend/src/pages/compute/TemplatesPanel.tsx` / `stores/userStore.ts` — 顺手清历史未用变量
+- `AGENTS.md` / `HANDOFF.md` — 项目定位、活跃模块、路由清单、数据表清单、数据流图全部同步
+
+### 数据库
+**DROP 39 张表（约 9 万行数据）**，一次性执行（关 FOREIGN_KEY_CHECKS）：
+```
+感知层    : data_sources(2) / meta_tables(3007) / meta_columns(83451) / meta_profiles(11)
+认知层    : onto_versions(3) / onto_classes(138) / onto_properties(1250)
+            / onto_relationships(40) / onto_constraints(680)
+资源管理  : instances(1) / agents(2) / credentials(0) / mcp_configs(0)
+T44 平台  : compute_nodes(1) / agent_containers(0) / node_containers(0)
+            / container_agents(0) / container_skills(0) / container_mcps(0)
+            / agent_skills(0) / agent_mcps(0) / node_connections(1)
+            / discovery_runs(71) / discovery_items(1828)
+AgentLooper: agent_looper_configs(0) / agent_looper_versions(0) / agent_looper_test_runs(0)
+AgentPlatform: agent_versions(2) / agent_deployments(0)
+旧知识库  : knowledge_bases(1) / knowledge_chunks(0) / knowledge_documents(0)
+            / source_code_repos(0) / source_code_files(0)
+旧算力表名: docker_services(1) / schedule_tasks(1) / task_runs(1) / task_log_entries(8)
+Alembic   : alembic_version(1)
+```
+**结果**：DB 从 63 张表 → **24 张**，零孤儿零缺失（ORM 声明与 DB 实际完全一致）
+
+### API 端点变更
+- ❌ 删除：`/api/v1/{perception,cognition,decision,execution,resources,agent-looper,agent-platform}/*`
+- ✅ 新增：`/api/v1/experts/skill-mcp/{skills,mcps}` 全套 CRUD + `/sync`（从 resources 搬迁）
+- ✅ 保留：`/api/v1/{auth,users,llm,opencode,experts,compute,data-platform,knowledge-base}`
+
+### 验证
+
+**后端**
+```
+app import 成功，路由只剩 8 个模块前缀
+✅ 保留端点（7 个全 200）:
+   /experts (8) · /experts/skill-mcp/skills (43) · /experts/skill-mcp/mcps (3)
+   /opencode/web/status · /compute/nodes (1) · /data-platform/sources · /knowledge-base/libraries (4)
+❌ 已删端点（8 个全 404）:
+   /perception/* · /cognition/* · /decision/* · /execution/*
+   /resources/skills · /resources/compute-nodes · /agent-looper/configs · /agent-platform/agents
+外键完整性：Base.metadata.sorted_tables 成功排序 24 张表（修完 3 个断链后）
+启动日志无错误
+```
+
+**pytest 基线对比**（用 `git stash` 精确对比）
+```
+删除前：34 failed, 202 passed, 6 errors
+删除后：29 failed, 109 passed, 6 errors
+→ 失败数 34→29（修好 5 个 opencode_sync 端点测试）
+→ passed 下降是因为删了 8 个测试文件（测的都是已删模块）
+→ 剩余 29 个失败全部集中在 data_platform 既有测试（用 mcp_type 等旧字段名），
+  逐个用 git stash 验证过：删除前后完全一致，非本次引入
+```
+
+**前端**
+```
+npm run build → ✓ built，0 error
+  （连历史遗留的 14 个 TS 错误也一并清零：AgentStudioPage/AgentLooperWizard
+   /AgentDetailPage/perception 等文件已删除，TemplatesPanel/userStore 顺手修掉）
+```
+
+**Playwright e2e 全绿**（`/tmp/after_purge.png`）
+```
+1) 登录 → 默认落地 /aide                                          ✅
+2) 菜单 = [AIDE, 专家团, 算力调度, 数据平台, 知识库, 用户管理]      ✅ 与预期完全一致
+3) 8 条死路由重定向全部生效                                        ✅
+   /workspace|/perception|/cognition|/decision|/execution → /aide
+   /resources|/agent-platform → /experts
+   /data-platform/metadata → /data-platform/sources
+4) 6 个保留页面全部正常渲染（无白屏）                              ✅
+5) 专家团 Skills Tab 20 行 / MCPs Tab 23 行                        ✅ 端点搬迁成功
+页面错误：仅 antd 既有废弃警告 + 2 个 403（/api/v1/users，
+          测试用户非平台管理员，权限系统正常工作，与本次无关）
+失败请求：仅 iframe 内 opencode 自己的 SSE（正常）
+```
+
+### 代码量变化
+- 后端：删 **58 个文件**（API 7 + service 21 + repo 7 + model 21 + schema 8 + 测试 9 + 脚本 1，含目录）
+- 前端：删 **6 个页面目录 + 4 个单文件**
+- 数据库：63 张表 → **24 张**（DROP 39 张，约 9 万行）
+- schema.sql：从手工维护的 12 张过期表 → ORM 自动生成的 24 张准确表
+
+---
+
+## 2026-08-03（补 5）
+
+### Agent: 主开发 Agent（深度清理 — 删除专家团/算力调度/数据平台/知识库/LLM，只留 AIDE + 用户管理）
+
+### 目标
+继续删除专家团、算力调度、数据平台、知识库，让项目整体清爽干净，包括数据库。
+
+### 删前盘点
+- **AIDE 完全自闭环**：`AidePage`/`AideHost`/`aideStore`/`aide.service` 只依赖 `api.ts`；
+  后端 `opencode.py` 只依赖 `auth` + `exceptions` → 删四模块对 AIDE 零影响 ✅
+- 发现上次删除留下的**空壳目录**（只剩 `__pycache__`）：
+  `api/v1/agent_looper/` / `api/v1/agent_platform/` / `services/agent_platform/` → 一并清掉
+
+### 用户决策（提问确认）
+1. **LLM 配置** → 一起删掉（四模块删完后 `LLMConfigService` 只剩 `/api/v1/llm` 自己在用，前端无页面）
+2. **用户管理** → 保留（登录必需 `users` 表）
+3. **4 个重组件** → 全删 + 卸依赖（`SqlEditor`/`ResultGrid`/`SchemaTree`/`DataTable`
+   拖着 monaco-editor 6.9MB worker，删完页面后已成孤儿）
+
+### 删除文件（后端 79 个）
+- **API（6）**：`experts.py` / `expert_skill_mcp.py` / `compute.py` / `llm.py`
+  + `data_platform/`（6 文件）+ `knowledge_base/`（8 文件）
+- **Service（14）**：`expert` / `skill` / `mcp` / `docker_node` / `schedule_task`
+  / `container_template` / `opencode_config_discovery` / `opencode_sync` / `opencode_local`
+  / `dp_data_source` / `dp_query` / `dp_chat` / `kb` / `llm_config`
+- **Repository（17）**：expert / skill / mcp / docker_node / schedule_task / container_template
+  / dp_*（4）/ kb_*（6）/ llm_config
+- **Model（19）**：expert / agent_relation / skill / mcp / docker_node / schedule_task
+  / container_template / dp_*（5）/ kb_*（6）/ llm_config
+- **Schema（17）**：对应上述模块的全部 Pydantic schema
+- **Core（3）**：`sql_guard.py` / `crypto.py` / `decorators.py`（删完模块后成孤儿）
+- **DB 工具（3）**：`seed_kb.py` / `seed_compute.py` / `schema_patch.py`
+- **目录（4）**：`app/connectors/`（4 文件，Agent Platform 遗留）/ `app/scripts/` / `app/models/`
+  / `sim/`（数据模拟器）/ `alembic/` + `alembic.ini`（本就不可用）
+- **测试（12）**：`tests/{data_platform,knowledge_base,repositories,security}/` 全部
+
+### 删除文件（前端）
+- **页面目录（4）**：`pages/{experts,compute,data-platform,knowledge-base}/`
+- **Service（5）**：`{expert,compute,dataPlatform,knowledgeBase,llm}.service.ts`
+- **Store（2）**：`{dataPlatform,knowledgeBase}Store.ts`
+- **组件（11）**：`SqlEditor` / `ResultGrid` / `SchemaTree` / `DataTable` / `monaco-setup`
+  / `AgentChatPanel` / `DangerConfirm` / `PageHeader` / `SectionTitle` / `StatCard` / `TagPill`
+- **测试（4）**：`{dataPlatform,knowledgeBase}.service.test.ts` / `{dataPlatform,knowledgeBase}Store.test.ts`
+  + `components/common/__tests__/`（4 个）
+
+### 卸载依赖
+**前端（11 个）**：`@monaco-editor/react` / `monaco-editor` / `monaco-sql-languages`
+/ `@xterm/xterm` / `@xterm/addon-fit` / `@tanstack/react-table` / `@tanstack/react-virtual`
+/ `@ant-design/charts` / `@antv/g6` / `echarts` / `echarts-for-react`
+→ dependencies **12 个 → 8 个**
+
+**后端（13 个）**：`alembic` / `aiomysql` / `redis` / `langchain` / `langchain-openai`
+/ `openai` / `numpy` / `pandas` / `celery` / `rdflib` / `asyncssh` / `sqlglot` / `sqlparse`
+/ `sse-starlette`（`cryptography` 保留 — `python-jose[cryptography]` 需要）
+→ 新增显式 `psutil`（AIDE 扫 `opencode web` 进程用，原来靠间接依赖）
+
+### 修改文件
+- `backend/app/api/v1/router.py` — 重写：只注册 3 个域，附完整已删清单表格
+- `backend/app/main.py` — 重写：lifespan 只留 `create_all`（seed/scheduler/schema_patch 全删）
+- `backend/app/db/models/__init__.py` — 重写：4 个 model，附两批删除清单
+- `backend/app/core/config.py` — 重写：删 Redis/OpenAI/Fernet/AgentLooper/OpencodeServe 等过期配置；
+  **加 `"extra": "ignore"`** 让 `.env` 历史遗留项（FERNET_KEY 等）不导致启动崩溃；
+  新增 `OPENCODE_{HOST,PORT,WEB_PORT}` 统一管理
+- `backend/app/api/v1/opencode.py` — `os.environ.get` 改用 `settings.OPENCODE_*`
+- `backend/requirements.txt` — 重写：从 30+ 个依赖精简到 15 个
+- `backend/schema.sql` — 从 ORM 重生（135 行 / 4 张表 + 88 张已删表完整清单）
+- `backend/tests/conftest.py` — 重写：删 kb_libraries / MEDIUMTEXT shim / FULLTEXT strip
+  / FERNET_KEY fixture（都指向已删模块）
+- `frontend/src/App.tsx` — 重写：2 个活跃路由 + 11 条重定向
+- `frontend/src/components/layout/AppLayout.tsx` — 菜单 2 项（AIDE / 用户管理）
+- `frontend/src/components/common/CmdKOmnibar.tsx` — 删 10 个死路由 nav 项 + 3 个未用图标
+- `frontend/src/components/common/index.ts` — 重写：只导出 4 个组件
+- `frontend/src/services/index.ts` — 重写为空壳（`export {}`），附迁移指引
+- `frontend/src/test-setup.ts` — 删 monaco mock（依赖已卸）
+- `AGENTS.md` / `HANDOFF.md` — **整篇重写**，反映"只剩 2 个模块"的新形态
+
+### 新增文件
+- `backend/tests/test_smoke.py` — **25 个冒烟测试**（原测试全删了不能裸奔）：
+  - `/health` `/` 可用性
+  - **OpenAPI 里只应出现 auth/users/opencode 三个域**（防止误恢复模块）
+  - 登录成功 / 密码错误 401 / `/auth/me`
+  - `/users` 认证闸门（无 token / 伪造 token / Basic / 乱码 全 401）
+  - `/opencode/web/status?fast=1` 响应协议校验
+  - **15 个已删端点必须 404**（参数化，防回归）
+  - ORM 只应剩 4 张表
+
+### 数据库
+**DROP 49 张表**（含上次删除后被 `create_all` 重建的 25 张空表壳）：
+```
+专家团   : experts(8) / agent_relations(2) / skills(43) / mcps(3)
+算力调度 : docker_nodes(1) / compute_tasks / compute_runs / container_templates(2)
+数据平台 : dp_data_sources(1) / dp_sql_queries / dp_query_history(3)
+           / dp_chat_sessions(1) / dp_chat_messages(2)
+知识库   : kb_libraries(4) / kb_data_assets / kb_code_repos
+           / kb_documents / kb_experiences / kb_tags
+LLM      : llm_configs(2)
++ 25 张第一批已删但被 create_all 重建的空壳
+```
+**结果**：DB **53 张 → 4 张**（`users` / `roles` / `user_roles` / `audit_logs`），零孤儿零缺失
+
+累计两批共 **DROP 88 张表**。
+
+### API 端点变更
+- ❌ 删除：`/api/v1/{experts, experts/skill-mcp, compute, data-platform, knowledge-base, llm}/*`
+- ✅ 保留：`/api/v1/{auth, users, opencode}` —— **共 11 个端点**
+
+### 验证
+
+**后端**
+```
+app import ✅ · 4 张表 ✅ · 11 个端点 ✅ · 启动无错误 ✅
+保留端点：/health · /auth/me · /opencode/web/status?fast=1  全 200
+已删端点：/experts · /experts/skill-mcp/skills · /compute/nodes
+          /data-platform/sources · /knowledge-base/libraries · /llm  全 404
+pytest: 25 passed / 0 failed  ← 从长期的 34 failed 变成全绿
+残留扫描：expert_service / skill_service / mcp_service / docker_node / kb_service
+          / dp_chat / llm_config / sql_guard / crypto / connectors / seed_* / schema_patch
+          → 全部 0 处引用 ✅
+```
+
+**前端**
+```
+npx tsc -b        → 0 error
+npm run build     → ✓ built in 208ms
+构建产物：8MB（含 6.9MB monaco worker）→ 单个 1.1MB（gzip 369KB）
+构建时间：914ms → 208ms
+```
+
+**Playwright e2e 全绿**（`/tmp/final.png`）
+```
+1) 登录 → 默认落地 /aide                     ✅
+2) 菜单 = [AIDE, 用户管理]                    ✅ 与预期完全一致
+3) 11 条死路由全部重定向到 /aide              ✅
+   /workspace /perception /cognition /decision /execution
+   /resources /agent-platform /experts /compute
+   /data-platform /knowledge-base
+4) 2 个保留页面正常渲染（无白屏）              ✅
+5) AIDE iframe → http://127.0.0.1:4096/       ✅
+   工具条含「AIDE / 已连接 / 复用 serve」      ✅
+页面错误：仅 1 个 antd 既有警告 + 2 个 403（/users，测试用户非管理员，权限系统正常）
+失败请求：仅 iframe 内 opencode 自己的 SSE（正常）
+```
+
+### 过程中修掉的一个自引入回归
+删 `core/crypto.py` 后从 `config.py` 移除了 `FERNET_KEY` 字段，
+但 `.env` 里仍有该项 → pydantic 抛 `extra_forbidden`，全部 25 个测试变 ERROR。
+**修法**：`Settings.model_config` 加 `"extra": "ignore"`，让 `.env` 里任何历史遗留项
+都不会导致启动失败（比逐个声明废弃字段更健壮）。
+
+### 项目最终形态
+```
+前端：AIDE（iframe 嵌 opencode Web UI）+ 用户管理
+      2 个页面 · 8 个 npm 依赖 · 产物 1.1MB
+后端：/api/v1/{auth, users, opencode} · 11 个端点 · 4 张表 · 15 个依赖
+测试：pytest 25 passed / 0 failed · tsc 0 error
+```
+
+### 代码量变化（两批累计）
+| | 第一批前 | 第一批后 | 第二批后（当前） |
+|---|---|---|---|
+| 后端文件 | — | -58 | **-79（再删）** |
+| 前端页面目录 | 11 | 5 | **2** |
+| API 路由域 | 15 | 8 | **3** |
+| API 端点 | ~200 | ~90 | **11** |
+| 数据库表 | 63 | 24 | **4** |
+| 前端 npm 依赖 | 19 | 12 | **8** |
+| 后端 pip 依赖 | 30+ | 30+ | **15** |
+| 构建产物 | ~8MB | ~8MB | **1.1MB** |
+| pytest | 34 failed | 27 failed | **0 failed** |
+
+### 补充清理（同批次收尾）
+
+盘点后又发现一批孤儿，一并清掉：
+
+**前端**
+- `presets/agentLoopers.ts`（Agent Looper 预设）
+- `types/{agent,agentLooper,dataPlatform,knowledgeBase,index}.ts` — 只剩 `types/user.ts` 有人用
+- `stores/appStore.ts` — 零引用
+- **`tests/` 整目录**：15 个 spec（`dp-*` 5 个 / `kb-*` 3 个 / `perception-*` 2 个
+  / `w10-*` 3 个 / `nav` / `visual/screenshots`）全部测已删模块
+- `playwright.config.ts` + 卸载 `@playwright/test` + 删 `test:e2e` script
+
+**新增前端测试** `src/__tests__/smoke.test.tsx`（**20 个**）：
+- 品牌名渲染
+- 菜单只有 AIDE / 用户管理两项
+- **参数化断言 10 个已删模块名不应出现在菜单**（专家团/算力调度/数据平台/知识库/
+  感知层/认知层/决策层/执行层/对话工作台/资源管理）
+- `/aide` `/users` 正常渲染
+- **参数化断言 6 条已删路由重定向到 `/aide`**
+
+**踩坑**：React 19 + jsdom 下 antd Menu 需要 `ResizeObserver`，
+`test-setup.ts` 补了 stub 才跑通（报错信息里 `AggregateError` 会掩盖真实原因，
+要往下翻才看到 `ResizeObserver is not defined`）。
+
+### 最终文件数
+```
+后端 app/     33 个 .py
+前端 src/     26 个文件
+前端依赖      8 dependencies / 13 devDependencies
+后端依赖      15 个
+```
+
+### 最终验证（全绿）
+```
+后端 pytest    25 passed / 0 failed
+前端 vitest    20 passed / 0 failed
+前端 tsc       0 error
+前端 lint      0 error（2 个 fast-refresh warning）
+前端 build     ✓ 217ms · 1.1MB
+e2e            5 组全绿
+```

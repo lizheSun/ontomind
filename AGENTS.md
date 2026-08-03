@@ -2,127 +2,159 @@
 
 面向 OpenCode / 其它编码 Agent 的仓库速查。仅列**容易踩坑或非直觉**的项，其它请读代码。
 
-> 🆕 **新 agent 冷启动请先读 [HANDOFF.md](./HANDOFF.md)**（数据库初始化、启动步骤、冒烟脚本）
+> 🆕 **新 agent 冷启动请先读 [HANDOFF.md](./HANDOFF.md)**
 
 ## 项目一句话
 
-OntoMind — AI 驱动本体自动构建平台。**五层业务架构**（perception / cognition / decision / execution） +
-**对话工作台**（前端 SDK 直连 opencode serve） + **专家团**（管理 opencode agent 配置）。
+OntoMind — AI Agent 工作平台。当前只有 **2 个模块**：
+
+1. **AIDE** — iframe 嵌入 opencode 官方 Web UI（默认落地页 `/aide`）
+2. **用户管理** — 用户 / 角色 / 权限 / 审计（`/users`）
+
+后端 3 个路由域（`/api/v1/{auth, users, opencode}`，共 11 个端点）+ **4 张数据表**。
+
+> 🗑️ **2026-08-03 分两批大清理**，删掉了几乎所有历史业务模块，
+> 连带 **DROP 88 张数据库表**。详见 [AGENT_LOG.md](./AGENT_LOG.md) 与下方「已删除清单」。
 
 ## 技术栈关键版本（易猜错）
 
-- Backend: Python 3.12+, FastAPI 0.115, **SQLAlchemy 2.0** (DeclarativeBase), Pydantic **v2**, MySQL 8, Redis 7
-- Frontend: React **19**, TypeScript **~6.0**, Vite **8**, **antd v6**（不是 v5，Form API 有差别），Zustand 5, React Router 7
+- Backend: Python 3.12+, FastAPI 0.115, **SQLAlchemy 2.0** (DeclarativeBase), Pydantic **v2**, MySQL 8
+- Frontend: React **19**, TypeScript **~6.0**, Vite **8**, **antd v6**（不是 v5，Form/Drawer/Modal API 有差别）, Zustand 5, React Router 7
 - **前端 lint 用 `oxlint`，不是 eslint**；不要新增 eslint 配置
-- 后端 requirements 声明了 `black` + `ruff`，但仓库**没有 pyproject.toml / ruff.toml**，跑之前先确认配置
-- **opencode CLI ≥ 1.17**（专家团 + 对话工作台的运行时依赖）
+- 后端 requirements 声明了 `black` + `ruff`，但仓库**没有 pyproject.toml / ruff.toml**
+- **opencode CLI ≥ 1.18**（AIDE 的运行时依赖；1.18 起 `serve` 内置 Web UI，可直接 iframe）
 
 ## 常用命令
 
 ```bash
-# 起 3 个终端（推荐）
-opencode serve --port 4096 --cors http://localhost:5173   # 终端 1：opencode 服务
+# 起 3 个终端
+opencode serve --port 4096 --cors http://localhost:5173   # 终端 1：opencode（AIDE 依赖）
 cd backend && uvicorn app.main:app --reload --port 8000   # 终端 2：后端（API docs: /api/docs）
 cd frontend && npm run dev                                # 终端 3：Vite → http://localhost:5173
 
-# 前端
-cd frontend && npm run build      # tsc -b && vite build
+cd frontend && npm run build      # tsc -b && vite build（当前 0 error）
 cd frontend && npm run lint       # oxlint
-
-# 后端测试
-cd backend && pytest
+cd backend && pytest              # 当前 25 passed / 0 failed
 ```
 
-## 数据库：**Alembic 目前形同虚设**
+## 数据库
 
-- `backend/alembic/versions/` **不存在**，没有任何迁移文件。
-- `app/main.py` 启动时执行 `Base.metadata.create_all(bind=engine)` — 靠这个自动建表。
-- `backend/schema.sql` 只手动维护了 9 张核心表，**不完整**（`experts` / `agent_versions` / `agent_deployments` 等新表只靠 create_all）。
-- `backend/alembic/env.py` 里写的是 `from app.models import *`，**但实际路径是 `app.db.models`**，直接 `alembic revision --autogenerate` 会 ImportError。修好前不要指望 alembic 能跑。
-- **首次建表**：起一次 `uvicorn app.main:app --reload` 就会自动 `create_all`。之后跑 seed 脚本创建 admin 用户 + 4 个内置专家（见 HANDOFF §1.6）。
+- **只有 4 张表**：`users` / `roles` / `user_roles` / `audit_logs`
+- `app/main.py` 启动时执行 `Base.metadata.create_all(bind=engine)` — 靠这个自动建表
+- `backend/schema.sql` 由 **ORM 自动导出**（文件末尾有再生成命令），是参考文档；
+  **建表权威是 `app/db/models/` 下的 Model**
+- ⚠️ **alembic 已删除**（`alembic/` + `alembic.ini` 于 2026-08-03 移除）：
+  它长期不可用（`env.py` import 路径错、`versions/` 空），且当前只有 4 张表不需要迁移工具
 - **新增 ORM Model 必须**：
   1. 建 `app/db/models/<name>_model.py`
-  2. 到 `app/db/models/__init__.py` 里 import 注册 + 加 `__all__`，否则 `create_all` 发现不到
+  2. 到 `app/db/models/__init__.py` import 注册 + 加 `__all__`，否则 `create_all` 发现不到
   3. Model 继承 `app.db.session.Base`（DeclarativeBase）
 
 ## 三层架构硬约束
 
 - 分层：`api/v1/*.py` → `services/*_service.py` → `db/repositories/*_repo.py` → `db/models/*_model.py`
 - **事务边界只在 Service 层**：`self.db.flush()` + `self.db.commit()`
-  ⚠️ **不要用 `with self.db.begin()`** — 与 FastAPI `get_db` 的默认事务冲突（本仓已踩坑，见 AGENT_LOG "保存专家 500 错误"）
+  ⚠️ **不要用 `with self.db.begin()`** — 与 FastAPI `get_db` 的默认事务冲突（本仓已踩坑）
 - Repository 只能 `self.db.flush()`，**不允许 commit / begin / 写业务逻辑**
 - API 层禁止直接查 DB、禁止写业务逻辑、禁止 try/except 业务异常（抛 `BusinessException` 让全局 handler 处理）
-- 命名（严格）：`XxxService` / `XxxRepository` / `Xxx`（Model） / `XxxCreate/Update/Response`（Schema） / 文件 `xxx_service.py` / `xxx_repo.py` / `xxx_model.py` / `xxx_schema.py`
-- 统一响应格式：`{"code": "SUCCESS"|"...", "message": "...", "data": ...}`；错误抛 `BusinessException(msg, code, status_code)`（见 `app/core/exceptions.py`）
+- 命名（严格）：`XxxService` / `XxxRepository` / `Xxx`（Model） / `XxxCreate/Update/Response`（Schema）
+- 统一响应格式：`{"code": "SUCCESS"|"...", "message": "...", "data": ...}`
 - 新增 API 路由要在 `app/api/v1/router.py` 显式 `include_router`
 
-## 五层业务域（router 前缀）
+## AIDE（唯一的核心业务模块）
 
-`/api/v1/{auth, users, llm, resources, perception, cognition, decision, execution, data-platform, knowledge-base, agent-platform, agent-looper, opencode, experts, compute}`
-
-⚠️ **已删除**：`/api/v1/{projects, application}` + `/api/v1/agent-platform/{runs, approvals, sessions}`。老代码里若见到相关调用是死代码。
-
-## 对话工作台 + 专家团（当前活跃架构）
-
-- **对话工作台 `/workspace`**：前端 SDK 直连本机 `opencode serve` (127.0.0.1:4096)
-  - 客户端 `features/opencode/client.ts`（fetch wrapper，与 `@opencode-ai/sdk` 等价）
-  - 状态 `features/opencode/stores/opencodeStore.ts`
-  - SSE 订阅 `features/opencode/hooks/useEventStream.ts`
+- **`/aide`**（默认落地页）：iframe 嵌入 opencode 官方 Web UI
+  - 页面 `pages/aide/AidePage.tsx` — **只管工具条 + 未就绪引导**
+  - **iframe 常驻宿主** `components/layout/AideHost.tsx` — 挂在 `AppLayout` 里**跟路由同级**，
+    切走路由只 `display:none` **不卸载**。⚠️ 这是硬要求：一旦放进路由，
+    React Router 卸载组件时 iframe 会销毁，opencode UI 得重下 bundle + 重建 SSE（实测差 **18.5x**）
+  - 共享状态 `stores/aideStore.ts`（status 落 sessionStorage，首屏不等接口直接渲染）
+- **opencode ≥ 1.18 的 `serve` 已内置 Web UI**（`GET /` 返回 HTML，
+  且响应头无 `X-Frame-Options` / CSP `frame-ancestors`）→ 默认复用 `serve(4096)`，**零额外进程**
 - **后端只做 3 件事** (`api/v1/opencode.py`)：
-  1. `GET /api/v1/opencode/health` — 探活
-  2. `POST /api/v1/opencode/spawn` — dev-only 一键拉起 opencode CLI
-  3. `POST /api/v1/opencode/session-link` — 把 opencode session_id 映射到业务侧 `opencode_sessions` 表
-- **专家团 `/experts`**（`api/v1/experts.py` + `services/expert_service.py`）：
-  - 1 个专家 = 1 个 `~/.config/opencode/agent/{slug}.md` 文件
-  - `ExpertService._write_agent_md(e)` 生成 YAML frontmatter + Markdown body
-  - 4 个内置专家：`data-analyst` / `frontend` / `backend` / `product-manager`
-- **⚠️ opencode 不热加载 agent 目录**：新增/编辑专家后必须重启 `opencode serve` 才能通过 `@slug` 路由。UI 已提示（未加载的专家会有橙色小圆点）
+  1. `GET  /api/v1/opencode/web/status` — 探活 + 决策最佳 `embed_url`（`?fast=1` 走 ~2ms 快路径）
+  2. `POST /api/v1/opencode/web/start` — 拉起独立 `opencode web`(4097)，serve 无 UI 时兜底
+  3. `POST /api/v1/opencode/web/stop`  — 停掉独立 `opencode web`
+  - ⚠️ `--version`（500ms 子进程，10min TTL）和 HTML 探测（60s TTL）**都有缓存，别删**
 - **开发时启动命令必须带 CORS**：`opencode serve --port 4096 --cors http://localhost:5173`
+
+## 已删除清单（老代码里见到即死代码，勿再引用）
+
+| 模块 | 路由 | 时间 |
+|---|---|---|
+| 对话工作台 | `/workspace`、`/api/v1/opencode/{health,spawn,session-link}` | 2026-08-03 |
+| 感知层 / 认知层 / 决策层 / 执行层 | `/api/v1/{perception,cognition,decision,execution}` | 2026-08-03 |
+| 资源管理 | `/api/v1/resources` | 2026-08-03 |
+| Agent Looper / Agent Platform | `/api/v1/{agent-looper,agent-platform}` | 2026-08-03 |
+| **专家团** | `/api/v1/experts`、`/api/v1/experts/skill-mcp` | 2026-08-03 |
+| **算力调度** | `/api/v1/compute` | 2026-08-03 |
+| **数据平台** | `/api/v1/data-platform` | 2026-08-03 |
+| **知识库** | `/api/v1/knowledge-base` | 2026-08-03 |
+| **LLM 配置** | `/api/v1/llm` | 2026-08-03 |
+| projects / application | — | 更早 |
+
+**前端所有已删路由都保留为 `<Navigate to="/aide">` 重定向**，老书签不会 404。
+
+同时移除的基础设施：
+- 后端：`app/{connectors,scripts,models}/`、`core/{sql_guard,crypto,decorators}.py`、
+  `db/{seed_kb,seed_compute,schema_patch}.py`、`alembic/`、`sim/`（数据模拟器）
+- 前端：`SqlEditor` / `ResultGrid` / `SchemaTree` / `DataTable` / `monaco-setup` /
+  `AgentChatPanel` / `AgentPicker` / `PageHeader` / `SectionTitle` / `StatCard` / `TagPill` / `DangerConfirm`
+- 依赖：`monaco-editor`（6.9MB worker）/ `@xterm/*` / `@tanstack/*` / `@ant-design/charts` /
+  `@antv/g6` / `echarts` / `langchain` / `openai` / `pandas` / `numpy` / `celery` / `redis` /
+  `rdflib` / `asyncssh` / `sqlglot` / `alembic` 等
+- **构建产物 ~8MB → 1.1MB，构建时间 914ms → 208ms**
 
 ## 前端约定
 
-- 目录按功能模块拆：`types/ + services/*.service.ts + stores/*Store.ts + pages/*/ + features/*/`
-- API 层：`services/api.ts` 已配 axios 拦截器（JWT + 401 自动跳 `/login`），业务模块用 `services/*.service.ts` 复用它
-- 状态管理走 Zustand（一个模块一个 store，见 `frontend/STANDARDS.md`）
-- **antd 是 v6**，`Form.useForm()`、Table API 与 v5 有区别，写代码前先看 v6 文档
-- 环境变量走 Vite：`import.meta.env.VITE_API_BASE_URL`（默认 `http://localhost:8000/api/v1`）、`VITE_OPENCODE_URL`（默认 `http://127.0.0.1:4096`）
-- 主题：**Editorial Light**（Fraunces serif + Geist sans + 象牙白 `#fafaf7` + 靛蓝墨水 `#3b52af`），见 `styles/global.css`
-- opencode 视觉在 `features/opencode/vendor/styles/opencode.css`（scoped 到 `.oc-scope`）
+- 目录：`services/*.service.ts` + `stores/*Store.ts` + `pages/*/` + `components/{common,layout}/`
+- API 层：`services/api.ts` 已配 axios 拦截器
+  - JWT 自动注入 + 401 自动跳 `/login`
+  - **网络错误自动重试**（指数退避 300/600/1200ms）：开发时 `uvicorn --reload` 热重载
+    有 1~3s 拒连窗口，重试能让用户无感。GET/HEAD/OPTIONS + `/auth/login`、`/auth/me` 才重试，
+    写操作（POST/PATCH/PUT/DELETE）**不重试**避免重复提交
+- `services/index.ts` 现在是空壳（只 `export {}`），保留是为了不破坏历史 import 路径；
+  新代码直接 import 具体 service
+- 状态管理走 Zustand（见 `frontend/STANDARDS.md`）
+- **antd 是 v6**：`destroyOnClose`→`destroyOnHidden`、`maskClosable`→`mask.closable`、
+  `<Spin tip>` 独立用不生效、`Drawer width`→`size`、`Space direction`→`orientation`
+- 环境变量走 Vite：`import.meta.env.VITE_API_BASE_URL`（默认 `http://localhost:8000/api/v1`）；
+  AIDE 的 opencode 地址由后端 `/opencode/web/status` 返回，前端不配
+- 主题：**Editorial Light**（Fraunces serif + Geist sans + 象牙白 `#fafaf7` + 靛蓝墨水 `#3b52af`），
+  见 `styles/global.css`
 
 ## 配置与环境
 
-- 后端所有配置集中在 `app/core/config.py`（`pydantic-settings`），读 `.env`
+- 后端配置集中在 `app/core/config.py`（`pydantic-settings`），读 `.env`
+- `model_config` 设了 `"extra": "ignore"` —— `.env` 里的历史遗留项（`FERNET_KEY`/`REDIS_URL`/
+  `OPENAI_API_KEY` 等）不会导致启动失败
 - 默认 `SECRET_KEY` 是占位符 — 生产必须换（`openssl rand -hex 32`）
 - CORS 白名单在 `Settings.CORS_ORIGINS`，加前端端口时改这里
-- Docker 挂 `./backend:/app` 做热重载；改后端不用重建镜像
+- opencode 端口在 `Settings.{OPENCODE_HOST,OPENCODE_PORT,OPENCODE_WEB_PORT}`
 
 ## 多 Agent 协同
 
-- **`AGENT_LOG.md`**（根目录）是团队约定的协同日志。做完非平凡改动，追加一段：**目标 / 决策 / 新增文件 / 修改文件 / 删除文件 / API 端点 / 数据库 / 验证**。已有 900+ 行例子，照抄格式。
-- **`HANDOFF.md`**（根目录）是新 agent 冷启动 30 分钟指南，包含数据库初始化、启动步骤、冒烟脚本。改动大架构后同步更新它。
-- 感知层 Cursor 风格的**流式标注**走 WebSocket，不是普通 REST（见 `app/api/v1/perception.py`）
-- Vendor：`frontend/src/features/opencode/vendor/` 预留给后续从 `opencode@v1.18.4:packages/web/src/components/` 搬 UI 组件；当前只搬了极简样式，第一版走 antd 原生 (`MessagePart.tsx`)。方案见 `vendor/VENDOR_META.md`。
+- **`AGENT_LOG.md`**（根目录）是团队约定的协同日志。做完非平凡改动，追加一段：
+  **目标 / 决策 / 新增文件 / 修改文件 / 删除文件 / API 端点 / 数据库 / 验证**。照抄已有格式。
+- **`HANDOFF.md`**（根目录）是新 agent 冷启动指南。改动大架构后同步更新。
 
-## 参考文档（重要，别重复造轮子）
+## 参考文档
 
-- **`HANDOFF.md`** — 新 agent 冷启动指南（数据库/启动/冒烟脚本）
+- **`HANDOFF.md`** — 新 agent 冷启动指南
 - **`AGENT_LOG.md`** — 历史变更时间线（做啥前先扫一遍）
-- `backend/STANDARDS.md` — 分层 / 事务 / 命名 / DI 全套规范
+- `backend/STANDARDS.md` — 分层 / 事务 / 命名 / DI 规范
 - `backend/DESIGN_STANDARDS.md` — API 设计 + DB 命名 + 错误码
 - `frontend/STANDARDS.md` — 前端类型 / service / store / 组件规范
-- `docs/project-plan.md` — 五层路线图
-- `docs/ONTOLOGY_AIBI_DATA_AGENT.md` — 本体 × AIBI 愿景
 
 ## 常见坑速览
 
 - 新增 Model 忘记去 `app/db/models/__init__.py` 注册 → `create_all` 不建表
-- 用 `db.commit()` 而不是 `db.flush()` in Repository → 破坏 Service 层事务边界
-- **Service 里用 `with self.db.begin()`** → InvalidRequestError（FastAPI 已开事务）；改成 `flush()` + `commit()`
+- Repository 里用 `db.commit()` 而非 `db.flush()` → 破坏 Service 层事务边界
+- Service 里用 `with self.db.begin()` → InvalidRequestError（FastAPI 已开事务）
 - 前端 lint 跑 `eslint` → 命令不存在，用 `npm run lint`（oxlint）
-- 直接 `alembic upgrade head` → 会因 `env.py` import 路径错误挂掉
+- **把 `AideHost` 放进路由** → 每次进 AIDE 都要重新加载 opencode UI（慢 18.5x）
 - API 直接返回 ORM 对象而不是 dict/Schema → 破坏统一响应格式
 - 忘了 `include_router` → 新端点 404
 - CORS 报错 → 加端口到 `Settings.CORS_ORIGINS`；opencode serve 记得带 `--cors http://localhost:5173`
-- 新建专家后 opencode 不认识 → 重启 `opencode serve`（agent 目录不热加载）
-- 中文输入法组词按 Enter 发送 → `ChatComposer` 里已用 `isComposing` 检测
-
+- 登录报「无法连接后端」→ 大概率是 `uvicorn --reload` 正在热重载（1~3s 窗口），
+  `api.ts` 已自动重试 3 次，稍等即可
