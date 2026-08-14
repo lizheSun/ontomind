@@ -31,6 +31,10 @@ httpx==0.28.1
 # --- 进程管理（AIDE 扫描 `opencode web` 进程；缺失时代码会优雅降级）---
 psutil==6.1.1
 
+# --- 算力管理（SSH + Docker）---
+asyncssh==2.19.0
+docker==7.1.0
+
 # --- Utils ---
 python-dotenv==1.0.1
 

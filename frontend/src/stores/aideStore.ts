@@ -12,6 +12,7 @@
  */
 import { create } from 'zustand';
 import type { AideStatus } from '../services/aide.service';
+import type { AideContainerSource } from '../types/compute';
 
 const CACHE_KEY = 'ontomind_aide_status';
 
@@ -48,12 +49,15 @@ interface AideState {
   fullscreen: boolean;
   /** 递增以触发 iframe reload */
   reloadToken: number;
+  /** 用户选择的容器 AIDE 源（null = 使用默认 opencode serve/web） */
+  containerSource: AideContainerSource | null;
 
   setStatus: (s: AideStatus | null) => void;
   setVisible: (v: boolean) => void;
   setLoaded: (v: boolean) => void;
   setFullscreen: (v: boolean) => void;
   reload: () => void;
+  setContainerSource: (source: AideContainerSource | null) => void;
 }
 
 const cached = readCache();
@@ -67,18 +71,18 @@ export const useAideStore = create<AideState>((set, get) => ({
   loaded: false,
   fullscreen: false,
   reloadToken: 0,
+  containerSource: null,
 
   setStatus: (s) => {
     writeCache(s);
+    // 如果用户选了容器源，embedUrl 由容器源决定，不受 status 影响
+    if (get().containerSource) return;
     const nextUrl = s?.healthy ? s.embed_url : '';
     const prevUrl = get().embedUrl;
     set({
       status: s,
-      // URL 没变就不动 embedUrl，避免 iframe 无谓重载
       embedUrl: nextUrl || prevUrl,
-      // 一旦拿到可用 URL 就永久挂载
       mounted: get().mounted || !!nextUrl,
-      // URL 真变了才重置 loaded
       loaded: nextUrl && nextUrl !== prevUrl ? false : get().loaded,
     });
   },
@@ -87,4 +91,27 @@ export const useAideStore = create<AideState>((set, get) => ({
   setLoaded: (v) => set({ loaded: v }),
   setFullscreen: (v) => set({ fullscreen: v }),
   reload: () => set((s) => ({ reloadToken: s.reloadToken + 1, loaded: false })),
+
+  setContainerSource: (source) => {
+    if (source) {
+      // 容器源：直接用 localhost + 映射端口
+      const url = `http://localhost:${source.port}`;
+      set({
+        containerSource: source,
+        embedUrl: url,
+        mounted: true,
+        loaded: false,
+        status: null, // 不依赖后端 status
+      });
+    } else {
+      // 切换回默认：从缓存恢复
+      const cached = readCache();
+      set({
+        containerSource: null,
+        embedUrl: cached?.healthy ? cached.embed_url : '',
+        mounted: get().mounted,
+        loaded: false,
+      });
+    }
+  },
 }));

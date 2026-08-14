@@ -126,7 +126,7 @@ export default function UsersPage() {
             style={{
               borderRadius: 6,
               background: 'rgba(100,116,139,0.1)',
-              color: '#64748b',
+              color: '#86868b', /* 【UI 重构】Apple 辅助文字色 */
               border: 'none',
             }}
           >

@@ -1,28 +1,20 @@
 /*
- * OntoMind Editorial Light Theme
+ * OntoMind — Apple Design Theme
  * -----------------------------------------------------------------
- * 设计原则：
- *   editorial（编辑排版）· minimal（极简）· refined（考究）
- *
- * · 象牙白 (paper) + 深墨黛 (ink) 双主色，靛蓝作单色 accent
- * · Fraunces (serif) — display / 大标题；Geist Sans — body；JetBrains Mono — code
- * · 无花哨阴影、无渐变洪水；替代物是发丝边、精确排版、优雅间距
- * · 卡片不再是「玻璃/发光」而是薄单线 hairline + 温热的纸感底色
- * · Antd 组件全 override 到浅色，Layout 背景默认 transparent 由 body 决定
+ * 【UI 重构】全站浅色化，遵循 Apple 官网设计语言：
+ *  - 纯白 #FFFFFF / 浅灰 #F5F5F7 双底色
+ *  - 品牌强调色 Apple Blue #0071e3
+ *  - 字体：SF Pro (system stack) + Geist sans + SF Mono
+ *  - 柔和圆角、轻薄阴影、毛玻璃模糊
+ *  - 文字分层：#1d1d1f 主标题 / #6e6e73 正文 / #86868b 辅助
+ *  - 仅极简平缓过渡，禁止弹跳/闪烁
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
 
-/* ============================================================
- * Reset
- * ============================================================ */
 *,
 *::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+*::after { box-sizing: border-box; margin: 0; padding: 0; }
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -36,122 +28,88 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
   min-height: 100vh;
-  font-feature-settings: 'ss01', 'cv11', 'ss03';
 }
 #root { min-height: 100vh; }
 
-/* ============================================================
- * Design Tokens
- * ============================================================ */
 :root {
-  /* — Typography — */
-  --font-serif: 'Fraunces', 'Cormorant Garamond', 'Songti SC', 'STSong', serif;
-  --font-sans:  'Geist', -apple-system, BlinkMacSystemFont, 'Noto Sans SC',
-                'PingFang SC', 'Helvetica Neue', sans-serif;
-  --font-mono:  'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  /* === Apple Font Stack === */
+  --font-sans:  -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Geist', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:  'SF Mono', 'JetBrains Mono', 'Menlo', 'Monaco', monospace;
+  --font-serif: -apple-system, 'SF Pro Display', 'Geist', sans-serif;
 
-  /* — 中性灰阶 (warm-ivory) — */
-  --paper-00: #ffffff;   /* pure white for cards/popovers */
-  --paper-01: #fafaf7;   /* dominant background — 米白 */
-  --paper-02: #f4f3ee;   /* subtle raise */
-  --paper-03: #ecebe4;   /* hover */
-  --paper-04: #e0dfd7;   /* strong hover / border-strong */
+  /* === Apple Light Palette === */
+  --bg-root:     #FFFFFF;   /* primary canvas */
+  --bg-surface:  #FFFFFF;   /* cards / panels */
+  --bg-elevated: #FFFFFF;   /* elevated elements */
+  --bg-subtle:   #F5F5F7;   /* secondary canvas / subtle fill */
+  --bg-hover:    rgba(0,0,0,0.03);
+  --bg-active:    rgba(0,0,0,0.05);
+  --bg-selected: rgba(0,113,227,0.06);
 
-  --ink-100: #1a1918;    /* primary text — 墨黛 */
-  --ink-80:  #35322e;    /* strong secondary */
-  --ink-60:  #605c56;    /* muted */
-  --ink-40:  #8f8b84;    /* faint / placeholder */
-  --ink-20:  #bfbcb5;    /* icons weak */
-  --ink-10:  #d6d3cc;    /* disabled */
+  /* === Text (Apple hierarchy) === */
+  --text-primary:    #1d1d1f;
+  --text-secondary:  #6e6e73;
+  --text-tertiary:   #86868b;
+  --text-accent:     #0071e3;
+  --text-inverse:    #FFFFFF;
 
-  /* — Backgrounds — */
-  --bg-root:      var(--paper-01);
-  --bg-surface:   var(--paper-00);
-  --bg-elevated:  var(--paper-00);
-  --bg-subtle:    var(--paper-02);
-  --bg-hover:     rgba(26, 25, 24, 0.04);
-  --bg-active:    rgba(26, 25, 24, 0.06);
-  --bg-selected:  rgba(59, 82, 175, 0.06);
+  /* === Accent (Apple Blue) === */
+  --accent:         #0071e3;
+  --accent-hover:   #0077ED;
+  --accent-soft:    #2997ff;
+  --accent-tint:    rgba(0,113,227,0.10);
+  --accent-purple:  #5b5bf6;
+  --accent-green:   #34c759;
+  --accent-amber:   #ff9f0a;
 
-  /* — Text — */
-  --text-primary:   var(--ink-100);
-  --text-secondary: var(--ink-60);
-  --text-tertiary:  var(--ink-40);
-  --text-accent:    var(--accent);
-  --text-inverse:   var(--paper-00);
+  /* === State === */
+  --success: #34c759;
+  --warning: #ff9f0a;
+  --danger:  #ff3b30;
 
-  /* — Borders — */
-  --border-hairline: rgba(26, 25, 24, 0.08);   /* 0.5px 感觉 */
-  --border-subtle:   rgba(26, 25, 24, 0.10);
-  --border-default:  rgba(26, 25, 24, 0.14);
-  --border-strong:   rgba(26, 25, 24, 0.22);
-  --border-accent:   rgba(59, 82, 175, 0.35);
+  /* === Border (Apple hairlines) === */
+  --border-hairline: rgba(0,0,0,0.06);
+  --border-subtle:   rgba(0,0,0,0.08);
+  --border-default:  rgba(0,0,0,0.12);
+  --border-strong:   rgba(0,0,0,0.20);
+  --border-accent:   rgba(0,113,227,0.40);
 
-  /* — Accent — 单色，靛蓝墨水 (indigo ink) — */
-  --accent:        #3b52af;
-  --accent-hover:  #2f4295;
-  --accent-soft:   #6b7ec7;
-  --accent-tint:   rgba(59, 82, 175, 0.10);
+  /* === Radii (Apple soft) === */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
 
-  /* — 状态 — */
-  --success: #476a4b;
-  --warning: #a86e12;
-  --danger:  #a5361e;
+  /* === Shadows (Apple light & low-opacity) === */
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.08);
+  --shadow-glow: 0 0 0 1px rgba(0,113,227,0.10);
 
-  /* — Radii — */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  /* === Transitions (Apple gentle) === */
+  --ease-out: cubic-bezier(0.42, 0, 0.58, 1);
+  --duration-fast: 0.18s;
+  --duration-normal: 0.28s;
 
-  /* — Shadows (极其克制) — */
-  --shadow-hairline: 0 0 0 0.5px var(--border-hairline);
-  --shadow-xs: 0 1px 2px rgba(26, 25, 24, 0.04);
-  --shadow-sm: 0 2px 6px rgba(26, 25, 24, 0.05), 0 0 0 0.5px var(--border-hairline);
-  --shadow-md: 0 4px 20px rgba(26, 25, 24, 0.06), 0 0 0 0.5px var(--border-hairline);
-  --shadow-lg: 0 24px 64px -12px rgba(26, 25, 24, 0.12), 0 0 0 0.5px var(--border-hairline);
-
-  /* — Motion — */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --duration-fast: 140ms;
-  --duration-normal: 260ms;
-  --duration-slow: 480ms;
-
-  /* — Legacy compat aliases (旧组件仍在 read 的 var) — */
-  --bg-glass:        var(--bg-hover);
-  --bg-glass-hover:  var(--bg-active);
-  --bg-glass-active: var(--bg-active);
-  --border-accent:   rgba(59, 82, 175, 0.35);
-  --shadow-glow:     none;
-  --shadow-glow-strong: none;
-  --gradient-hero:   linear-gradient(135deg, #3b52af 0%, #6b7ec7 100%);
-  --gradient-card:   transparent;
-  --gradient-subtle: transparent;
-
-  /* — Perception layer + code / kb — 保留旧变量以兼容组件，映射到浅色 — */
-  --dp-panel-border: rgba(59, 82, 175, 0.18);
-  --dp-panel-glow:   none;
-  --kb-tag-blue:     rgba(59, 82, 175, 0.12);
-  --kb-tag-purple:   rgba(140, 96, 176, 0.12);
-  --kb-tag-cyan:     rgba(56, 132, 148, 0.12);
-  --kb-tag-amber:    rgba(168, 110, 18, 0.12);
-  --kb-tag-emerald:  rgba(71, 106, 75, 0.12);
-  --kb-tag-rose:     rgba(165, 54, 30, 0.12);
-  --code-bg:      var(--paper-02);
-  --code-fg:      var(--ink-80);
-  --code-keyword: #7c3aed;
-  --code-string:  #476a4b;
-  --code-number:  #a86e12;
-  --code-comment: var(--ink-40);
+  /* === Legacy aliases (compat for components using old tokens) === */
+  --paper-00: #FFFFFF;
+  --paper-01: #FFFFFF;
+  --paper-02: #F5F5F7;
+  --ink-100: #1d1d1f;
+  --ink-80:  #424245;
+  --ink-60:  #6e6e73;
+  --ink-40:  #86868b;
+  --ink-20:  rgba(0,0,0,0.12);
+  --ink-10:  rgba(0,0,0,0.06);
+  --duration-slow: 0.4s;
 }
 
 /* ============================================================
- * Global animations
+ * Global animations — gentle fade
  * ============================================================ */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeIn {
@@ -162,33 +120,29 @@ body {
   animation: fadeInUp var(--duration-slow) var(--ease-out) both;
 }
 .page-enter > *:nth-child(1) { animation-delay: 0ms; }
-.page-enter > *:nth-child(2) { animation-delay: 50ms; }
-.page-enter > *:nth-child(3) { animation-delay: 100ms; }
-.page-enter > *:nth-child(4) { animation-delay: 150ms; }
-.page-enter > *:nth-child(5) { animation-delay: 200ms; }
+.page-enter > *:nth-child(2) { animation-delay: 40ms; }
+.page-enter > *:nth-child(3) { animation-delay: 80ms; }
+.page-enter > *:nth-child(4) { animation-delay: 120ms; }
+.page-enter > *:nth-child(5) { animation-delay: 160ms; }
 
 /* ============================================================
- * Ambient background — subtle warm-noise, editorial 底色
+ * Ambient background — clean white
  * ============================================================ */
 .bg-grid {
   position: relative;
   background: var(--bg-root);
 }
-/* 一层不干扰的斜纹米色底 (原 grid 换成极淡的 dot） */
 .bg-grid::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image:
-    radial-gradient(circle, rgba(26, 25, 24, 0.06) 0.5px, transparent 0.5px);
-  background-size: 24px 24px;
-  opacity: 0.5;
+  background: transparent;
 }
 
 /* ============================================================
- * Utility
+ * Utility — glass cards
  * ============================================================ */
 .glass-card {
   background: var(--bg-surface);
@@ -201,9 +155,7 @@ body {
   border-color: var(--border-default);
   box-shadow: var(--shadow-sm);
 }
-.glass-card-interactive {
-  cursor: pointer;
-}
+.glass-card-interactive { cursor: pointer; }
 .glass-card-interactive:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-md);
@@ -212,16 +164,16 @@ body {
 
 .gradient-text {
   color: var(--ink-100);
-  font-family: var(--font-serif);
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .shimmer {
   background: linear-gradient(90deg,
-    rgba(26,25,24,0.03) 0%,
-    rgba(26,25,24,0.08) 50%,
-    rgba(26,25,24,0.03) 100%);
+    rgba(0,0,0,0.03) 0%,
+    rgba(0,0,0,0.06) 50%,
+    rgba(0,0,0,0.03) 100%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
   border-radius: var(--radius-sm);
@@ -232,64 +184,64 @@ body {
 }
 
 /* ============================================================
- * Scrollbar — hairline
+ * Scrollbar — Apple hairline
  * ============================================================ */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(26, 25, 24, 0.10);
+  background: rgba(0,0,0,0.10);
   border-radius: 4px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(26, 25, 24, 0.20); }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.20); }
 
 ::selection {
-  background: rgba(59, 82, 175, 0.20);
+  background: rgba(0,113,227,0.18);
   color: var(--ink-100);
 }
 
 /* ============================================================
- * ANTD OVERRIDES — 全面浅色化
+ * ANTD OVERRIDES — Apple light theme
  * ============================================================ */
 .ant-layout { background: transparent !important; }
 .ant-layout-content { background: transparent !important; }
 
-/* --- Header --- */
+/* --- Header (Apple glass nav) --- */
 .ant-layout-header {
-  background: rgba(250, 250, 247, 0.85) !important;
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  background: rgba(255,255,255,0.72) !important;
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 1px solid var(--border-hairline) !important;
-  height: 56px !important;
-  line-height: 56px !important;
+  height: 52px !important;
+  line-height: 52px !important;
 }
 
 /* --- Menu (horizontal) --- */
 .ant-menu-horizontal {
   background: transparent !important;
   border-bottom: none !important;
-  line-height: 56px !important;
+  line-height: 52px !important;
 }
 .ant-menu-horizontal > .ant-menu-item {
   top: 0 !important;
-  height: 56px !important;
-  line-height: 56px !important;
+  height: 52px !important;
+  line-height: 52px !important;
   margin: 0 !important;
   padding: 0 14px !important;
   border-radius: 0 !important;
   border-bottom: 2px solid transparent !important;
-  color: var(--ink-60) !important;
+  color: var(--text-secondary) !important;
   font-family: var(--font-sans) !important;
   font-size: 13px !important;
   font-weight: 500 !important;
-  letter-spacing: 0.01em !important;
+  letter-spacing: -0.01em !important;
   transition: color var(--duration-fast) var(--ease-out) !important;
 }
 .ant-menu-horizontal > .ant-menu-item:hover {
-  color: var(--ink-100) !important;
+  color: var(--text-primary) !important;
   background: transparent !important;
 }
 .ant-menu-horizontal > .ant-menu-item-selected {
-  color: var(--ink-100) !important;
+  color: var(--accent) !important;
   background: transparent !important;
 }
 .ant-menu-horizontal > .ant-menu-item-selected::after {
@@ -300,25 +252,25 @@ body {
   margin-right: 6px !important;
 }
 
-/* --- Card --- */
+/* --- Card (Apple soft card) --- */
 .ant-card {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
   border-radius: var(--radius-lg) !important;
-  box-shadow: none !important;
+  box-shadow: var(--shadow-sm) !important;
   transition: border-color var(--duration-normal) var(--ease-out),
               box-shadow var(--duration-normal) var(--ease-out) !important;
 }
-.ant-card:hover { border-color: var(--border-default) !important; }
+.ant-card:hover { border-color: var(--border-default) !important; box-shadow: var(--shadow-md) !important; }
 .ant-card-head {
   border-bottom: 1px solid var(--border-hairline) !important;
   padding: 18px 22px !important;
   min-height: auto !important;
 }
 .ant-card-head-title {
-  color: var(--ink-100) !important;
-  font-family: var(--font-serif) !important;
-  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 600 !important;
   font-size: 17px !important;
   letter-spacing: -0.01em !important;
 }
@@ -328,18 +280,18 @@ body {
 .ant-table { background: transparent !important; font-size: 13px !important; }
 .ant-table-thead > tr > th {
   background: transparent !important;
-  color: var(--ink-40) !important;
-  font-weight: 500 !important;
+  color: var(--text-tertiary) !important;
+  font-weight: 600 !important;
   font-size: 11px !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  border-bottom: 1px solid var(--border-hairline) !important;
+  letter-spacing: 0.06em !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
   padding: 10px 16px !important;
 }
 .ant-table-tbody > tr > td {
   border-bottom: 1px solid var(--border-hairline) !important;
   padding: 14px 16px !important;
-  color: var(--ink-80) !important;
+  color: var(--text-primary) !important;
 }
 .ant-table-tbody > tr:hover > td {
   background: var(--bg-hover) !important;
@@ -353,139 +305,165 @@ body {
   border-radius: var(--radius-xs) !important;
   border: 1px solid var(--border-subtle) !important;
   background: var(--bg-subtle) !important;
-  color: var(--ink-80) !important;
+  color: var(--text-secondary) !important;
   font-size: 11px !important;
   font-weight: 500 !important;
   padding: 1px 8px !important;
-  letter-spacing: 0.02em !important;
+  letter-spacing: 0.01em !important;
 }
 
-/* --- Button --- */
+/* --- Button (Apple pill) --- */
 .ant-btn {
-  border-radius: var(--radius-md) !important;
+  border-radius: 980px !important;
   font-family: var(--font-sans) !important;
   font-weight: 500 !important;
   font-size: 13px !important;
-  height: 34px !important;
-  padding: 0 14px !important;
+  height: 36px !important;
+  padding: 0 20px !important;
   transition: all var(--duration-fast) var(--ease-out) !important;
   box-shadow: none !important;
-  letter-spacing: 0.005em !important;
+  letter-spacing: -0.01em !important;
 }
+.ant-btn-lg { height: 44px !important; padding: 0 24px !important; font-size: 14px !important; }
+.ant-btn-sm { height: 30px !important; padding: 0 14px !important; font-size: 12px !important; border-radius: 980px !important; }
 .ant-btn-default {
-  background: var(--bg-surface) !important;
-  border: 1px solid var(--border-subtle) !important;
-  color: var(--ink-80) !important;
+  background: var(--bg-subtle) !important;
+  border: 1px solid transparent !important;
+  color: var(--text-primary) !important;
 }
 .ant-btn-default:hover {
-  color: var(--ink-100) !important;
-  border-color: var(--border-strong) !important;
-  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: transparent !important;
+  background: rgba(0,0,0,0.06) !important;
 }
 .ant-btn-primary {
-  background: var(--ink-100) !important;
+  background: var(--accent) !important;
   border: none !important;
-  color: var(--paper-00) !important;
+  color: #fff !important;
 }
 .ant-btn-primary:hover {
-  background: var(--ink-80) !important;
+  background: var(--accent-hover) !important;
   transform: none !important;
 }
 .ant-btn-text {
-  color: var(--ink-60) !important;
+  color: var(--text-secondary) !important;
   background: transparent !important;
 }
 .ant-btn-text:hover {
-  color: var(--ink-100) !important;
+  color: var(--text-primary) !important;
   background: var(--bg-hover) !important;
 }
 .ant-btn-dangerous.ant-btn-text:hover {
-  background: rgba(165, 54, 30, 0.06) !important;
+  background: rgba(255,59,48,0.06) !important;
+  color: var(--danger) !important;
 }
 
-/* --- Input --- */
+/* --- Input ---
+ * 【UI 重构】修复双层框问题：
+ *   - 独立 Input（无 prefix/suffix）→ input 元素自己持有边框
+ *   - 带 prefix/suffix 的 Input（Input prefix、Input.Password、Input.Search）
+ *     → 外层 .ant-input-affix-wrapper 是唯一持有边框的容器，
+ *       其内部 .ant-input 元素必须 border:none，否则会出现"框里套框"
+ */
 .ant-input,
 .ant-input-affix-wrapper,
 .ant-input-password {
   background: var(--bg-surface) !important;
-  border: 1px solid var(--border-subtle) !important;
+  border: 1px solid var(--border-default) !important;
   border-radius: var(--radius-md) !important;
-  color: var(--ink-100) !important;
+  color: var(--text-primary) !important;
   font-size: 13px !important;
   transition: all var(--duration-fast) var(--ease-out) !important;
   box-shadow: none !important;
 }
 .ant-input:hover,
 .ant-input-affix-wrapper:hover {
-  border-color: var(--border-default) !important;
+  border-color: var(--border-strong) !important;
 }
 .ant-input:focus,
 .ant-input-affix-wrapper-focused {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px var(--accent-tint) !important;
+  box-shadow: 0 0 0 4px var(--accent-tint) !important;
 }
-.ant-input::placeholder { color: var(--ink-40) !important; }
-.ant-input-affix-wrapper .ant-input-prefix { color: var(--ink-40) !important; }
+.ant-input::placeholder { color: var(--text-tertiary) !important; }
+.ant-input-affix-wrapper .ant-input-prefix { color: var(--text-tertiary) !important; }
+
+/* 关键：wrapper 内部的 input 元素不显示自己的边框（避免双层） */
+.ant-input-affix-wrapper > .ant-input,
+.ant-input-password > .ant-input,
+.ant-input-search .ant-input,
+.ant-input-search .ant-input-affix-wrapper > .ant-input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+.ant-input-search .ant-input-affix-wrapper:focus,
+.ant-input-search .ant-input-affix-wrapper-focused {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 4px var(--accent-tint) !important;
+}
 
 /* --- Select --- */
 .ant-select-selector {
   background: var(--bg-surface) !important;
-  border: 1px solid var(--border-subtle) !important;
+  border: 1px solid var(--border-default) !important;
   border-radius: var(--radius-md) !important;
-  color: var(--ink-100) !important;
+  color: var(--text-primary) !important;
 }
-.ant-select-selection-placeholder { color: var(--ink-40) !important; }
+.ant-select-selection-placeholder { color: var(--text-tertiary) !important; }
 
-/* --- Modal --- */
+/* --- Modal (Apple sheet) --- */
 .ant-modal-content {
   background: var(--bg-surface) !important;
-  border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border-hairline) !important;
+  border-radius: var(--radius-xl) !important;
   box-shadow: var(--shadow-lg) !important;
+  overflow: hidden;
 }
 .ant-modal-header {
   background: transparent !important;
   border-bottom: 1px solid var(--border-hairline) !important;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0 !important;
 }
 .ant-modal-title {
-  color: var(--ink-100) !important;
-  font-family: var(--font-serif) !important;
-  font-weight: 500 !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 600 !important;
 }
-.ant-modal-close { color: var(--ink-60) !important; }
-.ant-modal-mask { background: rgba(26, 25, 24, 0.28) !important; }
+.ant-modal-close { color: var(--text-tertiary) !important; }
+.ant-modal-mask { background: rgba(0,0,0,0.30) !important; }
 
 /* --- Tabs --- */
 .ant-tabs-nav::before {
   border-bottom-color: var(--border-hairline) !important;
 }
 .ant-tabs-tab {
-  color: var(--ink-40) !important;
+  color: var(--text-tertiary) !important;
   font-weight: 500 !important;
   transition: color var(--duration-fast) var(--ease-out) !important;
 }
-.ant-tabs-tab:hover { color: var(--ink-80) !important; }
+.ant-tabs-tab:hover { color: var(--text-secondary) !important; }
 .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: var(--ink-100) !important;
+  color: var(--text-primary) !important;
 }
 .ant-tabs-ink-bar {
-  background: var(--ink-100) !important;
+  background: var(--accent) !important;
   height: 2px !important;
 }
 
 /* --- Statistic --- */
 .ant-statistic-title {
-  color: var(--ink-40) !important;
+  color: var(--text-tertiary) !important;
   font-size: 11px !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  font-weight: 500 !important;
+  letter-spacing: 0.06em !important;
+  font-weight: 600 !important;
 }
 .ant-statistic-content {
-  color: var(--ink-100) !important;
-  font-family: var(--font-serif) !important;
-  font-weight: 400 !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 600 !important;
   font-size: 32px !important;
   letter-spacing: -0.02em !important;
 }
@@ -496,12 +474,12 @@ body {
   border-color: var(--border-subtle) !important;
   background: transparent !important;
 }
-.ant-pagination-item a { color: var(--ink-60) !important; }
+.ant-pagination-item a { color: var(--text-secondary) !important; }
 .ant-pagination-item-active {
-  background: var(--ink-100) !important;
-  border-color: var(--ink-100) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
 }
-.ant-pagination-item-active a { color: var(--paper-00) !important; }
+.ant-pagination-item-active a { color: #fff !important; }
 
 /* --- Dropdown / Menu --- */
 .ant-dropdown-menu {
@@ -512,14 +490,14 @@ body {
   padding: 4px !important;
 }
 .ant-dropdown-menu-item {
-  color: var(--ink-80) !important;
+  color: var(--text-primary) !important;
   border-radius: var(--radius-sm) !important;
   padding: 8px 12px !important;
   font-size: 13px !important;
 }
 .ant-dropdown-menu-item:hover {
   background: var(--bg-hover) !important;
-  color: var(--ink-100) !important;
+  color: var(--text-primary) !important;
 }
 .ant-dropdown-menu-item-divider { background: var(--border-hairline) !important; }
 
@@ -527,8 +505,8 @@ body {
 .ant-message-notice-content {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-md) !important;
-  color: var(--ink-100) !important;
+  border-radius: var(--radius-lg) !important;
+  color: var(--text-primary) !important;
   box-shadow: var(--shadow-md) !important;
 }
 
@@ -536,18 +514,18 @@ body {
 .ant-divider { border-top-color: var(--border-hairline) !important; }
 
 /* --- Empty --- */
-.ant-empty-description { color: var(--ink-40) !important; }
+.ant-empty-description { color: var(--text-tertiary) !important; }
 
 /* --- Tooltip --- */
 .ant-tooltip-inner {
-  background: var(--ink-100) !important;
+  background: #1d1d1f !important;
   border: none !important;
   border-radius: var(--radius-sm) !important;
-  color: var(--paper-00) !important;
+  color: #fff !important;
   font-size: 12px !important;
   padding: 6px 10px !important;
 }
-.ant-tooltip-arrow::before { background: var(--ink-100) !important; }
+.ant-tooltip-arrow::before { background: #1d1d1f !important; }
 
 /* --- Badge --- */
 .ant-badge-count {
@@ -568,21 +546,25 @@ body {
   padding: 12px 14px !important;
 }
 .ant-alert-warning {
-  background: rgba(168, 110, 18, 0.05) !important;
-  border-color: rgba(168, 110, 18, 0.20) !important;
+  background: rgba(255,159,10,0.06) !important;
+  border-color: rgba(255,159,10,0.25) !important;
 }
 .ant-alert-error {
-  background: rgba(165, 54, 30, 0.05) !important;
-  border-color: rgba(165, 54, 30, 0.20) !important;
+  background: rgba(255,59,48,0.06) !important;
+  border-color: rgba(255,59,48,0.25) !important;
 }
 .ant-alert-info {
-  background: rgba(59, 82, 175, 0.05) !important;
-  border-color: rgba(59, 82, 175, 0.20) !important;
+  background: rgba(0,113,227,0.06) !important;
+  border-color: rgba(0,113,227,0.25) !important;
+}
+.ant-alert-success {
+  background: rgba(52,199,89,0.06) !important;
+  border-color: rgba(52,199,89,0.25) !important;
 }
 
 /* --- List --- */
 .ant-list-item { border-block-end-color: var(--border-hairline) !important; }
-.ant-list-empty-text { color: var(--ink-40) !important; }
+.ant-list-empty-text { color: var(--text-tertiary) !important; }
 
 /* --- Splitter (antd v6) --- */
 .ant-splitter-bar { background: var(--border-hairline) !important; }
@@ -595,8 +577,8 @@ body {
   border-radius: var(--radius-md) !important;
   box-shadow: var(--shadow-md) !important;
 }
-.ant-popover-title { color: var(--ink-100) !important; }
-.ant-popover-inner-content { color: var(--ink-80) !important; }
+.ant-popover-title { color: var(--text-primary) !important; }
+.ant-popover-inner-content { color: var(--text-secondary) !important; }
 
 /* --- Radio / Checkbox --- */
 .ant-radio-inner,
@@ -606,33 +588,43 @@ body {
 }
 .ant-radio-checked .ant-radio-inner,
 .ant-checkbox-checked .ant-checkbox-inner {
-  background: var(--ink-100) !important;
-  border-color: var(--ink-100) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
 }
 
 /* --- Switch --- */
-.ant-switch { background: var(--ink-20) !important; }
-.ant-switch-checked { background: var(--ink-100) !important; }
+.ant-switch { background: rgba(0,0,0,0.16) !important; }
+.ant-switch-checked { background: var(--accent) !important; }
 
 /* --- Typography --- */
 h1, h2, h3, h4 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  color: var(--ink-100);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--text-primary);
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
 .ant-typography, .ant-typography h1, .ant-typography h2, .ant-typography h3, .ant-typography h4 {
-  color: var(--ink-100) !important;
+  color: var(--text-primary) !important;
 }
-.ant-typography-caption { color: var(--ink-40) !important; }
+.ant-typography-caption { color: var(--text-tertiary) !important; }
 
 /* code inline */
 code {
   font-family: var(--font-mono);
   background: var(--bg-subtle);
-  color: var(--ink-80);
+  color: var(--text-secondary);
   padding: 1px 6px;
   border-radius: var(--radius-xs);
   font-size: 0.9em;
+}
+
+/* ============================================================
+ * Responsive helpers — Apple breakpoints
+ * ============================================================ */
+@media (max-width: 833px) {
+  :root {
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+  }
 }

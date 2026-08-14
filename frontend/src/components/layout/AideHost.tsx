@@ -18,12 +18,17 @@
 import { useEffect, useRef } from 'react';
 import { useAideStore } from '../../stores/aideStore';
 
-/** AppLayout Header 高度 */
-const HEADER_H = 56;
+/** AppLayout Header 高度（【UI 重构】同步顶栏高度 52） */
+const HEADER_H = 52;
 /** AIDE 工具条高度 */
 const TOOLBAR_H = 40;
 
-export default function AideHost() {
+interface Props {
+  /** 左侧侧边栏宽度，iframe 从该位置开始，占满右侧剩余空间 */
+  sidebarW: number;
+}
+
+export default function AideHost({ sidebarW }: Props) {
   const embedUrl = useAideStore((s) => s.embedUrl);
   const mounted = useAideStore((s) => s.mounted);
   const visible = useAideStore((s) => s.visible);
@@ -33,7 +38,6 @@ export default function AideHost() {
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // reloadToken 变化时手动 reload（不换 key，避免整个 DOM 节点重建）
   const lastTokenRef = useRef(reloadToken);
   useEffect(() => {
     if (lastTokenRef.current === reloadToken) return;
@@ -41,14 +45,13 @@ export default function AideHost() {
     const el = iframeRef.current;
     if (!el || !embedUrl) return;
     setLoaded(false);
-    // 用 src 重设触发重载（contentWindow.location.reload() 跨域会抛）
     el.src = embedUrl;
   }, [reloadToken, embedUrl, setLoaded]);
 
-  // 没进过 AIDE 就完全不渲染（避免影响其它页面首屏）
   if (!mounted || !embedUrl) return null;
 
   const top = fullscreen ? TOOLBAR_H : HEADER_H + TOOLBAR_H;
+  const left = fullscreen ? 0 : sidebarW;
 
   return (
     <iframe
@@ -59,15 +62,12 @@ export default function AideHost() {
       style={{
         position: 'fixed',
         top,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100%',
+        left,
+        width: fullscreen ? '100%' : `calc(100% - ${sidebarW}px)`,
         height: `calc(100vh - ${top}px)`,
         border: 'none',
         display: visible ? 'block' : 'none',
         background: '#fff',
-        // 全屏时盖住 antd Drawer/Modal 之下、但在页面内容之上
         zIndex: fullscreen ? 1000 : 1,
       }}
       allow="clipboard-read; clipboard-write; fullscreen"

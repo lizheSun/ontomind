@@ -61,6 +61,15 @@ class Settings(BaseSettings):
     OPENCODE_PORT: int = 4096       # serve（优先复用）
     OPENCODE_WEB_PORT: int = 4097   # 独立 web（兜底）
 
+    # === DataOps · Doris 默认数据源（可选种子，勿把密码提交进 git）===
+    DORIS_SOURCE_NAME: str = "Doris 数仓"
+    DORIS_HOST: str = ""
+    DORIS_PORT: int = 9030
+    DORIS_USER: str = "root"
+    DORIS_PASSWORD: str = ""
+    DORIS_DATABASE: str = ""
+    DORIS_CHARSET: str = "utf8mb4"
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

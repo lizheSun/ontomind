@@ -22,8 +22,20 @@ import app.db.models  # noqa: F401 — import all models for table discovery
 async def lifespan(app: FastAPI):
     """Application startup / shutdown lifecycle."""
     validate_production_security()
-    # 建表（dev 便利）：只剩 users / roles / user_roles / audit_logs
+    # 建表（dev 便利）：当前 13 张表，清单见 app/db/models/__init__.py
     Base.metadata.create_all(bind=engine)
+    # 播种 Agent 工厂内置预设（幂等；失败不阻塞启动）
+    from app.db.seed_agent_factory import seed_agent_factory
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        seed_agent_factory(db)
+        from app.services.dataops_service import DataOpsService
+
+        DataOpsService(db).ensure_seed_doris()
+    finally:
+        db.close()
     yield
 
 

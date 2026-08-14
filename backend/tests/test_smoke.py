@@ -1,9 +1,10 @@
-"""冒烟测试：验证精简后的 3 个路由域可用、已删模块确实 404、认证闸门有效。
+"""冒烟测试：验证 4 个路由域可用、已删模块确实 404、认证闸门有效。
 
-2026-08-03 深度精简后项目只剩：
+当前路由域（2026-08-03）：
 - `/api/v1/auth`     登录 / 注册 / me
 - `/api/v1/users`    用户 CRUD
 - `/api/v1/opencode` AIDE 探活 + 启停
+- `/api/v1/compute`  算力管理（节点 + Docker + 容器终端）
 """
 from __future__ import annotations
 
@@ -27,8 +28,8 @@ def test_root_and_health(anon_client):
     assert "name" in body and "version" in body
 
 
-def test_openapi_only_exposes_three_domains(anon_client):
-    """OpenAPI 里只应出现 auth / users / opencode 三个 /api/v1 域."""
+def test_openapi_exposes_expected_domains(anon_client):
+    """OpenAPI 里只应出现约定的 /api/v1 域，多出来说明有未登记的模块。"""
     r = anon_client.get("/api/openapi.json")
     assert r.status_code == 200
     paths = r.json()["paths"]
@@ -38,7 +39,13 @@ def test_openapi_only_exposes_three_domains(anon_client):
         for p in paths
         if p.startswith("/api/v1/") and len(p.split("/")) > 3
     }
-    assert v1_domains == {"auth", "users", "opencode"}, f"实际: {v1_domains}"
+    assert v1_domains == {
+        "auth", "users", "opencode", "compute",
+        # 2026-08-04 新增：Agent 工厂（Agent/Skill 模板 + Loop 编排 + 发布到容器）
+        "agent-factory",
+        # 2026-08-04 新增：Skill 平台（尚未挂路由，预留）
+        "skill-platform",
+    }, f"实际: {v1_domains}"
 
 
 # ---------------------------------------------------------------------------
@@ -130,10 +137,9 @@ def test_opencode_web_status_shape(client):
         "/api/v1/agent-platform/agents",
         "/api/v1/opencode/health",
         "/api/v1/opencode/session-link",
-        # 第二批删除
+        # 第二批删除（compute 已恢复，勿加回此列表）
         "/api/v1/experts",
         "/api/v1/experts/skill-mcp/skills",
-        "/api/v1/compute/nodes",
         "/api/v1/data-platform/sources",
         "/api/v1/knowledge-base/libraries",
         "/api/v1/llm",
@@ -144,13 +150,26 @@ def test_deleted_endpoints_are_gone(client, path):
 
 
 # ---------------------------------------------------------------------------
-# ORM 只应剩 4 张表
+# ORM 应 5 张表（用户 4 + 算力节点 1）
 # ---------------------------------------------------------------------------
 
-def test_orm_has_only_four_tables():
+def test_orm_has_expected_tables():
     import app.db.models  # noqa: F401
     from app.db.session import Base
 
     assert {t.name for t in Base.metadata.sorted_tables} == {
-        "users", "roles", "user_roles", "audit_logs",
+        "users", "roles", "user_roles", "audit_logs", "compute_nodes",
+        # 2026-08-04 新增：容器内常驻服务登记（AIDE 源来源 + 服务状态）
+        "container_services",
+        # 2026-08-04 新增：Agent 工厂 7 张表
+        "agent_templates", "agent_template_versions",
+        "skill_templates", "skill_files",
+        "agent_bundles", "bundle_members",
+        "deployments",
+        # 2026-08-04 新增：Skill 平台治理平面 9 张表
+        "skill_meta", "skill_params",
+        "skill_exec_prompt", "skill_exec_api", "skill_exec_flow_nodes",
+        "skill_policy",
+        "skill_versions", "skill_audit_logs",
+        "skill_invocations",
     }

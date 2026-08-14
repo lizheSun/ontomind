@@ -4,6 +4,918 @@
 
 ---
 
+## 2026-08-14
+
+### Agent: 提交推送 — DataOps 智能数开 + 平台壳层
+
+### 目标
+整理近期未提交改动并 push：DataOps 数据仓库/智能数开、侧栏可收起、Cursor 风格白底 IDE、Agent/Compute/Skill 相关平台能力。
+
+### 决策
+- 智能数开：左 Explorer / 中 Editor+Result / 右 Agent；主体白色；Doris 执行 `POST /dataops/sources/{id}/execute`
+- OpenCode：`@opencode-ai/sdk/client`；thinking/tools/`/`/`@`；修复 `session.idle` 导致发送按钮不结束
+- AppLayout 左侧二级导航可折叠，偏好写入 `localStorage.ontomind_sidebar_open`
+- **不提交** `backend/.env`（含 Doris 密码）；仅 `.env.example` 占位
+
+### 主要范围
+- 后端：dataops / compute / agent_factory / skill_platform 模型·仓库·服务·API
+- 前端：多域路由壳、Warehouse、SmartDev、AgentOps/Infra 页面与服务
+- 文档：`docs/prd/*`、`AGENT_LOG.md`
+
+### 验证
+- 本地前后端可起；智能数开页布局与侧栏折叠已手动确认
+
+---
+
+## 2026-08-13
+
+### Agent: 智能数开白底 + DataOps 侧栏可收起
+
+### 目标
+1. 智能数开主体色改为白色（保留 Cursor 三栏结构）
+2. 最左侧 DataOps 二级导航可收起/展开
+
+### 修改
+- `SmartDevPage.css` / `SmartDevPage.tsx`：浅色 token + Monaco `vs`
+- `AppLayout.tsx`：`sidebarOpen` + 顶栏/侧栏折叠按钮 + localStorage
+
+---
+
+## 2026-08-13
+
+### Agent: 智能数开 Cursor 工作台布局
+
+### 目标
+执行结果与 SQL 编辑同宽（中栏上下）；整体仿 Cursor IDE（三栏 + 底栏 Result/Output + 状态栏），收紧顶栏字号。
+
+### 决策
+- 结构：Explorer | Editor+Panel | Agent；Panel 仅挂在中栏下方
+- 视觉：暗色 workbench（#181818/#1e1e1e）、30px titlebar、22px statusbar、vs-dark Monaco
+- 样式独立 `SmartDevPage.css`
+
+### 修改
+- `frontend/src/pages/dataops/smart-dev/SmartDevPage.tsx`
+- `frontend/src/pages/dataops/smart-dev/SmartDevPage.css`（新增）
+
+---
+
+## 2026-08-13
+
+### Agent: 智能数开 IDE 增强（执行结果 / Doris / OpenCode parts / 可拖拽布局）
+
+### 目标
+优化 DataOps「智能数开」页：底部 SQL 执行过程与结果、Doris 执行器、OpenCode thinking/tools/`/`/`@`、修复发送按钮转圈、白底编辑器、四区可拖拽收起。
+
+### 决策
+- 发送转圈根因：只认 `session.status=idle`，忽略独立事件 `session.idle` → 同时监听两者并加 generation 兜底
+- SQL 执行走后端 `POST /dataops/sources/{id}/execute`（单语句、结果截断），前端选已配置 Doris/MySQL
+- Agent 展示 `reasoning` / `tool` part；`/` → `command.list` + `session.command`；`@` → `app.agents` + AgentPart
+- 布局用 `react-resizable-panels`；Monaco theme `vs` 白底
+
+### 新增/修改
+- 后端：`dataops_connector.execute`、`ExecuteSql*` schema、`/sources/{id}/execute`
+- 前端：`opencodeSdk.ts` 增强、`SmartDevPage.tsx` 重做、`dataops.service`/`types`、依赖 `react-resizable-panels`
+
+### 验证
+- `tsc -b` 通过；`oxlint` 无新增 error；前后端 health 200
+
+---
+
+## 2026-08-04（下午）
+
+### Agent: Agent 工厂 — OpenCode Agent/Skill 平台化（设计→版本→编排→发布→校验）
+
+### 目标
+把 OpenCode 的 Agent 设计（含 Agent Loop 编排模式）与 Skill 设计从「手写散落文件」
+升级为平台化能力：MySQL 存模板/结构、可版本回滚、可视化编排 Loop、一键发布到 Docker 容器并回读校验。
+
+**PRD：`docs/PRD-agent-skill-platform.md`**（含完整研究结论、字段字典、API 契约、验收用例）
+
+### 研究（实证，非推测）
+依据 OpenCode 官方文档 + 权威 JSON Schema（`opencode.ai/config.json`）+ 对运行实例的实机验证。
+
+| 项 | 结论 |
+|---|---|
+| Agent 定义 | Markdown（`agents/<name>.md`，**文件名即 agent 名**）或 JSON（`opencode.json` 的 `agent.<name>`）|
+| 权限键 | **仅 15 个合法**；其中 **10 个**支持 glob；规则**最后匹配胜出**（`*` 必须置顶）|
+| ⚠️ 静默失效 | 写错权限键（如 `write` 应为 `edit`）**不报错也不生效** —— 这是平台必须前置校验的根本原因 |
+| Loop 四旋钮 | `permission.task`（谁能调谁，deny 会把 subagent 从 Task 描述整条移除）/ `subagent_depth` / `steps` / `mode` |
+| Skill | 一目录一 skill；frontmatter **只认 5 字段**；`name` 必须等于目录名 |
+| Skill 最佳实践 | **渐进披露**：SKILL.md 只放高频规则，细节下沉 `references/`（实测本地 55 个 skill 的通用结构）→ 必须支持多文件 |
+
+**运行时控制面实测（决定了发布策略）**
+
+| 端点 | 实测结论 |
+|---|---|
+| `GET /agent` | ✅ 可靠，权限已展开为 `{permission,pattern,action}[]` → **作为回读校验权威依据** |
+| `PATCH /config` | ❌ **返回 200 但 agent 不出现在 `GET /agent`，也不落盘** → 原计划的「热注入」方案被实测否决 |
+| 写 `opencode.jsonc` 后不重启 | ❌ 不热感知 |
+| `GET /api/skill` | ❌ **skill 明确可用时仍返回 `data: []`**，不可信 |
+| skill 校验替代方案 | ✅ 容器内 `opencode run "列出可用 skills"` —— 实测有效 |
+
+→ **唯一可靠路径 = 写文件（为真）+ 重启（生效）+ `GET /agent`（校验）**
+→ `opencode web` 不暴露 `/agent`，控制面必须用 **serve**
+
+### 设计决策
+
+| 决策点 | 选择 | 理由 |
+|---|---|---|
+| 发布通道 | 写文件 + 重启 | 实测热注入不生效；文件抗重启、可版本化、可手改 |
+| 文件传输 | 本地 `put_archive()` 内存 tar；远程 `tar+base64` over SSH | 原子；彻底避开引号/中文编码问题 |
+| **发布单元** | **Bundle（编排方案）而非单个 agent** | Loop 是「一组 agent + 全局旋钮」整体，拆开发布会产生「装了但没人能调」的半成品 |
+| 校验时机 | **设计态就拦**（不合法存不进 DB）| 权限键写错 OpenCode 静默忽略，事后无法排查 |
+| 发布后 | 回读 `GET /agent` 逐项比对，差异写 `verify_json` | 不做 fire-and-forget，结果必须可证伪 |
+| Skill 存储 | 正文 LONGTEXT + 独立 `skill_files` 表 | 支撑 references/scripts 真实结构 |
+| YAML 渲染 | 手写而非 pyyaml | pyyaml 会给 `"git *"` 去引号导致解析不稳；且需控字段顺序、中文不转义 |
+| 重启告知 | `restart_confirmed` 必填 | 重启会中断进行中会话，不偷偷做 |
+
+### 数据库
+
+**新增 7 张表（6 → 13）**：
+`agent_templates` · `agent_template_versions`（整份快照非 diff，回滚可靠）
+`skill_templates` · `skill_files`（uniq(skill,rel_path)，防路径穿越）
+`agent_bundles` · `bundle_members` · `deployments`（产物 sha256 + 回读结果）
+
+### 新增文件（后端 12 / 前端 8）
+
+| 文件 | 说明 |
+|---|---|
+| `docs/PRD-agent-skill-platform.md` | PRD（唯一依据）|
+| `backend/app/db/models/{agent_template,skill_template,agent_bundle,deployment}_model.py` | 7 表 |
+| `backend/app/db/repositories/{agent_template,skill_template,agent_bundle,deployment}_repo.py` | 7 repo |
+| `backend/app/schemas/agent_factory_schema.py` | schema + 权限元数据 + **6 Loop / 8 Agent / 4 Skill 预设** |
+| `backend/app/services/agent_validate_service.py` | **15 条校验规则**（权限键白名单、glob 能力、`*` 置顶、路径穿越、拓扑一致性）|
+| `backend/app/services/agent_render_service.py` | DB → `.md`/`.jsonc`（glob 键强制加引号）|
+| `backend/app/services/agent_factory_service.py` | CRUD + 版本 + **渲染↔解析往返** 导入 |
+| `backend/app/services/agent_deploy_service.py` | **五阶段发布**：resolve→validate→write→reload→verify |
+| `backend/app/db/seed_agent_factory.py` | 幂等播种预设 |
+| `backend/app/api/v1/agent_factory.py` | **26 端点** |
+| `backend/tests/test_agent_factory.py` | **33 个单测** |
+| `frontend/src/types/agentFactory.ts` + `services/agentFactory.service.ts` | 类型 + API |
+| `frontend/src/components/agent-factory/{PermissionMatrix,LoopTopology,AgentDesigner,SkillDesigner,BundleDesigner,DeployCenter,shared}.tsx` | 四页 + 权限矩阵 + SVG 拓扑 |
+| `frontend/src/pages/agent-factory/AgentFactoryPage.tsx` | 主页（懒挂载 4 tab）|
+
+### 修改文件
+`backend/app/db/models/__init__.py`（注册 7 表）· `backend/app/api/v1/router.py`（挂 agent-factory）
+· `backend/app/main.py`（lifespan 播种）· `backend/app/db/repositories/deployment_repo.py`（`latest_for_target` 加 `exclude_id`）
+· `backend/tests/test_smoke.py`（表/域断言）· `frontend/src/App.tsx` + `AppLayout.tsx`（路由与导航）
+
+### 验证
+
+**后端单测 33 个 + 回归 24 个 = 57 passed**
+
+**实机验证（curl + docker inspect + GET /agent 三方交叉）**
+- 校验器：`write` → 报错并提示「应该写 edit」；`webfetch` 给 object → 报错；`*` 未置顶 → 警告；`../evil.md` → 拦截；无 primary / default_agent 是 subagent / task 死引用 → 全部命中 ✅
+- 渲染器：glob 键加引号、中文不转义、`#3b52af` 加引号、空值不输出 ✅
+- **渲染↔解析往返**：8 个预设全部无损（含嵌套 glob 权限）✅
+- 发布五阶段：`status=success`、8.5s、**回读 3/3 全一致** ✅
+- 幂等：二次发布 `written=0 skipped=6` ✅
+- 剪枝：移除成员后 `pruned=['agents/e2e-reviewer.md']`，容器内确认消失、`GET /agent` 不再列出 ✅
+- **容器内独立核对**：`agents/*.md` + `skills/<n>/{SKILL.md,references/,scripts/}` 全部就位 ✅
+- **OpenCode 真实加载**：`GET /agent` 回读 mode/temperature/color/中文描述/全部 glob 权限逐条一致 ✅
+- **skill 真实加载**：容器内 `opencode run` 输出含新 skill ✅
+- **实际调用**：`opencode run --agent ui-guard` → OpenCode 正确识别为 subagent 并 fallback 到我们部署的 primary `orchestrator`，按部署的 prompt 作答 ✅
+
+**前端（Playwright 真实浏览器）**
+- 四 tab 全渲染；权限矩阵 15 键 + 5 档；Skill 多文件树；**SVG 拓扑（4 节点 + 3 箭头）**；发布中心重启确认 + 产物 diff ✅
+- **走 UI 全链路**：矩阵点选 `edit=禁止` → DB 存 `{'edit':'deny'}` → 渲染 frontmatter 正确 → UI 发布 → 「全部一致」→ 容器内文件与 `GET /agent` 双向核对通过 ✅
+- 全站走查（compute 4 tab + agent-factory 4 tab + aide + users）：**console 0 error**（仅 `/users` 403 为既有权限问题，相关文件本次未改动）✅
+
+**回归**：`pytest` 57 passed · `tsc` 0 error · `vite build` 261ms · `oxlint` **0 error**（从 2 降到 0）
+
+### 追加修复：预设方案误报「没有 primary agent」+ 拓扑图连线缺失
+
+用户反馈两个问题，均已定位并修复。
+
+**问题 1：3 个内置预设在页面上报错**
+
+现象：「单体全能」「先规划后执行」「实现与评审环」都提示
+`1 处错误必须修正 · members 方案里没有 primary agent，用户无法与之对话`。
+
+根因：校验器只检查「成员里有没有 mode=primary 的 agent」，
+但**依赖 OpenCode 内置 `build`/`plan` 作主对话是完全合法的用法** ——
+这三个预设正是这种形态（只自定义 subagent，入口用内置 agent）。
+讽刺的是错误文案里已经写了「或依赖 OpenCode 内置的 build/plan」，代码却没实现这个分支。
+
+修复：
+- 入口判定改为「有自定义 primary **或** `default_agent ∈ {build, plan}`」
+- 新增 **`info` 级别**（区别于 error/warning）：配置合法，只把「会发生什么」讲清楚 ——
+  提示「本方案未自定义 primary，主对话将使用 OpenCode 内置的 'plan'」
+- 报错文案改为可执行的二选一：「① 把某成员角色设为主对话；② 把默认入口设为 build/plan」
+
+**问题 2：Loop 拓扑图连线缺失、节点错乱**
+
+三个独立缺陷：
+
+| 缺陷 | 现象 | 根因 |
+|---|---|---|
+| 无入口节点 | 「实现与评审环」2 节点 **0 连线**、「先规划后执行」1 节点 **0 连线** | 只画成员里的 primary；依赖内置入口时图上没有源节点，自然画不出箭头 |
+| subagent 排布错乱 | 「编排者与专家团」x=91/280/469 间距不均、y 不齐(158/170/158) | 弧度偏移 `arc` 与居中公式混用，把等距算歪了 |
+| 节点溢出画布 | x=469 + 宽 108 = 577 > 画布 560 | 布局未按内容反推画布尺寸 |
+
+修复（重写 `LoopTopology.tsx` 布局层）：
+- **补画内置入口节点**：没有自定义 primary 时，按 `default_agent` 画出 `build`/`plan`，
+  用**虚线边框 + 浅色填充**区分「非本方案定义」，并标注「OpenCode 内置入口」
+- **布局改为按内容反推画布**：`linear` 单行等距；`star` 每行最多 4 个、多行铺开，
+  画布宽高由节点数算出（`canvasW`/`canvasH`），彻底消除溢出
+- 移除弧度偏移，改用「每行独立居中」保证等距对齐
+
+**验证**
+
+| 方案 | 修复前 | 修复后 |
+|---|---|---|
+| 实现与评审环 | 2 节点 / **0 连线** | **3 节点（含 build 内置入口）/ 2 连线** |
+| 先规划后执行 | 1 节点 / **0 连线** | **2 节点（含 plan 内置入口）/ 1 连线** |
+| 编排者与专家团 | x=91/280/469 错乱溢出 | **x=82/208/334 等距对齐，520×182 不溢出** |
+
+- API 逐个校验 6 个预设：**全部 `ok=true`，0 error**（修复前 3 个报 error）
+- 浏览器逐个点开 6 个预设：无「错误必须修正」、无「没有入口」报错、连线数量正确、**console 0 error**
+- 新增 3 个回归测试（`test_bundle_may_rely_on_builtin_primary`、
+  `test_bundle_with_no_members_but_builtin_entry_is_ok`、
+  `test_all_bundle_presets_pass_validation`）—— 最后一个直接守住「内置预设自身必须校验通过」
+
+**涉及文件**：`backend/app/services/agent_validate_service.py`（入口判定 + `_info`）、
+`backend/app/schemas/agent_factory_schema.py`（`level` 加 `info`）、
+`backend/tests/test_agent_factory.py`（+3 测试）、
+`frontend/src/components/agent-factory/LoopTopology.tsx`（重写布局）、
+`frontend/src/components/agent-factory/shared.tsx`（渲染 info）、
+`frontend/src/types/agentFactory.ts`（类型）。
+
+**回归**：`pytest` 60 passed（+3）· `tsc` 0 error · `vite build` 285ms · `oxlint` 0 error。
+
+### 追加修复：AIDE 不能实时识别容器新起的 opencode
+
+**现象**：用户在容器里启动了 `opencode web`，AIDE 页面仍显示不可用/看不到该服务。
+
+**两个独立根因**
+
+**A. 数据层 —— 只 refresh 不 discover（主因）**
+
+AIDE 首屏调的是 `listContainerServices(refresh=true)`，它只回探**DB 里已登记**的服务。
+用户直接在容器控制台敲 `opencode web`，平台没经手过、DB 里根本没这条记录 →
+refresh 再多次也发现不了。
+
+实证（清空 `container_services` 模拟零登记态）：
+
+| 调用 | 结果 |
+|---|---|
+| `GET /services`（旧 AIDE 行为） | **0 个服务、`aide-sources` 0 条** ← 用户遇到的现象 |
+| `POST /services/discover`（修复后） | **2 个服务全部发现，均 `is_aide_source=true`** |
+
+**B. 体验层 —— 本机 opencode 在跑时会掩盖容器服务**
+
+宿主自己跑着 opencode（`embed_source=serve`）时 AIDE 判定 `ready=true`，
+「未就绪」引导区根本不渲染，用户完全看不到容器里还有可选服务，
+自然以为「我起的容器 opencode 没被识别」。
+
+**修复**
+
+1. `fetchServices(refresh, discover)` 增加 discover 通道；**首屏改为 discover**
+2. **未连接容器源时 10s 自动轮询 discover** —— 覆盖「先起服务再回 AIDE 等它亮」的场景
+3. 打开下拉时也做一次 discover（刚起的服务立刻出现）
+4. 刷新按钮由 refresh 改为 discover，并给**可执行结论**：
+   有几个可用 / 都不可用时直接说出最典型原因
+5. **工具条常驻提示**（不再依赖「未就绪」分支）：
+   `容器可选 N` / `N 个容器服务不可用`（hover 显示每个的具体原因）
+6. 未就绪引导区新增两个诊断横幅：
+   - 有可用容器服务 → 绿色 + **一键接入按钮**（不必再起本机 opencode）
+   - 有服务在跑但宿主访问不到 → 黄色 + 逐条原因 + 两种修法
+7. `pickService` 的拒绝提示细化：端口未映射时明确指出
+   「到『算力管理 → 容器』用『修改配置』加映射，或改起在已映射端口上」
+
+**顺带定位到用户环境的一个真实配置问题**
+
+`opencode001` 容器只映射了 `4097`，但服务起在容器内 `4096` →
+Docker 端口转发指向 `容器IP:4097`（无人监听），宿主必然访问不到。
+平台的判定是**正确**的（`host_port=None, host_reachable=0, is_aide_source=0`），
+只是原来没把原因讲清楚。改起在 4097 后立即可用（实测宿主 14097 → 200）。
+
+**验证**
+
+- 清空 DB + 容器内手工起服务 → 进 AIDE 后自动 discover 出 2 个服务，下拉两项均 `OK` 可选 ✅
+- 选中 `opencode001` → iframe 切到 `http://localhost:14097`，工具条显示「容器 opencode001 / 容器端口 4097」✅
+- 本机 opencode 在跑时，工具条仍显示 **「容器可选 2」** ✅
+- 浏览器 **console 0 error**
+- 回归：`pytest` 60 passed · `tsc` 0 error · `vite build` 267ms · `oxlint` 0 error
+
+**涉及文件**：`frontend/src/pages/aide/AidePage.tsx`（discover 通道 + 轮询 + 诊断横幅 + 工具条提示 + 拒绝提示细化）。
+
+### 追加修复：AIDE 服务探测慢 + 容器控制台打不开（连接池被打满）
+
+**现象**：① AIDE 选容器 opencode 服务时探测极慢；② 算力管理打开容器控制台一直转圈。
+
+**定位过程**（先量后修，不猜）
+
+压测发现连 `GET /compute/services`（纯查库）都要 **30s**，说明不是单个功能慢，是后端整体被拖死。
+翻日志拿到根因：
+
+```
+sqlalchemy.exc.TimeoutError: QueuePool limit of size 10 overflow 20 reached,
+connection timed out, timeout 30.00
+```
+
+**连接池 30 个连接全部耗尽**，且有 **3 个残留 uvicorn 进程**在抢资源。
+再往上追，池被耗尽是因为下面这条慢链路被 AIDE 10s 轮询反复触发：
+
+| 环节 | 耗时 | 问题 |
+|---|---|---|
+| `list_containers` | 0.5–2s | 每次对每个容器 `docker inspect` + 查镜像 ENV/CMD，**零缓存** |
+| `_probe_listen_ports` | 每容器一次 `docker exec` | 跨请求零复用 |
+| `refresh_services` | N × (exec + HTTP) | `_probe_one` **串行** |
+| `discover_services` | **~10s** | 遍历**所有**节点，含已知 offline 的远程节点 → 等 SSH 超时 |
+
+**四项修复**
+
+1. **短 TTL 缓存**（3s）：`list_containers` 与 `_probe_listen_ports` 加模块级缓存。
+   容器状态 3s 内几乎不变，但轮询叠加能省掉绝大部分 docker 调用。
+   需要强一致的路径可传 `fresh=True` 绕过。
+2. **缓存失效钩子** `invalidate_container_cache()`：容器创建/删除/启停/重建后立即失效，
+   避免读到旧状态（5 个调用点覆盖全部变更路径）。
+3. **并发探测**：`refresh_services` 与 `discover_services` 改为
+   「同容器串行（复用 listen 缓存）、不同容器 `asyncio.gather` 并发」——
+   这些都是 IO 等待，串行时 N 个服务 = N 倍延迟。
+4. **跳过离线节点 + 硬超时**（关键）：`discover_services` 默认跳过 `status=offline`
+   的远程节点（本地节点永不跳过），并给每个节点 8s `wait_for` 上限。
+   用户环境里那台 `macmini`（offline）一个就贡献了 10s。
+
+**效果（实测）**
+
+| 指标 | 修复前 | 修复后 |
+|---|---|---|
+| `GET /services` | **30s**（池耗尽） | **0.03s** |
+| `list_containers` | ~30s | **0.095s 冷 / 0.013s 缓存** |
+| `refresh_services` | 30s | **0.029s** |
+| `discover_services` | **10.5s** | **0.28s 冷 / 0.07s 缓存**（38×） |
+| AIDE 服务列表就绪 | 慢/超时 | **1.1s**；下拉打开 **0.4s** |
+| 控制台「已连接」 | 一直转圈 | **0.6s** |
+| 控制台 WS 首字节 | — | **0.18s** |
+
+**关于「控制台一直转圈」的结论**：后端 WS 链路本身一直是健康的
+（`exec_terminal_local` 返回 0.09s、PTY 首字节 0.16s、命令回显 0.18s）。
+转圈是**连接池耗尽的连带症状** —— 前置的 `/shells` 探测请求排队 30s 拿不到连接，
+前端就一直停在 `probing` 状态。池修好后自然恢复。
+（排查中我一度误判首字节要 6.5s，实为我自己测试脚本的 `recv timeout=6s` 造成的假象，
+ 用精确计时复测后确认是 0.18s。）
+
+**新增 3 个结构性保护测试**：TTL 真会过期、失效钩子按节点精确清理、
+`discover_services` 必须保留 `include_offline` 与 `asyncio.wait_for`。
+
+**运维动作**：清理了 3 个残留 uvicorn 进程与孤儿 MySQL 连接，前后端已重启。
+
+**涉及文件**：`backend/app/services/compute_service.py`（缓存 + 失效 + 并发 + 跳离线 + 超时）、
+`backend/tests/test_agent_factory.py`（+3 测试）。
+
+**回归**：`pytest` 63 passed（+3）· `tsc` 0 error · `vite build` 272ms · `oxlint` 0 error · console 0 error。
+
+### 追加修复：编排方案缺「委派授权」入口 + Prompt 无填写引导
+
+用户反馈三个问题，两个是**真实功能缺失**，一个是**可用性缺陷**。
+
+**问题 1：新加的 subagent 是虚线，且无法在页面上改**
+
+现象：在「编排者与专家团」里加 `refactorer` 后，`orchestrator → refactorer` 是灰虚线，
+而预设自带的三个 subagent 是实线。
+
+机制（实测确认）：`orchestrator` 的 permission.task 是
+`{"*": "deny", "explorer": "allow", "test-writer": "allow", "code-reviewer": "allow"}`。
+OpenCode **最后匹配胜出**，新加的 `refactorer` 不在白名单 → 落到 `"*": "deny"`。
+`deny` 会让 OpenCode 把该 subagent **从 Task 工具描述里整条移除** —— 模型看不到、永远不会指派。
+所以虚线本身是**正确反映**了配置。
+
+真正的缺陷：**编排页没有任何入口能改这个 task 权限**
+（`grep -c PermissionMatrix BundleDesigner.tsx` = **0**，设计时漏了最关键的编辑入口）。
+用户只能去 Agent 设计页手改 JSON，且完全不知道该改哪个字段。
+
+修复：编排页新增 **「委派授权」区块**（`primary × subagent` 矩阵）：
+- 每行一个 subagent，三态 Segmented（允许 / 需确认 / 禁止），带状态色点
+- 当前是 `deny` 的直接标注「模型看不到它」
+- 顶部 Alert 讲清「最后匹配胜出 + 预设自带 `{"*": "deny"}`」这个机制
+- 写入时**把精确名字追加到规则末尾**，并保证 `"*"` 仍在最前 —— 否则新规则会被 `*` 覆盖而不生效
+- 改的是 primary **agent 模板**的 `permission.task`（OpenCode 的 task 规则就落在 agent 定义里），
+  并明确告知「对所有引用该 agent 的方案生效」
+
+**问题 2：拓扑图虚线含义不明**
+
+修复：图例文案改为「禁止（模型看不到，**不会指派**）」；
+有 deny 边时在图下方直接点名：
+「`refactorer` 当前是禁止状态（灰虚线）—— OpenCode 会把它从 Task 工具描述里整条移除…
+到上方「**委派授权**」把它切成「允许」即可」。
+
+**问题 3：System Prompt 不知道怎么填**
+
+原来只有一行提示 + 一个 placeholder，面对空框无从下手。
+
+修复：
+- 新增 **「填入模板」** 按钮 —— 一键填入四段式骨架
+  （角色定位 → 工作方法 → 输出要求 → 禁止事项），带 `<占位说明>` 照着改
+- 新增 **「参考预设写法」** 按钮 —— 直接载入内置预设的 prompt 当范本
+- 字段说明写清建议结构，并点明「写清**不要做什么**比泛泛要求做好更有效」
+
+**验证**
+
+复现用户场景（给「编排者与专家团」加 `refactorer`）：
+
+| 步骤 | 结果 |
+|---|---|
+| 加入后打开编排页 | 「委派授权」区块出现，`refactorer` 在列，标注「模型看不到它」；拓扑 **1 条灰虚线** |
+| 点该行「允许」 | 拓扑 **灰虚线 0 条**（全变实线） |
+| DB 落库 | `{"*": "deny", "explorer": "allow", "refactorer": "allow", ...}`，`*` 仍在最前 ✅ |
+| 「填入模板」 | textarea 正确填入四段式模板 ✅ |
+
+浏览器 **console 0 error**。测试后已还原预设与 `orchestrator` 的原始 task 规则。
+
+**涉及文件**：`frontend/src/components/agent-factory/BundleDesigner.tsx`（委派授权矩阵 +
+`resolveTaskAction` / `setTaskPermission`）、`LoopTopology.tsx`（deny 提示）、
+`AgentDesigner.tsx`（prompt 模板与引导）。
+
+**回归**：`pytest` 63 passed · `tsc` 0 error · `vite build` 267ms · `oxlint` 0 error。
+
+### 追加修复：task 权限归属错位 —— 隐性规则透明化（用户指出的架构缺陷）
+
+**用户反馈**：报 3 条「规则指向 'explorer'/'test-writer'/'code-reviewer'，但它既不在本方案成员中…
+该规则不会生效」，并质疑「有很多隐性的规则，设计 agent 应该比较透明，
+`members.orchestrator.permission.task` 这种规则是读的 md 还是怎么获取的？应该怎么设计更直观」。
+
+**这个质疑完全正确，暴露了我上一轮引入的架构错误。**
+
+**根因：`permission.task` 归属错位**
+
+| 事实 | 说明 |
+|---|---|
+| 规则存哪 | `agent_templates.permission_json.task`（MySQL），渲染落盘到 `agents/<name>.md` frontmatter |
+| 不是读 md | md 是**渲染产物**，DB 才是源（导入功能才反向解析 md）|
+| **错在哪** | `task` 在 OpenCode 里是 **agent 级字段**，但语义是 **bundle 级**的（「本编排里谁能调谁」）|
+
+我上一轮的「委派授权」直接改 agent 模板，于是**跨方案污染**：
+
+```
+在 test 方案里授权 docs-writer / security-auditor
+  → 写进了共享的 orchestrator 模板
+  → 编排者与专家团 方案也带上这两条
+  → 但那个方案没有这俩成员 → 报「规则不会生效」
+```
+
+校验器的 warning **是对的**，它精确暴露了我的设计错误。
+
+**架构级修复**
+
+1. **数据层**：`bundle_members` 新增 `task_permission` —— 授权存在**方案成员**上，
+   不再回写 agent 模板（MySQL ALTER 已执行，13 表结构不变）
+2. **渲染层**：新增 `synthesize_task_rule()` —— 发布时按**本方案成员**重新合成
+   `permission.task`：
+   - 只为本方案 subagent 产出规则，模板里指向方案外 agent 的条目**一律剔除**
+   - 优先级：方案覆盖 > 模板规则 > 默认
+   - 保留模板 `"*"` 兜底（无则 deny），且 `"*"` 强制置顶（最后匹配胜出）
+   - 与兜底相同的动作不重复写，保持产物精简
+3. **校验层**：方案外规则由 **warning 降为 info**，文案改为
+   「模板里还有 N 条指向方案外 agent 的规则 —— 发布时会自动剔除，不写进产物」
+4. **透明化（回应「应该怎么设计更直观」）**：`BundleMemberResponse` 新增三个溯源字段
+   - `effective_task` —— **最终生效**的动作
+   - `task_source` —— `bundle`(本方案) / `template`(agent 模板) / `default`(未配置)
+   - `task_source_detail` —— 人话说明，如 `orchestrator 模板规则 "*": deny 命中`
+5. **前端**：委派授权矩阵改写 bundle；每行显示 **「来源」标签**（hover 出具体命中的规则）；
+   有覆盖时给「跟随模板」一键还原；未保存改动标 `有未保存改动`；
+   拓扑图连线改用后端 `effective_task`，保证**图与矩阵完全同源一致**
+
+**验证**
+
+| 检查项 | 结果 |
+|---|---|
+| 7 个方案校验 | **err=0 warn=0**（修复前 4 个方案共 11 条 warning）|
+| 溯源显示 | `docs-writer effective=deny source=template \| orchestrator 模板规则 "*": deny 命中` |
+| 产物剔除死规则 | `test` 方案的 `orchestrator.md` 只有 `"*": deny`，无 docs-writer/security-auditor |
+| 方案内覆盖生效 | 设 `docs-writer=allow` → 产物出现 `docs-writer: allow` |
+| **模板未被污染** | `orchestrator` 模板 task 仍是原始 4 条，**不含 docs-writer** ✅ |
+| 前端透明化 | 「来源：本方案」「来源：agent 模板」「跟随模板」「模型看不到它」全部呈现 |
+| 拓扑一致 | 1 allow(已授权) + 1 deny，与矩阵一致 |
+
+浏览器 **console 0 error**。测试后已还原被污染的 `orchestrator` 模板与 test 方案覆盖。
+
+**新增 5 个回归测试**：死规则剔除、方案覆盖优先、`*` 置顶、
+`resolve_task_action` 最后匹配胜出、方案外规则只报 info。
+
+**涉及文件**：`backend/app/db/models/agent_bundle_model.py`（+`task_permission`）、
+`app/schemas/agent_factory_schema.py`（+溯源字段）、
+`app/services/agent_render_service.py`（+`synthesize_task_rule`/`resolve_task_action`）、
+`app/services/agent_factory_service.py`（+`_resolve_effective_task`，`_bundle_members` 返回 5 元组）、
+`app/services/agent_deploy_service.py`（传 task_overrides）、
+`app/services/agent_validate_service.py`（warning→info）、
+`backend/tests/test_agent_factory.py`（+5）、
+`frontend/src/types/agentFactory.ts`、`BundleDesigner.tsx`、`LoopTopology.tsx`。
+
+**回归**：`pytest` 68 passed（+5）· `tsc` 0 error · `vite build` 273ms · `oxlint` 0 error。
+
+### 追加修复：Skill 平台 PRD + 双平面数据层 + 合规导出（P1-P2）
+
+**背景**：用户要求基于 OpenCode 官方 Skill 标准，设计并输出「Skill 可视化设计&统一管理平台」，
+覆盖 8 大模块、全生命周期，支持一键导出合规 OpenCode 目录包。
+
+**关键实测发现（决定整个架构）**
+
+在真实 OpenCode 容器（v1.18.12）上做两组探针确认：
+
+| 实验 | 构造 | 结果 |
+|---|---|---|
+| A | frontmatter 顶层塞 `risk_level` / `owner` / `qps_limit` | ✅ skill 正常加载，字段被**静默忽略** |
+| B | 同样信息放进 `metadata:` 子映射 | ✅ 正常加载，字段保留在文件里 |
+
+这说明往 frontmatter 塞治理字段是**无效的** —— 用户以为配了限流，实际没有。
+
+**架构决策：双平面分离**
+
+| 平面 | 内容 | 谁执行 |
+|---|---|---|
+| **执行平面**（Data Plane）| SKILL.md（**仅 5 合法字段**）+ references/ + scripts/ | OpenCode 原生 |
+| **治理平面**（Control Plane）| 限流/熔断/RBAC/脱敏/鉴权/Trace（9 张表） | 新增平台 Skill 网关 |
+
+三条落地规则：合规兜底（只出 5 字段）、metadata.omd_* 摘要可追溯、治理由网关执行。
+治理全量配置导出到 `_ontomind/skill.manifest.json`（刻意在 skills/ 之外）。
+
+**产出**
+
+| 文档 | 路径 |
+|---|---|
+| PRD（含架构/菜单/8 模块交互/全部表设计/分期/收益对比） | `docs/PRD-skill-platform.md` |
+| 9 张治理表（22 表） | `backend/app/db/models/skill_platform_model.py` |
+| Schema（含 SKILL_KIND_META/LIFECYCLE_META 等） | `backend/app/schemas/skill_platform_schema.py` |
+| 校验器（17 条规则，含明文密钥拦截） | `backend/app/services/skill_validate_service.py` |
+| 双平面渲染器 / JSON Schema 编译器 / 合规导出包 | `backend/app/services/skill_render_service.py` |
+
+**17 条校验规则（全实测验证）**
+
+| 范围 | 规则 |
+|---|---|
+| 合规 | ① kebab-case ② 目录名一致性 ③ description 1-1024 ④ metadata 值必须 string ⑤ 路径安全 ⑰ 渐进披露 |
+| **密钥安全** | ⑥ **明文密钥拦截**（AKIA/sk-/ark-/ghp_/JWT/PEM/长hex/长base64，仅放行 `cc://`/`kms://`/`vault://`/`sm://`/`env://`）|
+| 治理 | ⑧ 高危`+`二次确认 ⑨ 生命周期合法性 ⑩ 上线门禁(canary/released 前必配责任人/出参/生产地址) ⑯ API 型上线必配生产地址 |
+| Schema | ⑪ 参数名合法 ⑫ 枚举与类型匹配 ⑬ 正则合法性 |
+| 编排 | ⑭ 无环/连通/有 start-end ⑮ 引用未上线 skill 警告 |
+
+**双平面导出验证（约束 1 最终的判据）**
+
+导出 `pay-order-query` 包（含 SKILL.md + references + scripts）到真实容器 → 重启 serve → `opencode run` 输出：
+
+```
+- customize-opencode
+- db-migration
+- git-release
+- pay-order-query     ✅ 被 OpenCode 成功加载
+```
+
+**交付 PRD 文档**：`docs/PRD-skill-platform.md`（含完整架构设计、页面菜单结构、
+8 个模块逐模块交互逻辑、全部 22 表设计、标准 SKILL.md 模板样例、分 7 阶段落地计划、
+对比手工模式的收益量化表）。
+
+**回归**：`pytest` 68 passed · `tsc` 0 error · `vite build` 283ms · `oxlint` 0 error。
+
+### 追加：PRD 目录重构 + 产品骨架（7 域导航）
+
+**背景**：用户要求① 按域生成多份 PRD 文档；② 现有功能归入 Infra 目录；③ 项目名保持 OntoMind；④ 按 PROTOTYPE-GUIDANCE.md §9.2 搭建产品骨架。
+
+**产出**：
+
+| 产出 | 路径 |
+|---|---|
+| 总体 PRD | `docs/prd/overview.md` |
+| 6 个域 PRD | `docs/prd/{infra,codeops,dataops,modelops,agentops,govops}.md` |
+| 总览仪表盘 | `frontend/src/pages/overview/OverviewPage.tsx`（6 个 KPI 卡片） |
+| 占位页面 | `frontend/src/components/common/PlaceholderPage.tsx` |
+| 新导航布局 | `frontend/src/components/layout/AppLayout.tsx`（左侧 7 域图标栏 + 子菜单） |
+
+**导航结构**：
+
+```
+左侧图标栏：总览 · CodeOps · DataOps · ModelOps · AgentOps · GovOps · Infra
+点击域 → 右侧子菜单（如 AgentOps 含 Agent 设计 / Skill 设计 / 编排方案 / 发布中心）
+选中子菜单 → 内容区渲染对应页面
+```
+
+**路由映射**：
+
+| 旧路径 | 新路径 |
+|---|---|
+| `/compute` | → `/infra/compute`（重定向） |
+| `/aide` | → `/infra/aide`（重定向） |
+| `/agent-factory` | → `/agentops/agents`（重定向） |
+| `/skill-platform` | → `/agentops/skills`（重定向） |
+
+占位页面（`即将上线，敬请期待`）用于 CodeOps/DataOps/ModelOps/GovOps 尚未实现的功能。
+
+**验证**：
+- 总览页显示 6 个 KPI 卡片（AI 代码贡献率 38.5%、数据资产 1,247、模型服务 12 等）
+- 7 个域导航图标正常渲染
+- 每个域子菜单正确，点击跳转正常
+- 旧路由全部 301 重定向到新路径
+- 浏览器 console 0 error（仅 antd v6 预置弃用告警）
+- 回归：`pytest` 68 passed · `tsc` 0 error · `vite build` 267ms · `oxlint` 0 error
+
+### 追加：Skill 平台前端页面 + API 路由
+
+**背景**：之前做了后端数据层（9 张表）、校验器（17 条规则）、双平面渲染器，但完全没做前端页面和 API 路由，用户页面上看不到任何变化。
+
+**本轮交付**：
+- 挂载 `skill-platform` 路由，API 端点 15 个
+- `SkillPlatformService`（CRUD/生命周期/参数/版本/导出/克隆/审计）
+- 前端 `SkillDesignerPage.tsx`：三段式设计器（元数据 + 参数契约 + 执行逻辑）+ 右侧预览 + 导出/版本/克隆
+- 前端 `skillPlatform.service.ts` + `skillPlatform.ts` 类型定义
+- 导航栏新增「Skill 平台」入口
+
+**验证**：
+- 后端 API 创建/列表/导出全部正常
+- 页面加载正常，选中 skill 后三段式设计器显示完整
+- 浏览器 console 0 error
+- 回归：`pytest` 68 passed · `tsc` 0 error · `vite build` 328ms · `oxlint` 0 error
+
+### 遗留 / 注意
+- **控制面必须用 `opencode serve`**：`web` 不暴露 `/agent`，此时发布仍会写文件+重启，但校验降级为 `partial` 并明确告知原因（已实测该降级路径）
+- 容器重建会丢产物：`deployments` 记录容器 ID，可据此提示重新发布（未做自动重发）
+- `_probe_host_reachable` / 控制面探测走**后端视角**；后端与浏览器不同机时（远程节点）可能不一致
+- 远程 SSH 节点的发布路径已实现但**未在真机验证**（当前只有 local 节点在线）
+- 踩坑记录：`docker ps --filter name=opencode` 会**子串匹配到 `opencode001`**，测试与脚本里需用 `name=^opencode$` 精确匹配
+
+---
+
+## 2026-08-04
+
+### Agent: 容器服务登记 — 状态可见化 + MySQL 持久化 + AIDE 源联动
+
+### 目标（用户三条诉求）
+1. 算力页面「容器通过执行命令启动的服务是一种状态，应该要有地方展示出来」
+2. 容器启动的 opencode web/serve「应该有地方存下来，存到 MySQL，并维护状态的真实性、实时性」
+3. AIDE 页面「根据 MySQL 里的信息来加载选项进行切换」
+
+### 问题根因
+容器内起的服务是**运行态**，进程只活在容器里。原实现：
+- 服务信息不落库 → 页面刷新/后端重启后完全看不见
+- `get_aide_sources()` 每次实时扫全部容器，只按「容器端口是否为 4096/4097」判断，
+  **不校验进程是否真在监听、绑的什么地址、宿主是否真连得上** → 会把已挂掉/绑 loopback 的服务当可用源
+- AIDE 下拉只显示「节点/容器名」，选到不可用的源也没有任何提示
+
+### 设计决策
+
+| 决策点 | 选择 | 理由 |
+|--------|------|------|
+| 存储 | 新增 **`container_services`** 表 | 服务是可管理实体，需跨会话持久化 |
+| 唯一键 | `(container_id, container_port)` | 同容器同端口只一条，重复启动走 upsert |
+| 状态定位 | DB 存「声明 + **探测快照**」，**不当可信实时源** | 诚实建模，避免 UI 拿过期状态骗人 |
+| 真实性保证 | `refresh_services()` **四步递进探测** | 容器在吗 → 端口映射对吗 → 容器内在监听吗（绑什么） → 宿主真连得上吗 |
+| 端口监听探测 | 解析 **`/proc/net/tcp`**，不用 ss/netstat | 精简镜像普遍没有这些命令；/proc 是内核接口一定存在 |
+| loopback 坑 | 探测到 `bind=127.0.0.1` 直接判 `host_reachable=false` 并给修复建议 | 8-03 用户实际踩过的坑，这次在数据层堵掉 |
+| 启动服务 | `launch_service()` **强制 `--hostname 0.0.0.0`** | 从源头消灭上面那个坑 |
+| 自动登记 | 快速命令里跑 opencode → 自动 upsert 登记 | 用户不必手工再记一遍 |
+| 生命周期 | 容器删除 → 级联清登记；容器重建 → 迁移登记到新 ID | 避免 DB 留 unreachable 脏数据 |
+| AIDE 源 | 改为**读 DB**（`is_aide_source AND host_reachable`） | 快、准、且能解释「为什么这个不能选」 |
+| UI 新鲜度 | 每行显示「探测于 X 前」，>60s 标「可能已过期」+ 可选 15s 自动刷新 | 让快照语义对用户透明 |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `backend/app/db/models/container_service_model.py` | `ContainerService` + `ServiceKind` / `ServiceStatus` 枚举 |
+| `backend/app/db/repositories/container_service_repo.py` | 含 `get_by_container_port` / `list_aide_sources` / `delete_by_container` |
+| `frontend/src/components/compute/ServicesPanel.tsx` | 「服务」tab：状态表格 + 探测新鲜度 + 启动/停止/刷新/扫描发现 |
+
+### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `backend/app/db/models/__init__.py` | 注册新 model（否则 `create_all` 不建表）|
+| `backend/app/schemas/compute_schema.py` | 新增 `ContainerServiceResponse` / `ContainerServiceCreate` / `ServiceRefreshResult` / `ServiceLaunchRequest` |
+| `backend/app/services/compute_service.py` | 新增 `_parse_listen_table` 等解析函数；服务登记 CRUD、`refresh_service(s)`、`discover_services`、`launch_service`、`stop_service`、`_probe_one` 四步探测；`get_aide_sources` 改读 DB；exec 自动登记；容器删除/重建时维护登记；补 `httpx` import |
+| `backend/app/api/v1/compute.py` | 新增 8 个服务端点；`aide-sources` 支持 `refresh` |
+| `backend/tests/test_smoke.py` | 表清单断言补 `container_services`（5 → 6 张表）|
+| `frontend/src/types/compute.ts` | `ContainerServiceInfo` 等类型 + 状态色/文案映射 |
+| `frontend/src/services/compute.service.ts` | 8 个服务 API；`listAideSources` 支持 refresh |
+| `frontend/src/pages/compute/ComputePage.tsx` | 新增「服务」tab |
+| `frontend/src/pages/aide/AidePage.tsx` | 源下拉改读 `container_services`，富选项（状态点 + 访问地址 + 不可用原因）、不可用项置灰、选前校验、独立刷新按钮；容器源模式隐藏本机启停按钮；修 antd v6 `onDropdownVisibleChange` 弃用 |
+
+### API 端点（新增 8 个）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/compute/services?node_id&refresh` | 列服务（refresh=1 先回探）|
+| POST | `/compute/services/refresh` | 批量回探（维护实时性主入口）|
+| POST | `/compute/services/discover` | 扫描补录现实中已在跑但未登记的服务 |
+| POST | `/compute/nodes/{nid}/containers/{cid}/services` | 手工登记（upsert）|
+| POST | `/compute/nodes/{nid}/containers/{cid}/services/launch` | 一键启动 opencode + 登记（强制 0.0.0.0）|
+| POST | `/compute/services/{id}/refresh` | 回探单个 |
+| POST | `/compute/services/{id}/stop` | 停容器内进程（保留登记）|
+| DELETE | `/compute/services/{id}` | 删登记（不动进程）|
+
+变更：`GET /compute/aide-sources` 增加 `refresh` 参数，数据源由「实时扫容器」改为「查 container_services」。
+
+### 数据库
+
+**新增 1 张表 `container_services`**（5 → 6 张）：
+- 归属：`node_id`(FK→compute_nodes, CASCADE) / `node_name` / `container_id` / `container_name` / `image`
+- 定义：`kind`(enum) / `name` / `container_port` / `host_port` / `access_url` / `command` / `log_path` / `exec_id`
+- 探测态：`status`(enum) / `status_detail` / `bind_address` / `host_reachable` / `last_checked_at` / `is_aide_source`
+- 唯一键 `uq_container_port(container_id, container_port)`
+
+⚠️ 建表踩坑：首次 `create_all` 时被上一个被 kill 的进程遗留的
+`Waiting for table metadata lock` 卡死。处理办法：
+`SELECT * FROM performance_schema.metadata_locks` 定位持锁事务 → KILL 掉长 Sleep 的孤儿连接。
+
+### 验证
+
+后端（curl + docker 交叉校验）：
+- `discover` 扫出 2 个服务，`bind_address=0.0.0.0` / `host_reachable=true` / `is_aide_source=true` ✅
+- MySQL 落库确认：`(1,'opencode001',4097,14097,'running','0.0.0.0',1,1)`、`(2,'opencode',4096,14096,...)` ✅
+- **状态真实性**：容器内 `pkill` 掉服务 → refresh 后该行变 `stopped`、`is_aide_source=false`，
+  aide-sources 只剩 1 个 ✅
+- **loopback 检测**：故意用 `--hostname 127.0.0.1` 起服务 → 识别为 `bind=127.0.0.1`、
+  `host_reachable=false`，提示「Docker 端口映射对它无效…加 --hostname 0.0.0.0」✅
+- `launch` 一键启动 → 命令含 `--hostname 0.0.0.0`，回探 `host_reachable=true` ✅
+
+前端（Playwright 真实浏览器）：
+- 「服务」tab 展示两个服务、AIDE 标签、运行中、`bind 0.0.0.0`、「探测于 X 前」、统计条 ✅
+- AIDE 下拉 2 个富选项（状态点 + `http://localhost:14096` + kind 标签）✅
+- 选中后 iframe src 切到 `http://localhost:14096`，工具条显示「容器 opencode」+「容器端口 4096」✅
+- 杀掉 4097 服务 → 下拉该项**自动置灰**并显示「容器内端口 4097 没有进程监听…」✅
+- 四个 tab + AIDE 全量走查：**console 0 error，API 0 失败** ✅
+
+回归：`pytest` 24 passed；`tsc -b` 0 error；`vite build` 252ms 成功。
+
+### 追加修复：容器控制台点不同容器进的都是同一个终端
+
+**现象**：在「Docker 管理」点 A 容器的控制台，再点 B 容器的控制台，终端仍连着 A。
+
+**根因（两个叠加缺陷）**：
+1. `ContainerConsole` 用 `const [target] = useState(() => getStoredTarget())` 从 sessionStorage 取目标。
+   `useState` 的初始化函数**只在首次挂载时执行一次**，而该面板被 antd `Tabs` 常驻挂载
+   （切 tab 不卸载），所以后续 `sessionStorage.setItem` 再也不会被读到 → target 永远是第一个容器。
+2. 即使 target 更新了，自动连接 effect 的依赖是 `[shell, probing]`，**不含容器身份**。
+   切到「shell 相同的另一个容器」时两者都没变，effect 不重跑 → WebSocket 仍指向旧容器。
+
+**处置**：
+- 目标改由 **store 持有**（`computeStore.consoleTarget` + `openConsole()` action），
+  彻底放弃 sessionStorage 这条非响应式通路；`DockerManagement.openConsole` 改调 store action
+- shell 探测 effect 依赖改为 `[target?.nodeId, target?.containerId]`，
+  并在切换时**先 `cleanup()`** 杀掉旧 WebSocket + dispose 旧 xterm 实例（防串台）
+- 自动连接 effect 依赖补上容器身份
+- 控制台头部同时显示 **容器名 + 短 ID**，同名/相似容器也能一眼确认连的是哪个
+
+**验证**（Playwright + 容器内唯一标记文件）：
+- 在两个容器内分别写 `/tmp/whoami.txt`，点各自控制台后在终端 `cat`：
+  `opencode001` → `I_AM_CONTAINER_OPENCODE001_4097`；`opencode` → `I_AM_CONTAINER_OPENCODE_4096` ✅
+- 头部显示与实际容器 ID 一致（`aaacb9802daa` / `d75583b77b97`）✅
+- 快速来回切换 4 次，**4/4 header 与点击目标一致**，无串台 ✅
+- WebSocket 生命周期：切换时旧连接全部 close；离开算力页后 `opened=1 closed=1 leaked=0` ✅
+- 全量走查 4 tab + AIDE：console 0 error、API 0 失败 ✅
+
+**涉及文件**：`frontend/src/stores/computeStore.ts`（新增 `consoleTarget` / `openConsole`）、
+`frontend/src/types/compute.ts`（新增 `ConsoleTarget`）、
+`frontend/src/components/compute/ContainerConsole.tsx`、
+`frontend/src/components/compute/DockerManagement.tsx`。
+
+### 遗留 / 注意
+- `_probe_host_reachable` 探的是**后端视角**的可达性。后端与浏览器不同机时（远程节点场景）
+  可能与用户实际情况不一致，UI 已展示 `access_url` 供用户自行确认。
+- 服务状态是**拉取式**（按需/定时回探），没有做 watch/推送。长期停留可开「15s 自动刷新」。
+- 远程 SSH 节点的服务探测逻辑已实现但未在真机验证（当前只有 local 节点在线）。
+
+---
+
+## 2026-08-03（下午）
+
+### Agent: 算力管理 — 容器管理全链路排障与重构
+
+### 目标
+用户反馈 `/compute` 页「容器管理功能全是不能用的」：创建/修改容器都不成功、opencode 容器点 console 报错、
+错误信息匪夷所思、输入框全靠手写字符串拼接。要求逐项排查、优雅实现、每改一处自测后交付。
+
+### 排查方法
+起本地 Docker + uvicorn + vite，用 curl 直打 API、`docker inspect` 校验真实状态、
+Playwright 驱动真实浏览器跑完整交互，逐条定位而非猜测。
+
+### 发现并修复的 14 个缺陷
+
+| # | 缺陷 | 根因 | 影响 |
+|---|------|------|------|
+| 1 | 创建容器端口**方向反了** | `port_bindings[f"{parts[0]}/tcp"] = parts[1]`，把 `8099:80` 建成「容器 8099 → 宿主 80」 | 端口映射全错，服务永远访问不到 |
+| 2 | 创建容器**永久挂起** | 直接 `containers.run()`，镜像缺失时 SDK 隐式 pull，无网络时无限等待且无任何提示 | 「点新建一直转圈，最后什么都没有」 |
+| 3 | 容器列表端口**重复且反向** | 只读 `NetworkSettings.Ports` 未按 IPv4/IPv6 去重 | 显示 `4096:14096, 4096:14096` |
+| 4 | Docker 面板**永远 0 个容器** | `ensureLocalNode()` 直接 set selectedNode，从不触发 fetch（只有 `selectNode()` 里才 fetch） | 进页面就是空表，功能「全都不能用」的直接观感 |
+| 5 | `aide-sources` **永远返回空** | 自己 split ports 字符串且方向搞反 | AIDE 无法发现 opencode 容器 |
+| 6 | 修改容器表单**回填空白** | 前端读 `raw.config` / `hostConfig.restartPolicy`（驼峰），而 docker inspect 是 `Config` / `HostConfig.RestartPolicy` | 一改就把端口/环境变量清空 |
+| 7 | 后台命令**永远显示「已退出」** | 用 `fuser` 判活，精简镜像普遍没这个命令 | 无法观察长任务 |
+| 8 | 后台命令 **exit_code 永远 0/None** | `grep -oP 'EXIT_CODE=\K\d+'` 找一个从没被写入的标记 | 失败当成功 |
+| 9 | exec **命令注入 / 引号截断** | `sh -c '{cmd}'` 裸拼，命令含单引号即破 | 安全问题 + 命令跑不了 |
+| 10 | 控制台**硬编码 `/bin/bash`** | 前端固定 `/bin/bash`，alpine/distroless 无 bash 直接失败且无提示 | **「opencode 容器点 console 报错」的根因** |
+| 11 | 启停后表格行**变空白** | 远程分支 `return ContainerInfo(name="", image="", ...)` | UI 状态被空值覆盖 |
+| 12 | 改配置后容器**起不来** | 重建只带 `Cmd` 丢了 `Entrypoint` | 改个端口容器就废 |
+| 13 | 所有错误被**静默吞掉** | store 里 `catch {}` 空处理 | 用户看不到任何原因 |
+| 14 | antd v6 弃用告警 | `Alert message` / `notification message` / `Space direction` / `InputNumber addonBefore` / 静态 notification | 控制台一片红 |
+
+### 设计决策
+
+| 决策点 | 选择 | 理由 |
+|--------|------|------|
+| 端口/挂载/环境变量传输格式 | 字符串拼接 → **结构化对象** (`PortMapping`/`VolumeMapping`/`EnvVar`) | 方向语义由字段名固定，Pydantic 直接校验，前后端不再靠解析猜 |
+| 端口方向 | `to_docker_key()` = `容器端口/协议`，值 = 宿主端口 | 与 docker SDK 契约对齐并写进方法名，避免再写反 |
+| 镜像拉取 | 显式 `images.get()` → 缺失才 `pull()` → 900s 上限 | 杜绝隐式挂起，超时给可执行建议 |
+| 容器列表数据源 | 统一走 `docker inspect` 全量 JSON（本地 + 远程同口径） | 一次拿全端口/挂载/env/网络，前端零解析 |
+| 运行态判定 | `fuser` → **sentinel 文件**（`.done` 内含 exit code） | 不依赖容器内有额外命令 |
+| shell 选择 | 新增 `/shells` 探测端点 + 后端自动回退 + WS 下发 notice | bash 缺失时自动换 sh，不再报错 |
+| 修改容器 | 字段 `None`=沿用 / `[]`=清空；保留 Entrypoint；原在跑则重建后自动起 | 语义明确，重建不破坏容器 |
+| 命令执行 | 新增 **sync / async 双模式** | 短命令直接看结果，长任务才轮询 |
+| 表单 UX | 6 个**容器预设** + 每字段 placeholder/示例/「填入示例」+ 实时 `docker run` 预览 | 满足「不要那么多输入，每个输入都有案例」 |
+| 错误呈现 | 后端把 docker 原始报错**翻译成可执行中文**；前端 banner + notification | 端口占用/重名/挂载被拒/网络不存在都直接说怎么改 |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `frontend/src/components/compute/ContainerConfigEditor.tsx` | 端口/环境/挂载/网络/重启 结构化行编辑 + 校验 + docker run 预览 |
+| `frontend/src/components/compute/ContainerFormModal.tsx` | 新建/修改容器共用弹窗（预设驱动 + 结构化回填） |
+| `frontend/src/components/compute/ContainerExecModal.tsx` | 快速命令弹窗（模板参数表单 + sync/async + 轮询日志） |
+
+### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `backend/app/schemas/compute_schema.py` | 新增 `PortMapping`/`VolumeMapping`/`EnvVar`/`ImagePull*`/`ContainerPreset`；`ContainerInfo` 带结构化配置；7 个命令模板（含 mode/example）；6 个容器预设 |
+| `backend/app/services/compute_service.py` | 新增 inspect→结构化 解析函数组；重写 create/list/update/exec/aide-sources；新增 `detect_shells`/`resolve_shell`/`pull_image`/`_explain_docker_error`/`_validate_container_request` |
+| `backend/app/api/v1/compute.py` | 新增 `POST /images/pull`、`GET /containers/{id}/shells`、`GET /container-presets`；WS console 改为自动选 shell + 下发 error/notice |
+| `frontend/src/types/compute.ts` | 结构化类型 + 状态中文映射 + preset/shell/pull 类型 |
+| `frontend/src/services/compute.service.ts` | 新增 `pullImage`/`detectShells`/`listContainerPresets`；create/update 放宽 timeout |
+| `frontend/src/stores/computeStore.ts` | 修复自动选中本地节点后不 fetch；新增 `dockerError`/`pullImage`/`fetchPresets`；导出 `extractErrMsg`；操作错误改为抛出 |
+| `frontend/src/components/compute/DockerManagement.tsx` | 重写：结构化列（端口方向/挂载数/网络）、行级 loading、错误 banner、镜像拉取、接入新弹窗 |
+| `frontend/src/components/compute/ContainerConsole.tsx` | shell 自动探测 + 自动连接 + 解析 JSON 控制帧 + 可执行错误提示 + 清理泄漏 |
+| `frontend/src/components/compute/NodeManagement.tsx` | antd v6 适配（`App.useApp()` + orientation） |
+
+### API 端点
+
+新增 3 个：
+- `POST /api/v1/compute/nodes/{id}/images/pull` — 拉取镜像（900s 上限）
+- `GET  /api/v1/compute/nodes/{id}/containers/{cid}/shells` — 探测可用 shell
+- `GET  /api/v1/compute/container-presets` — 容器预设清单
+
+变更契约：`POST/PUT /containers` 的 `ports`/`envs`/`volumes` 由字符串改为结构化数组；
+`ContainerInfo` 增加 `port_mappings`/`volume_mappings`/`env_vars`/`command`/`restart`/`network`/`state_detail`/`exit_code`。
+
+### 数据库
+无变更。
+
+### 验证
+
+后端（curl + docker inspect 交叉校验）：
+- 创建 `8099:80` → `PortBindings={"80/tcp":[{"HostPort":"8099"}]}` ✅ 方向正确
+- 列表端口 `4096:14096, 4096:14096` → `4096->14096` ✅ 去重
+- 重名 → 「容器名 'x' 已被占用。请换一个名字…」；相对路径 → 「'app' 应写成 '/app'」；host+端口 → 明确拒绝 ✅
+- sync exec `exit 3` → `exit_code=3`；async `exit 7` → 日志增量 + `running` 翻转 + `exit_code=7` ✅
+- 含单引号命令 `echo 'it'\''s fine'` → 正确输出 `it's fine` ✅
+- shells 探测 → `{"shells":["/bin/bash","/bin/sh"],"default":"/bin/bash"}` ✅
+- aide-sources：`4200:4096` 容器 → 正确识别（原来恒为 `[]`）✅
+- 改端口后 `Entrypoint=["/bin/sleep"] Cmd=["600"]` 保留且容器仍 `running` ✅
+
+前端（Playwright 真实浏览器）：
+- Docker 管理 tab 容器数 1、`opencode` 可见（原为「暂无容器」）✅
+- 选 Nginx 预设 → 预览自动出现 `-p 8080:80 -v /tmp/site:… --restart` ✅
+- UI 建容器 `18081→8080` + env → docker 侧完全一致、状态 running ✅
+- 改端口 → 弹窗正确回填、重建后 `19090` 生效、env 保留、成功通知 ✅
+- opencode 控制台 → 自动选 bash、自动连接、`echo CONSOLE_WORKS_123` 有真实回显 ✅
+- 快速命令 → 7 模板、`进程列表` sync 执行返回 ps 输出 + 「成功 (exit 0)」✅
+- 空镜像/空镜像名校验、host 模式禁用端口 联动 ✅
+- Docker Desktop 停止时 → 明确 banner「无法连接本地 Docker…请确认 Docker Desktop 已启动」（原为静默空表）✅
+- 浏览器控制台 **0 error**（原有多条 antd 弃用告警）✅
+
+回归：`pytest` 24 passed；`tsc -b` 0 error；`oxlint` compute 相关 0 新增问题；`vite build` 1.07s 成功。
+
+### 追加修复：容器内服务绑 loopback 导致宿主访问不到
+
+**现象**：用户在容器内跑 `opencode web --port 4096`，容器端口映射为 `0.0.0.0:14096->4096/tcp`，
+但宿主 `http://localhost:14096/` 访问不到。
+
+**定位**（三步实证，非猜测）：
+1. `docker exec ... curl 127.0.0.1:4096` → **200**；`curl 172.17.0.2:4096`（容器自身 eth0 IP）→ **000**
+2. `/proc/net/tcp` 显示 `0100007F:1000 0A` —— 即 LISTEN 在 `127.0.0.1:4096`，而非 `0.0.0.0`
+3. `opencode web --help` 确认 `--hostname` **默认值就是 `127.0.0.1`**
+
+**根因**：Docker 端口转发的目标是「容器 IP:容器端口」(`172.17.0.2:4096`)，
+进程只绑容器 loopback 时该地址无人监听 → 转发落空。与端口映射配置无关。
+
+**处置**：
+- 现场用 `opencode web --port 4096 --hostname 0.0.0.0` 重启，`/proc/net/tcp` 变为 `00000000:1000`，
+  宿主 `http://localhost:14096/` 返回 200 + 正常 HTML ✅
+- 平台侧把坑消灭在模板里（`app/schemas/compute_schema.py`）：
+  - `opencode-serve` / `opencode-web` 两个模板**新增 `hostname` 参数，默认 `0.0.0.0`**，
+    命令串固定带 `--hostname {hostname}`，描述里写明「不要用 127.0.0.1」
+  - `opencode-web` 默认端口从 4097 修正为 4096（与实际用法一致）
+  - **新增 `check-bind-address` 模板**：列出容器内所有 LISTEN 端口及绑定地址，
+    并把 `0100007F` / `00000000` 直接翻译成「仅容器内可访问」/「宿主可访问」，
+    无 `ss`/`netstat` 的精简镜像也能用（回退解析 `/proc/net/tcp`）
+
+**验证**：`check-bind-address` 经 API 实跑输出 `port 4096  bind 0.0.0.0 [宿主可访问]`，exit 0；
+命令模板总数 7 → 8；`pytest` 24 passed。
+
+### 遗留 / 注意
+- 本次把 `/containers` 的请求体契约从字符串改为结构化数组，若有其它调用方需同步调整。
+- `_exec_sessions` 仍是进程内内存态，后端重启后旧 exec_id 查不到（已给明确提示）。
+- 远程（SSH）节点的结构化解析已实现但**未在真机验证**（当前只有 local 节点在线）。
+
+---
+
 ## 2025-07-07
 
 ### Agent: 主开发 Agent（感知层元数据提取系统 — 存储 + 浏览 + LLM/Agent 标注 + 流式交互）
@@ -2417,3 +3329,46 @@ npm run build     → ✓ built in 208ms
 前端 build     ✓ 217ms · 1.1MB
 e2e            5 组全绿
 ```
+
+---
+
+## 2026-08-12
+
+### Agent: DataOps 数据仓库（数据源 / 元数据 / 样例）
+
+### 目标
+资产地图「数据仓库」：添加数据源（Doris/MySQL/Hive 配置）、原始元数据探查、5–10 行样例查询；联调 Doris 10.18.1.249:9031。
+
+### 决策
+- UI：左侧源列表 + 右侧三段式（连接 / 元数据 / 样例），简约大气
+- Doris/MySQL 走 pymysql；Hive 可登记，探活后续
+- 凭据写 backend/.env（密码含 # 需引号），启动种子幂等入库；不提交真实密码
+
+### 新增
+- backend: data_source_model / repo / dataops_connector / dataops_service / api/v1/dataops
+- frontend: WarehousePage + dataops.service/types
+
+### API
+- `/api/v1/dataops/sources*` test/databases/tables/columns/sample
+
+### 验证
+- 探活 ok ~34ms；tmp 库 33 表；DESCRIBE + LIMIT 样例成功
+
+---
+
+## 2026-08-13
+
+### Agent: 智能数开 IDE（资产地图）
+
+### 目标
+资产地图下新增「智能数开」：左 ETL SQL 文件、中 Monaco SQL 编辑器、右 OpenCode Agent；可选容器 opencode serve；窗口联动。
+
+### 决策
+- 前端直连 `@opencode-ai/sdk` → serve（需 CORS）
+- 服务源：本机 4096 + `container_services` 中可达的 opencode_serve/web
+- 联动：发消息附带当前 SQL；助手 ```sql``` 可写回编辑器
+
+### 新增
+- `frontend/src/pages/dataops/smart-dev/*`
+- `frontend/src/services/opencodeSdk.ts`
+- deps: `@opencode-ai/sdk`, `@monaco-editor/react`, `monaco-editor`
