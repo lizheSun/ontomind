@@ -6,6 +6,48 @@
 
 ## 2026-08-14
 
+### Agent: Wiki 知识库 + 元数据自动标注 + 本体建模（Phase 0–3 + 收尾）
+
+### 目标
+落地完整链路：粘贴/URL → Wiki Markdown → information_schema 扫描 → 规则/LLM 标注 → delta 本体构建 → CQ 验收/发布/导出。
+
+### 决策
+- Connector 改走 `information_schema`（注释/批列/画像/`overlap_ratio`）；LLM 仅 httpx；长任务 `job_runner` 独立 Session
+- 置信度三档：≥0.85 自动采纳 / 0.65–0.85 待审 / <0.65 丢弃；rules 模式在无 `LLM_API_KEY` 时仍可用
+- 本体构建按 batch delta（extract→align→judge→merge），消金片段 `CONSUMER_FINANCE_FRAGMENT` 作对齐目标；导出不引 rdflib
+- UI：知识库三栏、元数据扫描/待审、本体 xyflow 图；菜单「业务系统」→「元数据与标注」，新增「本体建模」
+
+### 新增文件
+- backend: `llm_client` / `job_runner` / wiki|meta|ontology models·repos·schemas·services·apis；`annotation_rules|prompts`；`ontology_fragments`；`tests/test_{wiki,metadata,ontology}.py`
+- frontend: `htmlToMarkdown`；Paste/Url 导入；Knowledge/Metadata/Ontology 页；AnnotationReviewPanel / OntologyGraph；wiki|metadata|ontology services+types
+- docs: `docs/prd/ontology.md`
+
+### 修改文件
+- `dataops_connector` / `config` / `.env.example` / `main`（wiki seed）/ `router` / `models/__init__` / `test_smoke`
+- `WarehousePage` + `types/dataops`（comment/row_count）
+- `App.tsx` / `AppLayout.tsx`
+- `AGENTS.md` / `HANDOFF.md` / `schema.sql` / `AGENT_LOG.md`
+
+### 删除文件
+- 无（清理临时 header patch）
+
+### API 端点
+- `/api/v1/wiki/*` · `/api/v1/metadata/*` · `/api/v1/ontology/*`
+
+### 数据库
+- +17 表 → 合计 **40** 张（wiki 3 + meta 5 + ontology 9）
+
+### 验证
+```
+cd backend && pytest          # 85 passed
+cd frontend && npm run build  # 0 error
+cd frontend && npm run lint
+```
+
+---
+
+## 2026-08-14
+
 ### Agent: 提交推送 — DataOps 智能数开 + 平台壳层
 
 ### 目标

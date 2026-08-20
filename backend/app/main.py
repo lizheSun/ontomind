@@ -34,6 +34,12 @@ async def lifespan(app: FastAPI):
         from app.services.dataops_service import DataOpsService
 
         DataOpsService(db).ensure_seed_doris()
+        from app.services.wiki_service import WikiService
+
+        WikiService(db).ensure_seed_space()
+        from app.services.meta_standard_service import MetaStandardService
+
+        MetaStandardService(db).ensure_seed_standards()
     finally:
         db.close()
     yield

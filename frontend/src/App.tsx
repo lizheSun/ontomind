@@ -6,6 +6,10 @@ import OverviewPage from './pages/overview/OverviewPage';
 import PlaceholderPage from './components/common/PlaceholderPage';
 import WarehousePage from './pages/dataops/WarehousePage';
 import SmartDevPage from './pages/dataops/smart-dev/SmartDevPage';
+import KnowledgeBasePage from './pages/dataops/knowledge/KnowledgeBasePage';
+import MetadataPage from './pages/dataops/metadata/MetadataPage';
+import OntologyPage from './pages/dataops/ontology/OntologyPage';
+import LlmSettingsPage from './pages/govops/LlmSettingsPage';
 
 // Infra
 import InfraComputePage from './pages/infra/InfraComputePage';
@@ -52,11 +56,12 @@ export default function App() {
               <Route path="codeops/*" element={<Navigate to="/codeops/workspace" replace />} />
               {/* DataOps */}
               <Route path="dataops/catalog" element={<Navigate to="/dataops/catalog/biz-systems" replace />} />
-              <Route path="dataops/catalog/biz-systems" element={<PlaceholderPage title="业务系统" desc="业务应用系统与服务边界资产。" />} />
+              <Route path="dataops/catalog/biz-systems" element={<MetadataPage />} />
               <Route path="dataops/catalog/warehouse" element={<WarehousePage />} />
+              <Route path="dataops/catalog/ontology" element={<OntologyPage />} />
               <Route path="dataops/catalog/etl" element={<PlaceholderPage title="ETL代码库" desc="数据集成与调度作业代码资产。" />} />
               <Route path="dataops/catalog/code" element={<PlaceholderPage title="业务代码库" desc="业务服务与应用源码资产。" />} />
-              <Route path="dataops/catalog/knowledge" element={<PlaceholderPage title="知识库" desc="文档、向量索引与 RAG 语料资产。" />} />
+              <Route path="dataops/catalog/knowledge" element={<KnowledgeBasePage />} />
               <Route path="dataops/catalog/smart-dev" element={<SmartDevPage />} />
               <Route path="dataops/lineage" element={<PlaceholderPage title="数据血缘" desc="数据→特征→模型→Agent→应用 全链路血缘追踪。" />} />
               <Route path="dataops/quality" element={<PlaceholderPage title="数据质量" desc="五维数据质量监控。" />} />
@@ -73,10 +78,12 @@ export default function App() {
               <Route path="agentops/deploy" element={<AgentOpsDeployPage />} />
               <Route path="agentops/*" element={<Navigate to="/agentops/agents" replace />} />
               {/* GovOps */}
+              <Route path="govops" element={<Navigate to="/govops/llm" replace />} />
               <Route path="govops/catalog" element={<PlaceholderPage title="统一资产目录" desc="跨域搜索代码、数据、模型、Agent 资产。" />} />
               <Route path="govops/security" element={<PlaceholderPage title="安全合规" desc="AI 安全护栏、合规框架检查、Prompt 注入防御。" />} />
               <Route path="govops/cost" element={<PlaceholderPage title="成本归因" desc="Token 消耗归因、GPU 成本追踪、预算管理。" />} />
-              <Route path="govops/*" element={<Navigate to="/govops/catalog" replace />} />
+              <Route path="govops/llm" element={<LlmSettingsPage />} />
+              <Route path="govops/*" element={<Navigate to="/govops/llm" replace />} />
               {/* Infra */}
               <Route path="infra/compute" element={<InfraComputePage />}>
                 <Route index element={<Navigate to="nodes" replace />} />

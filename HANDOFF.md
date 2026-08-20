@@ -6,24 +6,23 @@
 
 ## 0 · TL;DR — 这个项目现在是什么
 
-**OntoMind = AI Agent 工作平台**，当前只有 **2 个模块**：
+**OntoMind = AI Agent 工作平台 + DataOps/本体语义层**。落地页 `/overview`。
 
 | 模块 | 路由 | 说明 |
 |---|---|---|
-| **AIDE** | `/aide`（默认落地页） | iframe 嵌入 opencode 官方 Web UI |
+| **Overview / 六域壳** | `/overview` 等 | CodeOps / DataOps / ModelOps / AgentOps / GovOps / Infra |
+| **AIDE** | `/aide` | iframe 嵌入 opencode Web UI（`AideHost` 常驻） |
 | **用户管理** | `/users` | 用户 / 角色 / 权限 / 审计 |
+| **DataOps** | `/dataops/*` | 仓库、智能数开、Wiki、元数据标注、本体建模 |
+| **AgentOps / Infra** | `/agentops/*` `/infra/*` | Agent/Skill 工厂、算力与容器 |
 
-规模：
-- 后端 **3 个路由域**（`/api/v1/{auth, users, opencode}`）、**11 个端点**、**4 张表**
-- 前端 **2 个页面**、8 个 npm 依赖、构建产物 **1.1MB**
-- 测试：`pytest` **25 passed / 0 failed**；`npm run build` **0 error**
+规模（2026-08-14）：
+- 后端 **10 个路由域**（auth/users/opencode/compute/agent-factory/skill-platform/dataops/wiki/metadata/ontology）、**40 张表**
+- 主题：**Apple Design**；依赖含 monaco / xterm / xyflow
+- 测试：`pytest` **85 passed**；`npm run build` / `npm run lint` 须 0 error
 
-> 🗑️ **2026-08-03 分两批大清理**：删掉了对话工作台、五层业务域（感知/认知/决策/执行）、
-> 资源管理、Agent Looper、Agent Platform、专家团、算力调度、数据平台、知识库、LLM 配置，
-> 连带 **DROP 88 张数据库表**。完整清单见 [AGENT_LOG.md](./AGENT_LOG.md) 与
-> [AGENTS.md](./AGENTS.md#已删除清单老代码里见到即死代码勿再引用)。
->
-> **老代码/老文档里提到这些模块的都是死代码，不要试图恢复或引用。**
+> 🗑️ 2026-08-03 曾大清理历史模块；之后已增量恢复 Compute/Agent/DataOps/Wiki/Ontology。  
+> **以 [AGENTS.md](./AGENTS.md) 与当前代码为准**，勿盲信下文旧「4 张表」残留描述（已逐步改写）。
 
 ---
 
@@ -72,7 +71,7 @@ CREATE DATABASE IF NOT EXISTS ontomind
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-建表**不用手动跑 SQL** —— 后端启动时 `Base.metadata.create_all()` 会自动建那 4 张表。
+建表**不用手动跑 SQL** —— 后端启动时 `Base.metadata.create_all()` 会自动建 **40** 张表。
 `backend/schema.sql` 只是 ORM 导出的参考文档。
 
 ### 1.6 `.env`
@@ -87,6 +86,11 @@ DB_PASSWORD=你的密码
 DB_NAME=ontomind
 
 SECRET_KEY=用 openssl rand -hex 32 生成
+
+# 可选：元数据 LLM 标注 / 本体生成（OpenAI 兼容）；空则仅 rules 模式可用
+# LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+# LLM_API_KEY=
+# LLM_MODEL=
 ```
 
 > `Settings.model_config` 设了 `"extra": "ignore"`，所以 `.env` 里的历史遗留项
@@ -116,8 +120,8 @@ cd frontend && npm run dev
 # → http://localhost:5173
 ```
 
-**验证**：浏览器打开 `http://localhost:5173`，登录后自动进 `/aide`，
-工具条应显示「**已连接 · 复用 serve**」，下方 iframe 里能看到 opencode 官方 UI。
+**验证**：浏览器打开 `http://localhost:5173`，登录后进 `/overview`；
+AIDE 在 `/aide`，工具条应显示「已连接 · 复用 serve」。
 
 ---
 
@@ -164,17 +168,25 @@ POST /api/v1/opencode/web/stop     停掉独立 opencode web
    │
    └── HTTP ─→ FastAPI:8000                             (登录 / 用户管理 / AIDE 探活)
                     │
-                    └── SQLAlchemy → MySQL              (4 张表)
+                    └── SQLAlchemy → MySQL              (40 张表)
 ```
 
 ---
 
 ## 4 · 数据库
 
-### 4.1 只有 4 张表
+### 4.1 当前 **40** 张表
+
+权威清单与分组见 `backend/app/db/models/__init__.py` 文件头。核心分组：
 
 ```
 users / roles / user_roles / audit_logs
+compute_nodes / container_services
+agent_* / skill_* / deployments
+data_sources
+wiki_spaces / wiki_documents / wiki_document_versions
+meta_scan_jobs / meta_tables / meta_columns / glossary_terms / annotations
+ontologies / ontology_*（9）
 ```
 
 ### 4.2 建表靠 `create_all`
@@ -188,12 +200,7 @@ users / roles / user_roles / audit_logs
 
 ### 4.3 alembic 已删除
 
-`alembic/` + `alembic.ini` 于 2026-08-03 移除。原因：
-- `versions/` 一直是空的，没有任何迁移文件
-- `env.py` 的 import 路径是错的（`from app.models import *`，实际在 `app.db.models`）
-- **只有 4 张表，不需要迁移工具**
-
-要加列直接改 Model + 手动 `ALTER TABLE`，或写一次性脚本。
+`alembic/` + `alembic.ini` 于 2026-08-03 移除。改列直接改 Model + 手动 `ALTER TABLE`，或写一次性脚本。
 
 ### 4.4 `schema.sql` 是导出物不是权威
 
@@ -244,6 +251,8 @@ users / roles / user_roles / audit_logs
 | 登录后白屏 | 检查 `SECRET_KEY` 是否配好；后端启动日志有无报错 |
 | `create_all` 未建新表 | 检查 `db/models/__init__.py` 是否 import 了新 model |
 | 「transaction already begun」 | Service 里用了 `with self.db.begin()` → 改成 `flush()` + `commit()` |
+| 标注/本体 llm 模式报 `LLM_NOT_CONFIGURED` | `.env` 设 `LLM_API_KEY`；rules/hybrid 的 rules 部分仍可跑 |
+| 扫描无表/列注释 | 必须走 `information_schema`，勿用裸 `DESCRIBE` |
 | `/users` 返回 403 | 权限系统正常工作 —— 该用户没有平台管理员角色 |
 | pydantic `extra_forbidden` | `.env` 有 Settings 未声明的项；`config.py` 已设 `extra: ignore`，若报错检查是否被改回 |
 
@@ -255,6 +264,8 @@ users / roles / user_roles / audit_logs
 |---|---|
 | `AGENTS.md` | 项目规范速查（本文的精简版） |
 | `AGENT_LOG.md` | **历史变更时间线 — 动手前先扫一遍** |
+| `docs/prd/ontology.md` | Wiki / 元数据 / 本体实现说明 |
+| `docs/ONTOLOGY_AIBI_DATA_AGENT.md` | 本体产品愿景 |
 | `backend/STANDARDS.md` | 分层 / 事务 / 命名 / DI 完整规范 |
 | `backend/DESIGN_STANDARDS.md` | API 设计 + DB 命名 + 错误码 |
 | `frontend/STANDARDS.md` | 前端类型 / service / store 规范 |
@@ -270,7 +281,7 @@ curl -s http://localhost:8000/health && echo " ← backend OK"
 # opencode 探活
 curl -s http://127.0.0.1:4096/global/health | grep -q healthy && echo "opencode OK"
 
-# 数据库探活（应输出 4 张表）
+# 数据库探活（应约 40 张表）
 mysql -uroot ontomind -e "SHOW TABLES;"
 
 # 登录 + AIDE 探活
@@ -284,10 +295,11 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 # 期望：healthy=true, embed_source="serve"
 
 # 后端测试
-cd backend && pytest -q          # 期望 25 passed
+cd backend && pytest -q          # 期望 85 passed
 
-# 前端构建
+# 前端构建 / lint
 cd frontend && npm run build     # 期望 0 error
+cd frontend && npm run lint
 ```
 
 **任一步失败 → 回到对应章节排查。全部通过 → 可以开工。**

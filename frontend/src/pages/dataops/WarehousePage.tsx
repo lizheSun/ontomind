@@ -555,7 +555,7 @@ export default function WarehousePage() {
                       loading={tableLoading}
                       items={tables.map((t) => ({
                         key: t.name,
-                        label: t.name,
+                        label: t.comment ? `${t.name}` : t.name,
                         active: t.name === activeTable,
                         onClick: () => void loadColumns(t.name),
                       }))}
@@ -613,6 +613,12 @@ export default function WarehousePage() {
                             columns={[
                               { title: '列名', dataIndex: 'name', width: 160 },
                               { title: '类型', dataIndex: 'type', width: 140 },
+                              {
+                                title: '注释',
+                                dataIndex: 'comment',
+                                ellipsis: true,
+                                render: (v: string | null | undefined) => v || '—',
+                              },
                               {
                                 title: '可空',
                                 dataIndex: 'nullable',

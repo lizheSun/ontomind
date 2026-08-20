@@ -54,8 +54,9 @@ const DOMAINS: DomainDef[] = [
   ]},
   { key: 'dataops', icon: <DatabaseOutlined />, label: 'DataOps', color: '#0a84ff', sub: [
     { key: '/dataops/catalog', label: '资产地图(AI)', children: [
-      { key: '/dataops/catalog/biz-systems', label: '业务系统' },
+      { key: '/dataops/catalog/biz-systems', label: '元数据与标注' },
       { key: '/dataops/catalog/warehouse', label: '数据仓库' },
+      { key: '/dataops/catalog/ontology', label: '本体建模' },
       { key: '/dataops/catalog/etl', label: 'ETL代码库' },
       { key: '/dataops/catalog/code', label: '业务代码库' },
       { key: '/dataops/catalog/knowledge', label: '知识库' },
@@ -76,6 +77,7 @@ const DOMAINS: DomainDef[] = [
     { key: '/agentops/deploy', label: '发布中心' },
   ]},
   { key: 'govops', icon: <SafetyOutlined />, label: 'GovOps', color: '#ff375f', sub: [
+    { key: '/govops/llm', label: 'LLM 配置' },
     { key: '/govops/catalog', label: '资产目录' },
     { key: '/govops/security', label: '安全合规' },
     { key: '/govops/cost', label: '成本归因' },
@@ -115,6 +117,22 @@ export default function AppLayout() {
       }
       return next;
     });
+  }, []);
+
+  const openSidebar = useCallback(() => {
+    setSidebarOpen(true);
+    try {
+      localStorage.setItem('ontomind_sidebar_open', '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const domainHome = useCallback((d: DomainDef) => {
+    if (!d.sub.length) return `/${d.key}`;
+    const first = d.sub[0];
+    if (first.children && first.children.length > 0) return first.children[0].key;
+    return first.key;
   }, []);
 
   useEffect(() => {
@@ -198,7 +216,10 @@ export default function AppLayout() {
               return (
                 <div
                   key={d.key}
-                  onClick={() => navigate(`/${d.key}`)}
+                  onClick={() => {
+                    openSidebar();
+                    navigate(domainHome(d));
+                  }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 5,
                     padding: '0 11px', height: 52, cursor: 'pointer',

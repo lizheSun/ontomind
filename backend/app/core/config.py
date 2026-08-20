@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     DORIS_DATABASE: str = ""
     DORIS_CHARSET: str = "utf8mb4"
 
+    # === LLM（元数据标注 / 本体生成，OpenAI 兼容端点）===
+    LLM_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
+    LLM_API_KEY: str = ""
+    LLM_MODEL: str = ""
+    LLM_TIMEOUT: int = 120
+    LLM_MAX_CONCURRENCY: int = 4
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

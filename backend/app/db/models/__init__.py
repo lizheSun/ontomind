@@ -1,20 +1,21 @@
 """ORM models.
 
-当前 22 张表：
+当前 **46** 张表：
 
 | 表 | 用途 | 引入 |
 |---|---|---|
 | users / roles / user_roles / audit_logs | 用户与审计 | 早期 |
-| compute_nodes | 算力节点（SSH / 本地 Docker） | 2026-08-03 |
-| container_services | 容器内常驻服务登记（AIDE 源） | 2026-08-04 |
-| agent_templates / agent_template_versions | Agent 模板 + 版本快照 | 2026-08-04 |
-| skill_templates / skill_files | Skill 模板 + 多文件（渐进披露） | 2026-08-04 |
-| agent_bundles / bundle_members | 编排方案（Agent Loop）+ 成员 | 2026-08-04 |
-| deployments | Bundle → 容器 的发布记录 | 2026-08-04 |
-| skill_meta / skill_params | Skill 治理元数据 + 参数契约 | 2026-08-04 |
-| skill_exec_prompt / skill_exec_api / skill_exec_flow_nodes | 三形态执行配置 | 2026-08-04 |
-| skill_policy | 容错熔断 + 安全权限策略 | 2026-08-04 |
-| skill_versions / skill_audit_logs / skill_invocations | 版本快照 / 审计 / 调用 Trace | 2026-08-04 |
+| compute_nodes / container_services | 算力节点 / 容器服务 | 2026-08 |
+| agent_templates / agent_template_versions | Agent 模板 + 版本 | 2026-08-04 |
+| skill_templates / skill_files | Skill 模板 + 文件 | 2026-08-04 |
+| agent_bundles / bundle_members / deployments | 编排与发布 | 2026-08-04 |
+| skill_meta / skill_params / skill_exec_* / skill_policy / skill_versions / skill_audit_logs / skill_invocations | Skill 平台治理 | 2026-08-04 |
+| data_sources | DataOps 数据源 | 2026-08-13 |
+| wiki_spaces / wiki_documents / wiki_document_versions | Wiki 知识库 | 2026-08-14 |
+| meta_scan_jobs / meta_tables / meta_columns / glossary_terms / annotations | 元数据扫描与标注 | 2026-08-14 |
+| meta_standards / meta_standard_versions / meta_column_standards / meta_column_standard_history / meta_database_briefs | 标准项与库概况 | 2026-08-14 |
+| platform_llm_settings | 平台 LLM 配置 | 2026-08-14 |
+| ontologies / ontology_*（9） | 本体建模 / CQ / 版本 | 2026-08-14 |
 
 ⚠️ 新增 Model 必须在此 import 并加入 __all__，否则 create_all 发现不到、不建表。
 """
@@ -72,6 +73,53 @@ from app.db.models.data_source_model import (
     DataSourceType,
     DataSourceStatus,
 )
+from app.db.models.wiki_model import (
+    WikiSpace,
+    WikiDocument,
+    WikiDocumentVersion,
+    WikiSourceType,
+    WikiDocStatus,
+)
+from app.db.models.meta_model import (
+    MetaScanJob,
+    MetaTable,
+    MetaColumn,
+    GlossaryTerm,
+    Annotation,
+    MetaStandard,
+    MetaStandardVersion,
+    MetaColumnStandard,
+    MetaColumnStandardHistory,
+    MetaDatabaseBrief,
+    PlatformLlmSetting,
+    ScanStatus,
+    JobKind,
+    AnnotationTargetType,
+    AnnotationLabelKind,
+    AnnotationSource,
+    AnnotationStatus,
+    GlossarySource,
+    MetaStandardStatus,
+    MetaBindStatus,
+    MetaBindSource,
+)
+from app.db.models.ontology_model import (
+    Ontology,
+    OntologyBuildJob,
+    OntologyObjectType,
+    OntologyProperty,
+    OntologyLinkType,
+    OntologyMapping,
+    OntologyMetric,
+    OntologyCQ,
+    OntologyVersion,
+    OntologyJobStatus,
+    OntologyBuildPhase,
+    OntologyElementSource,
+    OntologyElementStatus,
+    OntologyMappingElementType,
+    OntologyCQVerifyStatus,
+)
 
 __all__ = [
     # 用户与审计
@@ -126,4 +174,48 @@ __all__ = [
     "DataSource",
     "DataSourceType",
     "DataSourceStatus",
+    # Wiki
+    "WikiSpace",
+    "WikiDocument",
+    "WikiDocumentVersion",
+    "WikiSourceType",
+    "WikiDocStatus",
+    # Metadata / Annotation
+    "MetaScanJob",
+    "MetaTable",
+    "MetaColumn",
+    "GlossaryTerm",
+    "Annotation",
+    "MetaStandard",
+    "MetaStandardVersion",
+    "MetaColumnStandard",
+    "MetaColumnStandardHistory",
+    "MetaDatabaseBrief",
+    "PlatformLlmSetting",
+    "ScanStatus",
+    "JobKind",
+    "AnnotationTargetType",
+    "AnnotationLabelKind",
+    "AnnotationSource",
+    "AnnotationStatus",
+    "GlossarySource",
+    "MetaStandardStatus",
+    "MetaBindStatus",
+    "MetaBindSource",
+    # Ontology
+    "Ontology",
+    "OntologyBuildJob",
+    "OntologyObjectType",
+    "OntologyProperty",
+    "OntologyLinkType",
+    "OntologyMapping",
+    "OntologyMetric",
+    "OntologyCQ",
+    "OntologyVersion",
+    "OntologyJobStatus",
+    "OntologyBuildPhase",
+    "OntologyElementSource",
+    "OntologyElementStatus",
+    "OntologyMappingElementType",
+    "OntologyCQVerifyStatus",
 ]

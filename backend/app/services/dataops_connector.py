@@ -103,44 +103,251 @@ class DataSourceConnector:
             conn.close()
 
     def list_tables(self, database: str) -> list[dict[str, Any]]:
-        conn = self._connect(database=database)
+        return self.list_tables_meta(database)
+
+    def list_tables_meta(self, database: str) -> list[dict[str, Any]]:
+        _ident(database)
+        conn = self._connect()
         try:
             with conn.cursor() as cur:
-                cur.execute(f"SHOW FULL TABLES FROM {_ident(database)}")
+                cur.execute(
+                    """
+                    SELECT TABLE_NAME, TABLE_TYPE, TABLE_COMMENT, TABLE_ROWS, ENGINE, CREATE_TIME
+                    FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = %s
+                    ORDER BY TABLE_NAME
+                    """,
+                    (database,),
+                )
                 rows = cur.fetchall()
-            # Doris/MySQL: (name, type) or (name,)
             out: list[dict[str, Any]] = []
             for row in rows:
-                name = str(row[0])
-                kind = str(row[1]) if len(row) > 1 else "BASE TABLE"
-                out.append({"name": name, "type": kind})
-            out.sort(key=lambda x: x["name"])
+                create_time = row[5]
+                out.append(
+                    {
+                        "name": str(row[0]),
+                        "type": str(row[1] or "BASE TABLE"),
+                        "comment": str(row[2] or "") or None,
+                        "row_count": int(row[3]) if row[3] is not None else None,
+                        "engine": str(row[4]) if row[4] is not None else None,
+                        "create_time": create_time.isoformat()
+                        if hasattr(create_time, "isoformat")
+                        else (str(create_time) if create_time else None),
+                    }
+                )
             return out
         finally:
             conn.close()
 
     def list_columns(self, database: str, table: str) -> list[dict[str, Any]]:
+        _ident(database)
+        _ident(table)
+        conn = self._connect()
+        try:
+            return self._list_columns_on_conn(conn, database, [table]).get(table, [])
+        finally:
+            conn.close()
+
+    def batch_columns(self, database: str, tables: list[str]) -> dict[str, list[dict[str, Any]]]:
+        _ident(database)
+        names = [t for t in tables if t]
+        if not names:
+            return {}
+        for t in names:
+            _ident(t)
+        conn = self._connect()
+        try:
+            return self._list_columns_on_conn(conn, database, names)
+        finally:
+            conn.close()
+
+    def _list_columns_on_conn(
+        self, conn: Any, database: str, tables: list[str]
+    ) -> dict[str, list[dict[str, Any]]]:
+        placeholders = ", ".join(["%s"] * len(tables))
+        sql = f"""
+            SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, DATA_TYPE, COLUMN_TYPE,
+                   IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME IN ({placeholders})
+            ORDER BY TABLE_NAME, ORDINAL_POSITION
+        """
+        with conn.cursor() as cur:
+            cur.execute(sql, (database, *tables))
+            rows = cur.fetchall()
+        out: dict[str, list[dict[str, Any]]] = {t: [] for t in tables}
+        for row in rows:
+            tname = str(row[0])
+            out.setdefault(tname, []).append(
+                {
+                    "name": str(row[1]),
+                    "ordinal": int(row[2]) if row[2] is not None else 0,
+                    "data_type": str(row[3] or ""),
+                    "type": str(row[4] or row[3] or ""),
+                    "nullable": str(row[5] or "").upper() in {"YES", "TRUE", "1"},
+                    "key": str(row[6] or ""),
+                    "default": row[7],
+                    "extra": str(row[8] or ""),
+                    "comment": str(row[9] or "") or None,
+                }
+            )
+        return out
+
+    def profile_column(
+        self,
+        database: str,
+        table: str,
+        column: str,
+        *,
+        sample_rows: int = 10000,
+    ) -> dict[str, Any]:
+        db = _ident(database)
+        tb = _ident(table)
+        col = _ident(column)
+        sample_rows = max(100, min(int(sample_rows), 50000))
         conn = self._connect(database=database)
         try:
             with conn.cursor() as cur:
-                cur.execute(f"DESCRIBE {_ident(database)}.{_ident(table)}")
-                rows = cur.fetchall()
-            cols: list[dict[str, Any]] = []
-            for row in rows:
-                # Field, Type, Null, Key, Default, Extra
-                cols.append(
-                    {
-                        "name": str(row[0]),
-                        "type": str(row[1]) if len(row) > 1 else "",
-                        "nullable": str(row[2]).upper() in {"YES", "TRUE", "1"} if len(row) > 2 else True,
-                        "key": str(row[3]) if len(row) > 3 else "",
-                        "default": None if len(row) < 5 else row[4],
-                        "extra": str(row[5]) if len(row) > 5 else "",
-                    }
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*) AS total,
+                           COUNT({col}) AS non_null,
+                           COUNT(DISTINCT {col}) AS distinct_count,
+                           MIN({col}) AS min_v,
+                           MAX({col}) AS max_v
+                    FROM (
+                        SELECT {col} FROM {db}.{tb} LIMIT {sample_rows}
+                    ) s
+                    """
                 )
-            return cols
+                row = cur.fetchone() or (0, 0, 0, None, None)
+                total = int(row[0] or 0)
+                non_null = int(row[1] or 0)
+                distinct_count = int(row[2] or 0)
+                min_v, max_v = row[3], row[4]
+                null_rate = 0.0 if total == 0 else round(1.0 - (non_null / total), 6)
+                distinct_ratio = 0.0 if non_null == 0 else round(distinct_count / non_null, 6)
+
+                top_k: list[dict[str, Any]] = []
+                data_type = ""
+                try:
+                    cur.execute(
+                        """
+                        SELECT DATA_TYPE FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME=%s
+                        """,
+                        (database, table, column),
+                    )
+                    dt_row = cur.fetchone()
+                    data_type = str(dt_row[0] or "").lower() if dt_row else ""
+                except Exception:
+                    data_type = ""
+
+                numericish = data_type in {
+                    "int", "bigint", "smallint", "tinyint", "mediumint",
+                    "decimal", "double", "float", "numeric", "real",
+                    "date", "datetime", "timestamp", "time",
+                }
+                if not numericish:
+                    min_v, max_v = None, None
+                    try:
+                        cur.execute(
+                            f"""
+                            SELECT {col} AS v, COUNT(*) AS cnt
+                            FROM (
+                                SELECT {col} FROM {db}.{tb} LIMIT {sample_rows}
+                            ) s
+                            WHERE {col} IS NOT NULL
+                            GROUP BY {col}
+                            ORDER BY cnt DESC
+                            LIMIT 10
+                            """
+                        )
+                        for r in cur.fetchall():
+                            val = r[0]
+                            if hasattr(val, "isoformat"):
+                                val = val.isoformat()
+                            elif isinstance(val, (bytes, bytearray)):
+                                val = val.decode("utf-8", errors="replace")
+                            top_k.append({"value": val, "count": int(r[1] or 0)})
+                    except Exception:
+                        top_k = []
+                else:
+                    if hasattr(min_v, "isoformat"):
+                        min_v = min_v.isoformat()
+                    if hasattr(max_v, "isoformat"):
+                        max_v = max_v.isoformat()
+
+            return {
+                "total": total,
+                "null_rate": null_rate,
+                "distinct_count": distinct_count,
+                "distinct_ratio": distinct_ratio,
+                "min": min_v,
+                "max": max_v,
+                "top_k": top_k,
+                "sampled": True,
+                "sample_rows": sample_rows,
+                "data_type": data_type or None,
+            }
         finally:
             conn.close()
+
+    def overlap_ratio(
+        self,
+        database: str,
+        left_table: str,
+        left_col: str,
+        right_table: str,
+        right_col: str,
+        *,
+        limit: int = 10000,
+    ) -> float:
+        try:
+            db = _ident(database)
+            lt = _ident(left_table)
+            lc = _ident(left_col)
+            rt = _ident(right_table)
+            rc = _ident(right_col)
+            limit = max(100, min(int(limit), 50000))
+            conn = self._connect(database=database)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""
+                        SELECT COUNT(*) FROM (
+                            SELECT DISTINCT {lc} AS v
+                            FROM {db}.{lt}
+                            WHERE {lc} IS NOT NULL
+                            LIMIT {limit}
+                        ) l
+                        """
+                    )
+                    left_n = int((cur.fetchone() or (0,))[0] or 0)
+                    if left_n <= 0:
+                        return 0.0
+                    cur.execute(
+                        f"""
+                        SELECT COUNT(*) FROM (
+                            SELECT DISTINCT {lc} AS v
+                            FROM {db}.{lt}
+                            WHERE {lc} IS NOT NULL
+                            LIMIT {limit}
+                        ) l
+                        WHERE l.v IN (
+                            SELECT DISTINCT {rc}
+                            FROM {db}.{rt}
+                            WHERE {rc} IS NOT NULL
+                            LIMIT {limit}
+                        )
+                        """
+                    )
+                    hit = int((cur.fetchone() or (0,))[0] or 0)
+                return round(hit / left_n, 6)
+            finally:
+                conn.close()
+        except Exception:
+            return 0.0
 
     def sample(
         self, database: Optional[str], table: str, limit: int = 10

@@ -24,7 +24,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import agent_factory, auth, compute, dataops, opencode, skill_platform, users
+from app.api.v1 import agent_factory, auth, compute, dataops, metadata, ontology, opencode, skill_platform, users, wiki
 
 api_router = APIRouter()
 
@@ -46,3 +46,12 @@ api_router.include_router(skill_platform.router, tags=["Skill 平台"])
 
 # --- DataOps（数据源 / 元数据 / 样例）---
 api_router.include_router(dataops.router, tags=["DataOps"])
+
+# --- Wiki 知识库 ---
+api_router.include_router(wiki.router, tags=["Wiki 知识库"])
+
+# --- 元数据扫描与自动标注 ---
+api_router.include_router(metadata.router, tags=["元数据与标注"])
+
+# --- 本体建模 ---
+api_router.include_router(ontology.router, tags=["本体建模"])

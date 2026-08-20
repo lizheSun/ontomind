@@ -41,6 +41,10 @@ export interface ConnectionTestResult {
 export interface TableInfo {
   name: string;
   type: string;
+  comment?: string | null;
+  row_count?: number | null;
+  engine?: string | null;
+  create_time?: string | null;
 }
 
 export interface ColumnInfo {
@@ -50,6 +54,9 @@ export interface ColumnInfo {
   key: string;
   default: unknown;
   extra: string;
+  comment?: string | null;
+  ordinal?: number;
+  data_type?: string;
 }
 
 export interface SampleResult {

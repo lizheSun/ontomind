@@ -41,10 +41,12 @@ def test_openapi_exposes_expected_domains(anon_client):
     }
     assert v1_domains == {
         "auth", "users", "opencode", "compute",
-        # 2026-08-04 新增：Agent 工厂（Agent/Skill 模板 + Loop 编排 + 发布到容器）
         "agent-factory",
-        # 2026-08-04 新增：Skill 平台（尚未挂路由，预留）
         "skill-platform",
+        "dataops",
+        "wiki",
+        "metadata",
+        "ontology",
     }, f"实际: {v1_domains}"
 
 
@@ -159,17 +161,24 @@ def test_orm_has_expected_tables():
 
     assert {t.name for t in Base.metadata.sorted_tables} == {
         "users", "roles", "user_roles", "audit_logs", "compute_nodes",
-        # 2026-08-04 新增：容器内常驻服务登记（AIDE 源来源 + 服务状态）
         "container_services",
-        # 2026-08-04 新增：Agent 工厂 7 张表
         "agent_templates", "agent_template_versions",
         "skill_templates", "skill_files",
         "agent_bundles", "bundle_members",
         "deployments",
-        # 2026-08-04 新增：Skill 平台治理平面 9 张表
         "skill_meta", "skill_params",
         "skill_exec_prompt", "skill_exec_api", "skill_exec_flow_nodes",
         "skill_policy",
         "skill_versions", "skill_audit_logs",
         "skill_invocations",
+        "data_sources",
+        "wiki_spaces", "wiki_documents", "wiki_document_versions",
+        "meta_scan_jobs", "meta_tables", "meta_columns",
+        "glossary_terms", "annotations",
+        "meta_standards", "meta_standard_versions",
+        "meta_column_standards", "meta_column_standard_history",
+        "meta_database_briefs", "platform_llm_settings",
+        "ontologies", "ontology_build_jobs",
+        "ontology_object_types", "ontology_properties", "ontology_link_types",
+        "ontology_mappings", "ontology_metrics", "ontology_cqs", "ontology_versions",
     }
