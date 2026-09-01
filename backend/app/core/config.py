@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
+        "http://localhost:5176",
+        "http://127.0.0.1:5176",
         "http://localhost:3000",
     ]
 
@@ -60,6 +66,10 @@ class Settings(BaseSettings):
     OPENCODE_HOST: str = "127.0.0.1"
     OPENCODE_PORT: int = 4096       # serve（优先复用）
     OPENCODE_WEB_PORT: int = 4097   # 独立 web（兜底）
+
+    # === DeepSeek Harness（会话插件，不是 Web UI）===
+    # 指向 deepseek-harness 源码检出。空则尝试同级目录 ../deepseek-harness
+    DSH_REPO: str = ""
 
     # === DataOps · Doris 默认数据源（可选种子，勿把密码提交进 git）===
     DORIS_SOURCE_NAME: str = "Doris 数仓"

@@ -1,6 +1,6 @@
 """ORM models.
 
-当前 **46** 张表：
+当前 **51** 张表：
 
 | 表 | 用途 | 引入 |
 |---|---|---|
@@ -16,6 +16,8 @@
 | meta_standards / meta_standard_versions / meta_column_standards / meta_column_standard_history / meta_database_briefs | 标准项与库概况 | 2026-08-14 |
 | platform_llm_settings | 平台 LLM 配置 | 2026-08-14 |
 | ontologies / ontology_*（9） | 本体建模 / CQ / 版本 | 2026-08-14 |
+| harness_sessions / harness_messages | 统一会话（OpenCode / DSH 插件） | 2026-08-31 |
+| kanban_boards / kanban_columns / kanban_tasks | 任务看板 | 2026-09-01 |
 
 ⚠️ 新增 Model 必须在此 import 并加入 __all__，否则 create_all 发现不到、不建表。
 """
@@ -103,6 +105,8 @@ from app.db.models.meta_model import (
     MetaBindStatus,
     MetaBindSource,
 )
+from app.db.models.harness_model import HarnessSession, HarnessMessage
+from app.db.models.kanban_model import KanbanBoard, KanbanColumn, KanbanTask
 from app.db.models.ontology_model import (
     Ontology,
     OntologyBuildJob,
@@ -218,4 +222,11 @@ __all__ = [
     "OntologyElementStatus",
     "OntologyMappingElementType",
     "OntologyCQVerifyStatus",
+    # 统一会话
+    "HarnessSession",
+    "HarnessMessage",
+    # 任务看板
+    "KanbanBoard",
+    "KanbanColumn",
+    "KanbanTask",
 ]

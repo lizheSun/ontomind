@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Input, Modal, Tag, Typography } from 'antd';
 import {
   LogoutOutlined,
-  RobotOutlined,
   SearchOutlined,
-  TeamOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { flattenNav } from '../../nav';
 
 const { Text } = Typography;
 
@@ -18,41 +17,23 @@ interface OmnibarItem {
   label: string;
   hint?: string;
   keywords?: string[];
-  icon: React.ReactNode;
+  icon: ReactNode;
   mode: OmnibarMode;
-  /** Route that owns this item — used for context-aware boosting. */
   scope?: string;
   run: () => void;
 }
 
-/**
- * Full navigation catalogue mirroring the routes registered in App.tsx.
- * Kept in-file (no runtime dependency on the router config) so the omnibar
- * remains self-contained and easy to unit-test.
- */
 function buildNavItems(navigate: (to: string) => void): OmnibarItem[] {
-  return [
-    {
-      id: 'nav:/aide',
-      label: 'AIDE',
-      hint: '/aide',
-      keywords: ['aide', 'ide', 'opencode', '编辑器', 'editor', '开发'],
-      icon: <RobotOutlined />,
-      mode: 'nav',
-      scope: '/aide',
-      run: () => navigate('/aide'),
-    },
-    {
-      id: 'nav:/users',
-      label: '用户管理',
-      hint: '/users',
-      keywords: ['users', '用户', 'yonghu'],
-      icon: <TeamOutlined />,
-      mode: 'nav',
-      scope: '/users',
-      run: () => navigate('/users'),
-    },
-  ];
+  return flattenNav().map((n) => ({
+    id: `nav:${n.key}`,
+    label: n.label,
+    hint: n.key,
+    keywords: n.keywords,
+    icon: <SearchOutlined />,
+    mode: 'nav' as const,
+    scope: n.key,
+    run: () => navigate(n.key),
+  }));
 }
 
 function buildActionItems(
@@ -102,12 +83,12 @@ function buildActionItems(
     },
     {
       id: 'act:kb-search',
-      label: '跳转到语义搜索',
-      hint: '/knowledge-base/search',
-      keywords: ['search', 'semantic', '搜索', 'kb'],
+      label: '跳转到知识库',
+      hint: '/dataops/catalog/knowledge',
+      keywords: ['search', 'semantic', '搜索', 'kb', 'wiki', '知识库'],
       icon: <SearchOutlined />,
       mode: 'act',
-      run: () => navigate('/knowledge-base/search'),
+      run: () => navigate('/dataops/catalog/knowledge'),
     },
   ];
 }
@@ -211,17 +192,12 @@ export function CmdKOmnibar({ open: controlledOpen, onOpenChange }: CmdKOmnibarP
       // KB search is a single synthetic action that jumps to /knowledge-base/search?q=...
       const kbItem: OmnibarItem = {
         id: 'kb:go',
-        label: query ? `在知识库中搜索 "${query}"` : '打开知识库搜索',
-        hint: query
-          ? `/knowledge-base/search?q=${encodeURIComponent(query)}`
-          : '/knowledge-base/search',
+        label: query ? `在知识库中搜索 "${query}"` : '打开知识库',
+        hint: '/dataops/catalog/knowledge',
         icon: <SearchOutlined />,
         mode: 'kb',
         run: () => {
-          const path = query
-            ? `/knowledge-base/search?q=${encodeURIComponent(query)}`
-            : '/knowledge-base/search';
-          navigate(path);
+          navigate('/dataops/catalog/knowledge');
           close();
         },
       };
@@ -287,15 +263,15 @@ export function CmdKOmnibar({ open: controlledOpen, onOpenChange }: CmdKOmnibarP
       destroyOnHidden
       width={640}
       styles={{
-        body: { padding: 0, background: '#0a0f1f' },
+        body: { padding: 0, background: 'var(--bg-surface)' },
       }}
-      style={{ top: 96 }}
+      style={{ top: 80 }}
       mask={{ closable: true }}
     >
       <div
         style={{
           padding: '12px 14px 8px 14px',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid var(--border-hairline)',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
@@ -310,7 +286,7 @@ export function CmdKOmnibar({ open: controlledOpen, onOpenChange }: CmdKOmnibarP
           }}
           variant="borderless"
           size="large"
-          prefix={<SearchOutlined style={{ color: 'rgba(255,255,255,0.4)' }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--text-tertiary)' }} />}
           placeholder="跳转页面 · 输入 > 执行动作 · 输入 ? 搜知识库"
           value={rawQuery}
           onChange={(e) => {
@@ -352,16 +328,16 @@ export function CmdKOmnibar({ open: controlledOpen, onOpenChange }: CmdKOmnibarP
                 gap: 12,
                 padding: '10px 16px',
                 cursor: 'pointer',
-                background: active ? 'rgba(59,130,246,0.14)' : 'transparent',
+                background: active ? 'var(--bg-selected)' : 'transparent',
                 borderLeft: active
-                  ? '2px solid #3b82f6'
+                  ? '2px solid var(--accent)'
                   : '2px solid transparent',
               }}
             >
               <span
                 style={{
                   fontSize: 16,
-                  color: active ? '#60a5fa' : 'rgba(255,255,255,0.6)',
+                  color: active ? 'var(--accent)' : 'var(--text-tertiary)',
                   width: 20,
                   display: 'inline-flex',
                   justifyContent: 'center',
@@ -370,13 +346,13 @@ export function CmdKOmnibar({ open: controlledOpen, onOpenChange }: CmdKOmnibarP
                 {item.icon}
               </span>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: '#e8eef5', fontSize: 13, fontWeight: 500 }}>
+                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 500 }}>
                   {item.label}
                 </div>
                 {item.hint && (
                   <div
                     style={{
-                      color: 'rgba(255,255,255,0.45)',
+                      color: 'var(--text-tertiary)',
                       fontSize: 11,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -399,12 +375,12 @@ export function CmdKOmnibar({ open: controlledOpen, onOpenChange }: CmdKOmnibarP
 
       <div
         style={{
-          borderTop: '1px solid rgba(255,255,255,0.06)',
+          borderTop: '1px solid var(--border-hairline)',
           padding: '8px 14px',
           display: 'flex',
           justifyContent: 'space-between',
           fontSize: 11,
-          color: 'rgba(255,255,255,0.45)',
+          color: 'var(--text-tertiary)',
         }}
       >
         <span>↑↓ 选择 · ↵ 执行 · Esc 关闭</span>

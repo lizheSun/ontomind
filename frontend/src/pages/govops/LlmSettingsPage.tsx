@@ -274,7 +274,7 @@ export default function LlmSettingsPage() {
   ];
 
   return (
-    <div className="page-enter" style={{ padding: 24, maxWidth: 1080 }}>
+    <div className="om-page page-enter">
       <Title level={4} style={{ marginTop: 0 }}>
         LLM 配置
       </Title>

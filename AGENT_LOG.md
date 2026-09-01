@@ -1,6 +1,323 @@
 # Agent 操作记录
 
-> **用途**: 多 Agent 协同开发时，记录每次操作的目的、内容和影响范围，方便其他 Agent 快速理解上下文。
+> **用途**：多 Agent 协同时的**当前快照 + 操作日志**。新 agent 先读本文「当前快照」，细节规范再读 [AGENTS.md](./AGENTS.md) / [HANDOFF.md](./HANDOFF.md)。  
+> 下面按时间倒序记每次改动；**以代码与「当前快照」为准**，不要盲信更旧条目里的表数量或「只有 AIDE」描述。
+
+---
+
+## 当前快照（2026-09-01）
+
+### 产品现在是什么
+
+OntoMind = **AI Agent 工作平台** + DataOps/本体语义层。落地页 `/overview`。主题对齐 **Yao Agents CUI**（Outfit、`#3371fc`、64px 图标轨、256px 侧栏）。
+
+| 入口 | 路由 | 做什么 |
+|---|---|---|
+| 会话 | `/chat` | 原生聊天。OpenCode / DSH 插件。**不是** AIDE iframe |
+| 看板 | `/board` | 卡片 = 会话任务；列是工作流；点卡片本页打开对话层 |
+| AIDE | `/infra/aide` | iframe 嵌 opencode Web UI（`AideHost` 常驻，别往路由里塞） |
+| 用户 | `/users` | 用户 / 角色 / 权限 |
+| DataOps | `/dataops/*` | 数仓、智能数开、Wiki、元数据、本体 |
+| AgentOps / Infra | `/agentops/*` `/infra/*` | Agent/Skill 工厂；「电脑」管节点和容器 |
+
+后端路由域：`auth` / `users` / `opencode` / **`harness`** / **`kanban`** / `compute` / `agent-factory` / `skill-platform` / `dataops` / `wiki` / `metadata` / `ontology`。  
+ORM **51** 张表（清单：`backend/app/db/models/__init__.py`）。`pytest` **106 passed**。
+
+---
+
+### 本轮落地的功能（相对 `main` 上一次提交）
+
+1. **统一会话 `/chat`**
+   - 前端只打 `/api/v1/harness/*`，不直连 OpenCode SDK / DSH RPC。
+   - **OpenCode**：本机 `opencode serve` 活着就走 HTTP + `/event` SSE（thinking / tool 轨迹）；serve 挂了才 `opencode run --format json`。
+   - **DSH**：源码 JSON-RPC（`tsx packages/examples/jsonrpc-demo`），**不是** `dsh --profile web`，也**没有** `dsh --profile sdk`。
+   - 消息里展示 **思考过程**（默认展开）和 **工具调用卡片**。
+   - 组合器（与看板 overlay 共用）：切 Agent、语音（结果**追加**草稿）、工作区、拖拽上传（进 `inbox/`）、优化提示（GovOps LLM，可撤销）。
+
+2. **任务看板 `/board`**
+   - 表：`kanban_boards` → `kanban_columns` → `kanban_tasks`（任务可绑 `harness_sessions`）。
+   - 列位置 ≠ 运行状态：拖拽只改列/`position`；会话执行写 `pending|running|waiting|completed|failed`。
+   - 「新任务」立刻建卡并在本页右侧打开对话；点卡片不跳 `/chat`。
+
+3. **DSH / OpenCode 协议坑（已修）**
+   - DSH model **只能是** `deepseek-v4-flash` / `deepseek-v4-pro` / `deepseek-v4-flash-vision-exp`（默认 flash）。`deepseek-official` 是 **provider 名**，不能当 model。
+   - JSON-RPC 必须先等 `initialize` 返回再 `session/prompt`（一起写 stdin 会用默认 model 报 400）。
+   - OpenCode `/event` 在 prompt 开始前就会有 `session.idle`，必须先看到 assistant/part 再当回合结束，否则 thinking/tools 全丢。
+
+4. **壳层 / 主题**
+   - 图标轨：总览、会话、看板、六域、AIDE 仍在 Infra。
+   - Yao 风格登录页、品牌标、空状态、StatusDot；**未改** AIDE iframe 行为。
+
+5. **可选**：`docker/opencode/` 是把 opencode serve 打进容器的样例（本机开发不强制）。
+
+---
+
+### Agent 环境怎么准备
+
+开发机：macOS / Linux，**Python 3.12+**，**Node 20+**，**MySQL 8**。前端 lint 是 **oxlint**，不要装 eslint。antd **v6**。
+
+#### 1. 仓库与依赖
+
+```bash
+git clone <本仓> && cd ontomind
+
+cd backend && pip install -r requirements.txt
+cd ../frontend && npm install
+```
+
+`backend/.env`（已 gitignore）：
+
+```ini
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=ontomind
+DB_PASSWORD=你的密码
+DB_NAME=ontomind
+SECRET_KEY=用 openssl rand -hex 32 生成
+```
+
+```sql
+CREATE DATABASE IF NOT EXISTS ontomind
+  DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+建表**不用 alembic**：启动后端时 `create_all`。新增 Model 必须在 `models/__init__.py` import + `__all__`。
+
+登录账号用你们库里已有的用户（本机常见 `admin` / `admin123`，以实际库为准）。
+
+#### 2. 日常三终端（最小能进总览）
+
+```bash
+# 终端 1 · OpenCode（AIDE + /chat 的 OpenCode 插件都靠它）
+opencode serve --port 4096 --cors http://localhost:5173
+# 前端若跑在 5176：再加 --cors http://localhost:5176，或 CORS 里已放行 5173–5176
+
+# 终端 2 · 后端
+cd backend && uvicorn app.main:app --reload --port 8000
+# 文档：http://localhost:8000/api/docs
+
+# 终端 3 · 前端
+cd frontend && npm run dev
+# → http://localhost:5173（被占会 5174/5176）
+```
+
+探活：
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://127.0.0.1:4096/global/health   # 期望 healthy
+cd backend && pytest -q                       # 106 passed
+cd frontend && npm run lint && npm run build
+```
+
+#### 3. `/chat` 要用 OpenCode
+
+- 装 CLI：`curl -fsSL https://opencode.ai/install | bash`，版本 **≥ 1.18**。
+- `opencode serve` 必须带 `--cors`，否则浏览器和 AIDE iframe 都会挂。
+- 会话插件优先打 serve 的 `/session` + `/event`；没起 serve 才会退回 CLI（轨迹不完整）。
+
+#### 4. `/chat` 要用 DSH
+
+**不要**用 `dsh --profile web`（那是给人看的浏览器，和 AIDE 一样不能当 runner）。
+
+正确：把 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 源码放在**同级目录**并 `pnpm install`：
+
+```text
+~/github/ontomind
+~/github/deepseek-harness    ← 同级；或 backend/.env 设 DSH_REPO=/绝对路径
+```
+
+插件会跑：`tsx packages/examples/jsonrpc-demo/src/bin.ts` + `examples/jsonrpc-agent/cordis.yml`。
+
+密钥走 **GovOps → LLM 配置**（写入 `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL`），模型填 `deepseek-v4-flash` 或 `deepseek-v4-pro`。别填 `deepseek-official`。
+
+会话页插件列表里 DSH 显示「JSON-RPC 源码运行时 · …」才算就绪。
+
+#### 5. 改代码时别踩的坑
+
+- 三层：`api/v1` → `services` → `repositories`（只 flush）→ `models`。Service **禁止** `with self.db.begin()`。
+- `AideHost` 必须与 `<Outlet/>` 同级常驻。
+- 加 runner：实现 `RunnerPlugin`（`probe` + `stream` → `StreamEvent`），在 `PluginRegistry.with_builtins` 注册。
+- 看板：拖拽不改 `run_status`；前端只打 `/api/v1/kanban/*`。
+
+---
+
+## 2026-09-01
+
+### Agent: 修 DSH `deepseek-official` 模型错误 + 会话轨迹不显示
+
+### 目标
+1. DSH 报 `you passed deepseek-official`（那是 provider 名，不是 API model）
+2. `/chat` 看不到 thinking / tool call
+
+### 决策
+- JSON-RPC 默认 `model = deepseek-official`；stdin 一次写入 initialize+prompt 会竞态，prompt 用默认 model。改为先等 initialize 再 prompt；别名映射到 `deepseek-v4-flash`
+- OpenCode `/event` 在 prompt 开始前就会收到 `session.idle`，解析器立刻结束。改为必须先看到 assistant/part 再认 idle
+- 轨迹 UI 用 `<details>` 展示思考过程，工具卡片保持原样
+
+### 修改文件
+- backend: `harness/plugins/dsh.py`、`opencode.py`、`process.py`、`harness_service.py`、`tests/test_harness_parsers.py`
+- frontend: `ChatTranscript.tsx`、`global.css`
+- **未改** AIDE
+
+---
+
+## 2026-09-01
+
+### Agent: DSH / OpenCode 改走 SDK 协议，会话里看 thinking 与 tools
+
+### 目标
+用户用 `dsh --profile web` 能开 DSH，但 OntoMind 按旧文档跑 `dsh --profile sdk` 会失败。同时要把 thinking / tool 轨迹接到 `/chat`。
+
+### 决策
+- DSH Web ≠ 会话 runner。OntoMind 打 JSON-RPC：源码 `tsx …/jsonrpc-demo`（`DSH_REPO` 或同级 `../deepseek-harness`）
+- OpenCode 优先 `opencode serve` 的 `/event` SSE（与智能数开同一套 part 模型），CLI `run --format json` 仅兜底
+- 轨迹用 `part_id` 就地更新 thinking / tool 卡片
+
+---
+
+## 2026-09-01
+
+### Agent: 会话组合器对齐 Yao，并做得更顺
+
+### 目标
+Yao 会话条上的切 Agent、语音、工作区、上传、优化提示，在 OntoMind `/chat` 与看板 overlay 共用同一套组合器。
+
+### 决策
+- 工作区可在无会话时选；上传无会话则先建。自动生成的 `~/.ontomind/harness/` 不当成下次默认工作区
+- 语音识别追加进草稿，不覆盖；优化提示可再点撤销；附件只进插件 prompt
+- Agent 用现有 harness 插件（OpenCode / DSH），优化走 GovOps `resolve_llm_client`
+
+### 修改文件
+- backend: `harness_schema` / `harness_service` / `api/v1/harness`（workspaces、files、optimize）+ tests
+- frontend: `ChatComposer`、`chatStore`、`harness.service`、`ChatTranscript` file chips；**未改** AIDE
+
+---
+
+## 2026-09-01
+
+### Agent: 看板对齐 Yao 交互 — 卡片即会话，本页打开对话层
+
+### 目标
+上一版看板「不能用」：新建要填表、点卡片跳到 `/chat`。改成 Yao 同页任务会话。
+
+### 决策
+- 「新任务」立即建卡并在右侧打开对话层，输入框可直接发；点卡片同样不跳路由
+- 看板页收起 256px 侧栏，列占满轨右侧；Esc / 关闭回到纯看板
+- 复用 `ChatPane`（/chat 与看板共用）
+
+---
+
+## 2026-09-01
+
+### Agent: 任务看板 `/board`
+
+### 目标
+给 OntoMind 加 Yao 风格任务看板：卡片 = 会话任务，列是工作流，运行状态单独过滤。不改 AIDE。
+
+### 决策
+- 表 `kanban_boards` / `kanban_columns` / `kanban_tasks`；任务可选 FK `session_id` → `harness_sessions`
+- 列位置与 `run_status` 正交；拖拽只改列和 position
+- 新任务同时建 harness session；点卡片 `/chat?session=`
+- 会话 SSE 结束时回写卡片 `running/completed/failed/waiting`
+- 图标轨「看板」在「会话」之后；侧栏列看板列表
+
+### 修改文件
+- backend: `models/kanban_model`、`repositories/kanban_repo`、`services/kanban_service`、`kanban_sync`、`api/v1/kanban`、`tests/test_kanban`
+- frontend: `pages/board/**`、`nav.ts`、`AppLayout` 看板侧栏、Overview 卡片；ChatPage 支持 `?session=`
+- **未改** AidePage / AideHost
+
+---
+
+## 2026-08-31
+
+### Agent: 新板块「会话」— 交互层 + OpenCode/DSH 插件
+
+### 目标
+在 OntoMind 做比 Yao 更好用的统一 Agent 聊天。不改 AIDE iframe 模块；图标轨新增「会话」`/chat`。
+
+### 决策
+- 协议层 `app/harness/`：`StreamEvent` + `RunnerPlugin`；OpenCode / DSH 是插件
+- OpenCode：`opencode run --format json`（stdin 用户话）
+- DSH：官方 `dsh --profile sdk` + JSON-RPC stdin（不依赖 `tai dsh`）；密钥走 GovOps LLM 配置
+- 前端只消费 SSE `/api/v1/harness/sessions/{id}/messages`；侧栏会话列表 + 输入框切换 runner
+- AIDE（AideHost / AidePage / opencode serve）原样保留
+
+### 修改文件
+- backend: `app/harness/**`、`models/harness_model`、`repositories/harness_repo`、`services/harness_service`、`api/v1/harness`、`tests/test_harness_*`
+- frontend: `pages/chat/**`、`nav.ts`、`AppLayout` 会话侧栏、Overview 卡片；**未改** AidePage/AideHost
+
+---
+
+### Agent: Infra 电脑模块对齐 Yao /dashboard/computers
+
+### 目标
+把 OntoMind Infra 算力页改成 Yao「电脑」布局：状态 Tab + 主机卡片列表，点进详情是状态条 / 信息格 / 容器与服务。
+
+### 决策
+- 侧栏只留「电脑 / AIDE」；页内 Tab：电脑 | 容器 | 服务（对应 Yao 的 电脑 | 工作空间）
+- 列表：运行中 / 已停止 / 全部 + 搜索 + 卡片（状态胶囊、地址脚注）
+- 详情：`/infra/compute/nodes/:id`，2×2 信息格 + 系统信息 + 容器摘要
+- 旧路径 `/infra/compute/{nodes,docker,services}` 仍可用
+
+### 修改文件
+- `frontend/src/styles/global.css`（`.om-computer` / `.om-host-card`）
+- `components/compute/computerUi.tsx`、`ComputerDetail.tsx`
+- `NodeManagement` / `DockerManagement` / `ServicesPanel` 改为卡片
+- `InfraComputePage`、`nav.ts`、`App.tsx`、`AppLayout`、Overview / AIDE 文案
+
+---
+
+### Agent: 参照 Yao CUI 升级 OntoMind 前端视觉
+
+### 目标
+对照本地 `http://127.0.0.1:5091/dashboard/assistants`，把 OntoMind 从 Apple 浅色顶栏改为 Yao 三栏壳（64px 图标轨 + 256px 上下文栏 + 内容）。
+
+### 决策
+- Token 对齐 Yao：Outfit、`#3371fc`、画布 `#f0f0f0`、卡片白底 + `0 0 30px rgba(0,0,0,.081)`、圆角 6/9
+- 默认浅色，轨底支持深色（`data-theme`）
+- 总览做成 Assistants 式卡片列表（标签 + 进入）
+- CmdK 导航目录与 `nav.ts` 共用
+
+### 修改文件
+- `frontend/src/styles/global.css`、`theme.ts`、`nav.ts`、`App.tsx`、`AppLayout.tsx`
+- Login / Overview / CmdK / PageHeader / BrandMark / Placeholder / EmptyState / GlassPanel
+- AideHost 去掉顶栏偏移；若干页 `100vh-52` → `100%`
+
+---
+
+## 2026-08-20
+
+### Agent: LLM 配置多套化 — 修复测试 400 + 接入 DeepSeek + 应用/测试/管理
+
+### 目标
+GovOps「LLM 配置」从单行升级为多套：修复 `llm-settings/test` 400、接入 DeepSeek、支持保存多套配置（MySQL 持久化）、提供无歧义的「应用 / 测试 / 管理」能力。
+
+### 根因（400）
+`platform_llm_settings` 里保存的 `model=DeepSeek-V4-Flash-0731` 不是 API 接受的模型名，DeepSeek 返回 400：
+`The supported API model names are deepseek-v4-pro or deepseek-v4-flash`。真实 `model` 参数应为 `deepseek-v4-pro` / `deepseek-v4-flash`。
+连带：测试端点 `max_tokens=16` 对推理模型过小（答案被 reasoning 吃光，content 为空）；旧端点只能测已保存配置、无法保存前先测。
+
+### 决策
+- 语义约定（消除歧义）：`enabled`=该配置可用；`is_default`=全局唯一「当前生效」标记；「应用 / 设为默认」=置 `is_default=True` 并自动 `enabled=True`、清除其它默认；停用当前默认自动取消 `is_default`。
+- `resolve_llm_client(db)` 只认 `is_default=True AND enabled=True`，无默认则回退 `.env`（标注/本体等 LLM 任务统一走这一条）。
+- 测试拆两种：`POST /llm-settings/{id}/test`（测已保存）、`POST /llm-settings/test`（内联测未保存表单）；`max_tokens` 提到 64。
+- 密钥 Fernet 加密入库（复用 `SECRET_KEY`），列表只返回 masked，永不回传明文。
+
+### 修改文件
+- backend: `services/llm_settings_service`（重写多配置 CRUD+apply+test）、`db/models/meta_model`（`PlatformLlmSetting` 加 `name`/`is_default`）、`db/repositories/meta_repo`（`list_all`/`get`/`get_default`/`delete`/`clear_default`）、`schemas/metadata_schema`（`LlmSettingCreate`/`LlmSettingTestRequest`/Response 加 id·name·is_default）、`api/v1/metadata`（7 端点）、`tests/test_standards`（重写 roundtrip 覆盖多配置/apply/删除）、`schema.sql`（再导出 46 表）
+- frontend: `pages/govops/LlmSettingsPage`（整页重设计：列表+新增/编辑弹窗+设为默认/测试/启停/删除）、`services/metadata.service`（list/create/update/delete/apply/testSaved/testInline）、`types/metadata`（`LlmSetting`+`LlmTestResult`）、`pages/dataops/metadata/MetadataPage`（改 `getActiveLlmSetting`）
+
+### API 端点
+- `GET /api/v1/metadata/llm-settings` · `GET /llm-settings/active` · `POST /llm-settings` · `POST /llm-settings/test` · `PUT/DELETE /llm-settings/{id}` · `POST /llm-settings/{id}/apply` · `POST /llm-settings/{id}/test`
+
+### 数据库
+- `platform_llm_settings` 新增 `name VARCHAR(128)` + `is_default TINYINT(1)`（幂等 ALTER 迁移）
+- 写入两套 DeepSeek：`deepseek-v4-pro`（默认）+ `deepseek-v4-flash`，base_url=`https://api.deepseek.com`
+
+### 验证
+- `pytest` 89 passed；前端 `tsc -b`/`build`/`oxlint` 0 error
+- 真实连通：`deepseek-v4-pro → OK（7.2s）`，`deepseek-v4-flash`/`deepseek-v4-pro` 均 200
 
 ---
 

@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
 import Login from './pages/Login';
+import { applyColorMode, getAntdTheme, onColorModeChange, readColorMode, type ColorMode } from './theme';
 import AppLayout from './components/layout/AppLayout';
 import OverviewPage from './pages/overview/OverviewPage';
 import PlaceholderPage from './components/common/PlaceholderPage';
@@ -10,6 +12,8 @@ import KnowledgeBasePage from './pages/dataops/knowledge/KnowledgeBasePage';
 import MetadataPage from './pages/dataops/metadata/MetadataPage';
 import OntologyPage from './pages/dataops/ontology/OntologyPage';
 import LlmSettingsPage from './pages/govops/LlmSettingsPage';
+import ChatPage from './pages/chat/ChatPage';
+import KanbanPage from './pages/board/KanbanPage';
 
 // Infra
 import InfraComputePage from './pages/infra/InfraComputePage';
@@ -17,6 +21,7 @@ import InfraAidePage from './pages/infra/InfraAidePage';
 import NodeManagement from './components/compute/NodeManagement';
 import DockerManagement from './components/compute/DockerManagement';
 import ServicesPanel from './components/compute/ServicesPanel';
+import ComputerDetail from './components/compute/ComputerDetail';
 
 // AgentOps
 import AgentOpsAgentsPage from './pages/agentops/AgentOpsAgentsPage';
@@ -28,20 +33,14 @@ import AgentOpsDeployPage from './pages/agentops/AgentOpsDeployPage';
 import UsersPage from './pages/users';
 
 export default function App() {
+  const [mode, setMode] = useState<ColorMode>(() => readColorMode());
+  useEffect(() => {
+    applyColorMode(mode);
+    return onColorModeChange(setMode);
+  }, [mode]);
+
   return (
-    <ConfigProvider theme={{
-      token: {
-        // 【UI 重构】Apple 字体栈 + 品牌蓝 + 柔和圆角
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Geist', 'Segoe UI', sans-serif",
-        colorPrimary: '#0071e3',
-        borderRadius: 12,
-        colorText: '#1d1d1f',
-        colorTextSecondary: '#6e6e73',
-        colorBgContainer: '#FFFFFF',
-        colorBgLayout: '#FFFFFF',
-        colorBorder: 'rgba(0,0,0,0.12)',
-      },
-    }}>
+    <ConfigProvider theme={getAntdTheme(mode)}>
       <AntApp>
         <BrowserRouter>
           <Routes>
@@ -50,6 +49,9 @@ export default function App() {
               <Route index element={<Navigate to="/overview" replace />} />
               {/* 总览 */}
               <Route path="overview" element={<OverviewPage />} />
+              <Route path="chat" element={<ChatPage />} />
+              <Route path="board" element={<KanbanPage />} />
+              <Route path="board/:boardId" element={<KanbanPage />} />
               {/* CodeOps */}
               <Route path="codeops/workspace" element={<PlaceholderPage title="AI 编码工作台" desc="AI Agent 辅助的代码开发环境，支持上下文感知、增量开发、安全审查。" />} />
               <Route path="codeops/pipelines" element={<PlaceholderPage title="CI/CD 流水线" desc="AI 驱动的智能 CI/CD 流水线，含部署风险预测、金丝雀发布。" />} />
@@ -88,6 +90,7 @@ export default function App() {
               <Route path="infra/compute" element={<InfraComputePage />}>
                 <Route index element={<Navigate to="nodes" replace />} />
                 <Route path="nodes" element={<NodeManagement />} />
+                <Route path="nodes/:nodeId" element={<ComputerDetail />} />
                 <Route path="docker" element={<DockerManagement />} />
                 <Route path="services" element={<ServicesPanel />} />
               </Route>

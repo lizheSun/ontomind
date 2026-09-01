@@ -18,8 +18,8 @@
 import { useEffect, useRef } from 'react';
 import { useAideStore } from '../../stores/aideStore';
 
-/** AppLayout Header 高度（【UI 重构】同步顶栏高度 52） */
-const HEADER_H = 52;
+/** 无顶栏：工具条贴在内容区顶部 */
+const HEADER_H = 0;
 /** AIDE 工具条高度 */
 const TOOLBAR_H = 40;
 
@@ -67,7 +67,7 @@ export default function AideHost({ sidebarW }: Props) {
         height: `calc(100vh - ${top}px)`,
         border: 'none',
         display: visible ? 'block' : 'none',
-        background: '#fff',
+        background: 'var(--bg-root)',
         zIndex: fullscreen ? 1000 : 1,
       }}
       allow="clipboard-read; clipboard-write; fullscreen"

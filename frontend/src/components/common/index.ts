@@ -11,6 +11,9 @@ export { GlassPanel } from './GlassPanel';
 export { EmptyState } from './EmptyState';
 export { CmdKOmnibar } from './CmdKOmnibar';
 export type { CmdKOmnibarProps } from './CmdKOmnibar';
+export { BrandMark } from './BrandMark';
+export { PageHeader } from './PageHeader';
+export { StatusDot } from './StatusDot';
 export {
   ZenGodToggle,
   useUIMode,

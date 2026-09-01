@@ -1,26 +1,19 @@
-/** Docker 管理组件 — 容器列表 + 镜像列表 + 新建/修改/启停/命令/日志 */
-import { useEffect, useState } from 'react';
+/** 容器列表 — Yao 电脑卡片布局；新建/启停/终端逻辑不变。 */
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   App,
   Button,
   Drawer,
-  Empty,
   Input,
   Modal,
   Popconfirm,
   Space,
-  Switch,
-  Table,
-  Tabs,
-  Tag,
   Tooltip,
-  Typography,
 } from 'antd';
 import {
   BoxPlotOutlined,
   CloudDownloadOutlined,
-  CloudServerOutlined,
   CodeOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -33,27 +26,26 @@ import {
   SyncOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
+import { EmptyState } from '../common/EmptyState';
 import useComputeStore, { extractErrMsg } from '../../stores/computeStore';
 import type { ContainerInfo, ImageInfo } from '../../types/compute';
-import { containerStatusColor, containerStatusLabel } from '../../types/compute';
+import { containerStatusLabel } from '../../types/compute';
 import { getContainerLogs, inspectContainer } from '../../services/compute.service';
 import ContainerConsole from './ContainerConsole';
 import ContainerFormModal from './ContainerFormModal';
 import ContainerExecModal from './ContainerExecModal';
-
-const { Text } = Typography;
+import { AddrFoot, FilterTabs, HostCard, StatusPill } from './computerUi';
 
 const LOG_BOX: React.CSSProperties = {
-  background: '#1a1918',
-  color: '#e0e0e0',
+  background: 'var(--bg-subtle)',
+  color: 'var(--text-primary)',
   padding: 16,
   borderRadius: 8,
   minHeight: 300,
   maxHeight: 500,
   overflow: 'auto',
   fontSize: 12,
-  fontFamily: "'JetBrains Mono', monospace",
+  fontFamily: 'var(--font-mono)',
   whiteSpace: 'pre-wrap',
   wordBreak: 'break-all',
   margin: 0,
@@ -63,15 +55,17 @@ export default function DockerManagement() {
   const { notification } = App.useApp();
   const {
     selectedNode,
+    nodes,
+    selectNode,
+    ensureLocalNode,
+    fetchNodes,
     images,
     imagesLoading,
     containers,
     containersLoading,
-    showAllContainers,
     dockerError,
     fetchImages,
     fetchContainers,
-    toggleShowAll,
     startContainer,
     stopContainer,
     restartContainer,
@@ -79,7 +73,6 @@ export default function DockerManagement() {
     pullImage,
   } = useComputeStore();
 
-  // 右侧半屏交互终端 Drawer
   const [consoleDrawerOpen, setConsoleDrawerOpen] = useState(false);
   const [consoleTarget, setConsoleTarget] = useState<{
     nodeId: number;
@@ -87,7 +80,6 @@ export default function DockerManagement() {
     containerName: string;
   } | null>(null);
 
-  // 弹窗
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ContainerInfo | null>(null);
   const [prefillImage, setPrefillImage] = useState<string | undefined>();
@@ -103,35 +95,35 @@ export default function DockerManagement() {
 
   const [pullImageName, setPullImageName] = useState('');
   const [pulling, setPulling] = useState(false);
-
-  // 行级 loading，避免整表 loading 造成「点了没反应」的错觉
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // 进入组件即拉取（节点已选中但数据未加载的情况）
+  const [pane, setPane] = useState<'containers' | 'images'>('containers');
+  const [filter, setFilter] = useState<'running' | 'stopped' | 'all'>('all');
+  const [q, setQ] = useState('');
+
   useEffect(() => {
-    if (selectedNode && containers.length === 0 && !containersLoading) {
+    void (async () => {
+      await ensureLocalNode();
+      await fetchNodes();
+      const store = useComputeStore.getState();
+      if (!store.selectedNode && store.nodes[0]) selectNode(store.nodes[0]);
+    })();
+  }, [ensureLocalNode, fetchNodes, selectNode]);
+
+  useEffect(() => {
+    if (selectedNode) {
       void fetchContainers();
       void fetchImages();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNode?.id]);
+  }, [selectedNode?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** 包裹容器操作：统一 loading + 错误提示（原来错误被 store 静默吞掉） */
-  const runAction = async (
-    id: string,
-    label: string,
-    fn: () => Promise<void>,
-  ) => {
+  const runAction = async (id: string, label: string, fn: () => Promise<void>) => {
     setBusyId(id);
     try {
       await fn();
       notification.success({ title: `${label}成功`, duration: 2 });
     } catch (err) {
-      notification.error({
-        title: `${label}失败`,
-        description: extractErrMsg(err),
-        duration: 8,
-      });
+      notification.error({ title: `${label}失败`, description: extractErrMsg(err), duration: 8 });
     } finally {
       setBusyId(null);
     }
@@ -175,11 +167,7 @@ export default function DockerManagement() {
       notification.success({ title: `${img} 拉取成功` });
       setPullImageName('');
     } catch (err) {
-      notification.error({
-        title: '拉取失败',
-        description: extractErrMsg(err),
-        duration: 10,
-      });
+      notification.error({ title: '拉取失败', description: extractErrMsg(err), duration: 10 });
     } finally {
       setPulling(false);
     }
@@ -195,255 +183,42 @@ export default function DockerManagement() {
     setConsoleDrawerOpen(true);
   };
 
-  // ---- 表格列 ----
+  const runningN = containers.filter((c) => c.status === 'running').length;
+  const stoppedN = containers.length - runningN;
 
-  const containerColumns: ColumnsType<ContainerInfo> = [
-    {
-      title: '名称',
-      dataIndex: 'name',
-      width: 170,
-      render: (name: string, r) => (
-        <Space orientation="vertical" size={0}>
-          <Text strong>{name}</Text>
-          <Text code style={{ fontSize: 10.5 }}>
-            {r.id.slice(0, 12)}
-          </Text>
-        </Space>
-      ),
-    },
-    { title: '镜像', dataIndex: 'image', width: 200, ellipsis: true },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (status: string, r) => (
-        <Space orientation="vertical" size={0}>
-          <Tag color={containerStatusColor[status] || 'default'}>
-            {containerStatusLabel[status] || status}
-          </Tag>
-          {status !== 'running' && r.exit_code != null && r.exit_code !== 0 && (
-            <Text type="danger" style={{ fontSize: 10.5 }}>
-              exit {r.exit_code}
-            </Text>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: '端口（宿主→容器）',
-      dataIndex: 'ports',
-      width: 160,
-      render: (ports: string) =>
-        ports ? (
-          <Text style={{ fontSize: 11.5, fontFamily: 'monospace' }}>{ports}</Text>
-        ) : (
-          <Text type="secondary" style={{ fontSize: 11.5 }}>
-            无
-          </Text>
-        ),
-    },
-    {
-      title: '挂载',
-      dataIndex: 'volume_mappings',
-      width: 150,
-      render: (vols: ContainerInfo['volume_mappings']) =>
-        vols && vols.length > 0 ? (
-          <Tooltip
-            title={vols
-              .map((v) => `${v.host_path} → ${v.container_path}${v.read_only ? ' (ro)' : ''}`)
-              .join('\n')}
-          >
-            <Text style={{ fontSize: 11.5, cursor: 'default' }}>{vols.length} 个挂载</Text>
-          </Tooltip>
-        ) : (
-          <Text type="secondary" style={{ fontSize: 11.5 }}>
-            无
-          </Text>
-        ),
-    },
-    {
-      title: '网络',
-      dataIndex: 'network',
-      width: 84,
-      render: (n: string) => <Tag style={{ fontSize: 10.5 }}>{n || 'bridge'}</Tag>,
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 300,
-      fixed: 'right',
-      render: (_, record) => {
-        const isRunning = record.status === 'running';
-        const busy = busyId === record.id;
-        return (
-          <Space size={2}>
-            {isRunning ? (
-              <Tooltip title="停止">
-                <Button
-                  size="small"
-                  type="text"
-                  loading={busy}
-                  icon={<PauseCircleOutlined />}
-                  onClick={() => runAction(record.id, '停止', () => stopContainer(record.id))}
-                />
-              </Tooltip>
-            ) : (
-              <Tooltip title="启动">
-                <Button
-                  size="small"
-                  type="text"
-                  loading={busy}
-                  icon={<PlayCircleOutlined />}
-                  onClick={() => runAction(record.id, '启动', () => startContainer(record.id))}
-                />
-              </Tooltip>
-            )}
-            <Tooltip title="重启">
-              <Button
-                size="small"
-                type="text"
-                loading={busy}
-                icon={<SyncOutlined />}
-                onClick={() => runAction(record.id, '重启', () => restartContainer(record.id))}
-              />
-            </Tooltip>
-            <Tooltip title="修改端口 / 挂载 / 环境变量（会重建容器）">
-              <Button
-                size="small"
-                type="text"
-                icon={<EditOutlined />}
-                onClick={() => {
-                  setEditing(record);
-                  setFormOpen(true);
-                }}
-              />
-            </Tooltip>
-            <Tooltip title={isRunning ? '打开交互终端' : '需先启动容器'}>
-              <Button
-                size="small"
-                type="text"
-                disabled={!isRunning}
-                icon={<CodeOutlined />}
-                onClick={() => openConsole(record)}
-              />
-            </Tooltip>
-            <Tooltip title={isRunning ? '执行命令' : '需先启动容器'}>
-              <Button
-                size="small"
-                type="text"
-                disabled={!isRunning}
-                icon={<ThunderboltOutlined />}
-                onClick={() => setExecTarget(record)}
-              />
-            </Tooltip>
-            <Tooltip title="查看日志">
-              <Button
-                size="small"
-                type="text"
-                icon={<FileTextOutlined />}
-                onClick={() => void handleLogs(record)}
-              />
-            </Tooltip>
-            <Tooltip title="完整详情 (inspect)">
-              <Button
-                size="small"
-                type="text"
-                icon={<InfoCircleOutlined />}
-                onClick={() => void handleInspect(record)}
-              />
-            </Tooltip>
-            <Popconfirm
-              title={`删除容器 ${record.name}？`}
-              description={isRunning ? '容器正在运行，将强制删除' : undefined}
-              onConfirm={() => runAction(record.id, '删除', () => removeContainer(record.id, true))}
-            >
-              <Button size="small" type="text" danger loading={busy} icon={<DeleteOutlined />} />
-            </Popconfirm>
-          </Space>
-        );
-      },
-    },
-  ];
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return containers.filter((c) => {
+      if (filter === 'running' && c.status !== 'running') return false;
+      if (filter === 'stopped' && c.status === 'running') return false;
+      if (!needle) return true;
+      return `${c.name} ${c.image} ${c.id}`.toLowerCase().includes(needle);
+    });
+  }, [containers, filter, q]);
 
-  const imageColumns: ColumnsType<ImageInfo> = [
-    {
-      title: '标签',
-      dataIndex: 'tags',
-      render: (tags: string[]) => (
-        <Space size={4} wrap>
-          {tags.map((t) => (
-            <Tag key={t} style={{ fontFamily: 'monospace', fontSize: 11.5 }}>
-              {t}
-            </Tag>
-          ))}
-        </Space>
-      ),
-    },
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      width: 130,
-      render: (id: string) => <Text code style={{ fontSize: 11 }}>{id.slice(0, 12)}</Text>,
-    },
-    { title: '大小', dataIndex: 'size', width: 100 },
-    { title: '创建时间', dataIndex: 'created', width: 170 },
-    {
-      title: '操作',
-      key: 'act',
-      width: 110,
-      render: (_, img) => {
-        const tag = img.tags.find((t) => t && !t.startsWith('<none>'));
-        return (
-          <Button
-            size="small"
-            type="link"
-            disabled={!tag}
-            onClick={() => {
-              setEditing(null);
-              setPrefillImage(tag!);
-              setFormOpen(true);
-            }}
-          >
-            用它建容器
-          </Button>
-        );
-      },
-    },
-  ];
+  const visibleImages = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return images;
+    return images.filter((img) => img.tags.join(' ').toLowerCase().includes(needle) || img.id.includes(needle));
+  }, [images, q]);
 
-  if (!selectedNode) {
-    return (
-      <Empty
-        description="请先在「节点管理」中选择一个节点"
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-      />
-    );
+  if (!selectedNode && nodes.length === 0) {
+    return <EmptyState title="暂无电脑" description="请先在「电脑」页添加或导入节点。" />;
   }
 
   return (
     <div>
-      {/* 节点信息条 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 14,
-          padding: '10px 14px',
-          background: 'rgba(0,113,227,0.04)',
-          borderRadius: 12,
-          border: '1px solid rgba(0,113,227,0.10)',
-        }}
-      >
-        <Space>
-          <CloudServerOutlined style={{ color: '#0071e3' }} />{/* 【UI 重构】Apple Blue */}
-          <Text>
-            当前节点：<Text strong>{selectedNode.name}</Text>
-            <Text type="secondary" style={{ marginLeft: 8 }}>
-              ({selectedNode.host}:{selectedNode.port})
-            </Text>
-          </Text>
-        </Space>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+        <Button
+          icon={<ReloadOutlined />}
+          loading={containersLoading || imagesLoading}
+          onClick={() => {
+            void fetchContainers();
+            void fetchImages();
+          }}
+        >
+          刷新
+        </Button>
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -457,6 +232,15 @@ export default function DockerManagement() {
         </Button>
       </div>
 
+      <FilterTabs
+        value={pane}
+        onChange={(k) => setPane(k as typeof pane)}
+        items={[
+          { key: 'containers', label: '容器', count: containers.length },
+          { key: 'images', label: '镜像', count: images.length },
+        ]}
+      />
+
       {dockerError && (
         <Alert
           type="error"
@@ -468,109 +252,202 @@ export default function DockerManagement() {
         />
       )}
 
-      <Tabs
-        defaultActiveKey="containers"
-        tabBarExtraContent={
-          <Space>
-            <Switch checked={showAllContainers} onChange={toggleShowAll} size="small" />
-            <Text style={{ fontSize: 12 }}>含已停止</Text>
-            <Button
-              size="small"
-              icon={<ReloadOutlined />}
-              loading={containersLoading || imagesLoading}
-              onClick={() => {
-                void fetchContainers();
-                void fetchImages();
-              }}
-            >
-              刷新
-            </Button>
-          </Space>
-        }
-        items={[
-          {
-            key: 'containers',
-            label: (
-              <Space size={4}>
-                <BoxPlotOutlined />
-                容器
-                <Tag>{containers.length}</Tag>
-              </Space>
-            ),
-            children: (
-              <Table
-                size="middle"
-                rowKey="id"
-                columns={containerColumns}
-                dataSource={containers}
-                loading={containersLoading}
-                pagination={false}
-                scroll={{ x: 1180 }}
-                locale={{
-                  emptyText: (
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={
-                        <span>
-                          该节点暂无容器
-                          <br />
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            点右上角「新建容器」，可从预设一键创建
-                          </Text>
-                        </span>
-                      }
-                    />
-                  ),
-                }}
-              />
-            ),
-          },
-          {
-            key: 'images',
-            label: (
-              <Space size={4}>
-                <CloudServerOutlined />
-                镜像
-                <Tag>{images.length}</Tag>
-              </Space>
-            ),
-            children: (
-              <div>
-                <Space.Compact style={{ marginBottom: 12, width: '100%', maxWidth: 460 }}>
-                  <Input
-                    size="small"
-                    placeholder="输入镜像名拉取，例如 nginx:1.27-alpine"
-                    value={pullImageName}
-                    onChange={(e) => setPullImageName(e.target.value)}
-                    onPressEnter={() => void handlePull()}
-                    style={{ fontFamily: 'monospace' }}
-                  />
-                  <Button
-                    size="small"
-                    type="primary"
-                    icon={<CloudDownloadOutlined />}
-                    loading={pulling}
-                    onClick={() => void handlePull()}
-                  >
-                    拉取
-                  </Button>
-                </Space.Compact>
-                <Table
-                  size="middle"
-                  rowKey="id"
-                  columns={imageColumns}
-                  dataSource={images}
-                  loading={imagesLoading}
-                  pagination={false}
-                  locale={{ emptyText: '暂无镜像，可在上方输入镜像名拉取' }}
-                />
-              </div>
-            ),
-          },
-        ]}
+      <Input
+        className="om-comp-search"
+        placeholder="搜索电脑名称、镜像、标签…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        allowClear
+        size="large"
       />
 
-      {/* 新建 / 修改容器 */}
+      {pane === 'containers' ? (
+        <>
+          <FilterTabs
+            value={filter}
+            onChange={(k) => setFilter(k as typeof filter)}
+            items={[
+              { key: 'running', label: '运行中', count: runningN },
+              { key: 'stopped', label: '已停止', count: stoppedN },
+              { key: 'all', label: '全部', count: containers.length },
+            ]}
+          />
+          {visible.length === 0 ? (
+            <EmptyState
+              title="暂无容器"
+              description="点右上角「新建容器」，可从预设一键创建。"
+              action={
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setEditing(null);
+                    setFormOpen(true);
+                  }}
+                >
+                  新建容器
+                </Button>
+              }
+            />
+          ) : (
+            <div className="om-host-list">
+              {visible.map((c) => {
+                const on = c.status === 'running';
+                const busy = busyId === c.id;
+                return (
+                  <HostCard
+                    key={c.id}
+                    glyph={<BoxPlotOutlined />}
+                    title={c.name}
+                    subtitle={c.image}
+                    pill={
+                      <StatusPill
+                        tone={on ? 'ok' : 'off'}
+                        label={containerStatusLabel[c.status] || c.status}
+                      />
+                    }
+                    foot={<AddrFoot addr={c.ports || '无端口'} tag={c.network || 'bridge'} when={c.id.slice(0, 12)} />}
+                    actions={
+                      <Space size={2}>
+                        {on ? (
+                          <Tooltip title="停止">
+                            <Button
+                              size="small"
+                              type="text"
+                              loading={busy}
+                              icon={<PauseCircleOutlined />}
+                              onClick={() => void runAction(c.id, '停止', () => stopContainer(c.id))}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title="启动">
+                            <Button
+                              size="small"
+                              type="text"
+                              loading={busy}
+                              icon={<PlayCircleOutlined />}
+                              onClick={() => void runAction(c.id, '启动', () => startContainer(c.id))}
+                            />
+                          </Tooltip>
+                        )}
+                        <Tooltip title="重启">
+                          <Button
+                            size="small"
+                            type="text"
+                            loading={busy}
+                            icon={<SyncOutlined />}
+                            onClick={() => void runAction(c.id, '重启', () => restartContainer(c.id))}
+                          />
+                        </Tooltip>
+                        <Tooltip title="修改配置（会重建容器）">
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<EditOutlined />}
+                            onClick={() => {
+                              setEditing(c);
+                              setFormOpen(true);
+                            }}
+                          />
+                        </Tooltip>
+                        <Tooltip title={on ? '打开交互终端' : '需先启动容器'}>
+                          <Button
+                            size="small"
+                            type="text"
+                            disabled={!on}
+                            icon={<CodeOutlined />}
+                            onClick={() => openConsole(c)}
+                          />
+                        </Tooltip>
+                        <Tooltip title={on ? '执行命令' : '需先启动容器'}>
+                          <Button
+                            size="small"
+                            type="text"
+                            disabled={!on}
+                            icon={<ThunderboltOutlined />}
+                            onClick={() => setExecTarget(c)}
+                          />
+                        </Tooltip>
+                        <Tooltip title="查看日志">
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<FileTextOutlined />}
+                            onClick={() => void handleLogs(c)}
+                          />
+                        </Tooltip>
+                        <Tooltip title="inspect">
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<InfoCircleOutlined />}
+                            onClick={() => void handleInspect(c)}
+                          />
+                        </Tooltip>
+                        <Popconfirm
+                          title={`删除容器 ${c.name}？`}
+                          description={on ? '容器正在运行，将强制删除' : undefined}
+                          onConfirm={() => void runAction(c.id, '删除', () => removeContainer(c.id, true))}
+                        >
+                          <Button size="small" type="text" danger loading={busy} icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      </Space>
+                    }
+                  />
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <Space.Compact style={{ marginBottom: 14, width: '100%', maxWidth: 520 }}>
+            <Input
+              placeholder="输入镜像名拉取，例如 nginx:1.27-alpine"
+              value={pullImageName}
+              onChange={(e) => setPullImageName(e.target.value)}
+              onPressEnter={() => void handlePull()}
+              style={{ fontFamily: 'var(--font-mono)' }}
+            />
+            <Button type="primary" icon={<CloudDownloadOutlined />} loading={pulling} onClick={() => void handlePull()}>
+              拉取
+            </Button>
+          </Space.Compact>
+          {visibleImages.length === 0 ? (
+            <EmptyState title="暂无镜像" description="在上方输入镜像名拉取。" />
+          ) : (
+            <div className="om-host-list">
+              {visibleImages.map((img: ImageInfo) => {
+                const tag = img.tags.find((t) => t && !t.startsWith('<none>')) || img.tags[0] || img.id.slice(0, 12);
+                return (
+                  <HostCard
+                    key={img.id}
+                    title={tag}
+                    subtitle={`${img.size} · ${img.id.slice(0, 12)}`}
+                    pill={<StatusPill tone="off" label="镜像" />}
+                    foot={<AddrFoot addr={img.created} tag={img.tags.length > 1 ? `${img.tags.length} tags` : undefined} />}
+                    actions={
+                      <Button
+                        size="small"
+                        type="link"
+                        disabled={!img.tags.find((t) => t && !t.startsWith('<none>'))}
+                        onClick={() => {
+                          setEditing(null);
+                          setPrefillImage(tag);
+                          setFormOpen(true);
+                        }}
+                      >
+                        用它建容器
+                      </Button>
+                    }
+                  />
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
       <ContainerFormModal
         open={formOpen}
         editing={editing}
@@ -581,15 +458,7 @@ export default function DockerManagement() {
           setPrefillImage(undefined);
         }}
       />
-
-      {/* 快速命令 */}
-      <ContainerExecModal
-        open={!!execTarget}
-        container={execTarget}
-        onClose={() => setExecTarget(null)}
-      />
-
-      {/* 日志 */}
+      <ContainerExecModal open={!!execTarget} container={execTarget} onClose={() => setExecTarget(null)} />
       <Modal
         title={`容器日志 · ${logsName}`}
         open={logsOpen}
@@ -600,8 +469,6 @@ export default function DockerManagement() {
       >
         <pre style={LOG_BOX}>{logsLoading ? '加载中…' : logsContent}</pre>
       </Modal>
-
-      {/* Inspect */}
       <Modal
         title="容器完整详情"
         open={inspectOpen}
@@ -610,34 +477,14 @@ export default function DockerManagement() {
         width={760}
         destroyOnHidden
       >
-        <pre
-          style={{
-            background: '#fafaf7',
-            padding: 16,
-            borderRadius: 8,
-            maxHeight: 520,
-            overflow: 'auto',
-            fontSize: 11.5,
-            fontFamily: "'JetBrains Mono', monospace",
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-all',
-            margin: 0,
-          }}
-        >
-          {JSON.stringify(inspectData, null, 2)}
-        </pre>
+        <pre style={{ ...LOG_BOX, background: 'var(--bg-subtle)' }}>{JSON.stringify(inspectData, null, 2)}</pre>
       </Modal>
-
-      {/* 右侧半屏交互终端 */}
       <Drawer
         title={null}
         open={consoleDrawerOpen}
         onClose={() => setConsoleDrawerOpen(false)}
         width="50vw"
-        styles={{
-          body: { padding: 0 },
-          wrapper: { minWidth: 480 },
-        }}
+        styles={{ body: { padding: 0 }, wrapper: { minWidth: 480 } }}
         destroyOnHidden
       >
         {consoleTarget && (

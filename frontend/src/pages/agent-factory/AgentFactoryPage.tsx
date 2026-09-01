@@ -77,7 +77,7 @@ export default function AgentFactoryPage() {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - 52px)', display: 'flex', flexDirection: 'column', background: '#F5F5F7' }}>{/* 【UI 重构】同步顶栏高度 52，浅灰底 */}
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-root)' }}>
       <div style={{ flex: 1, minHeight: 0, padding: '16px 16px 0', overflow: 'auto' }}>
         {panel === 'agents' && <AgentDesigner meta={meta} />}
         {panel === 'bundles' && <BundleDesigner presets={presets} onDeploy={goDeploy} />}

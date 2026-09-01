@@ -1,7 +1,5 @@
 import React from 'react';
-import { Empty, Typography } from 'antd';
-
-const { Text } = Typography;
+import { Empty } from 'antd';
 
 interface EmptyStateProps {
   title?: React.ReactNode;
@@ -19,33 +17,16 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   className,
 }) => {
   return (
-    <div
-      className={className}
-      style={{
-        padding: '48px 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <div className={className} style={{ padding: '48px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <Empty
         image={icon ?? Empty.PRESENTED_IMAGE_SIMPLE}
         description={
           <div style={{ textAlign: 'center' }}>
-            <div
-              style={{
-                color: 'var(--text-primary, #e8eef5)',
-                fontSize: 15,
-                fontWeight: 500,
-                marginBottom: description ? 4 : 12,
-              }}
-            >
+            <div style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 500, marginBottom: description ? 4 : 12 }}>
               {title}
             </div>
             {description && (
-              <Text style={{ color: 'var(--text-secondary, #8895b4)', fontSize: 13 }}>
-                {description}
-              </Text>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{description}</div>
             )}
             {action && <div style={{ marginTop: 16 }}>{action}</div>}
           </div>

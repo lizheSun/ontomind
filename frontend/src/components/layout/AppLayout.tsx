@@ -1,163 +1,97 @@
 /**
- * 平台主布局 — 一级导航在顶栏，二级导航在左侧边栏。
- * 【UI 重构】Apple 官网风格：毛玻璃固定导航、浅色侧栏、移动端折叠。
+ * 平台主布局 — 对齐 Yao Assistants 三栏：图标轨 64 + 上下文 256 + 内容。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Avatar, Dropdown, Space, Typography, Grid } from 'antd';
+import { Avatar, Dropdown, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   ApiOutlined,
-  CloudServerOutlined,
+  AppstoreOutlined,
+  DesktopOutlined,
   CodeOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   LogoutOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  MessageOutlined,
+  MoonOutlined,
   RightOutlined,
   RobotOutlined,
   SafetyOutlined,
+  SearchOutlined,
+  SunOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import useUserStore from '../../stores/userStore';
 import AideHost from './AideHost';
+import { BrandMark } from '../common/BrandMark';
+import { CmdKOmnibar } from '../common/CmdKOmnibar';
+import { ChatSessionRail } from '../../pages/chat/ChatSessionRail';
+import {
+  DOMAINS,
+  RAIL_W,
+  SIDEBAR_W,
+  domainHome,
+  findDomain,
+  type DomainDef,
+} from '../../nav';
+import {
+  readColorMode,
+  setColorMode,
+  onColorModeChange,
+  applyColorMode,
+  type ColorMode,
+} from '../../theme';
 
-const { Header, Sider, Content } = Layout;
-const { Text } = Typography;
-const { useBreakpoint } = Grid;
+const DOMAIN_ICONS: Record<string, ReactNode> = {
+  overview: <DashboardOutlined />,
+  chat: <MessageOutlined />,
+  board: <AppstoreOutlined />,
+  codeops: <CodeOutlined />,
+  dataops: <DatabaseOutlined />,
+  modelops: <RobotOutlined />,
+  agentops: <ApiOutlined />,
+  govops: <SafetyOutlined />,
+  infra: <DesktopOutlined />,
+};
 
-interface SubChild {
-  key: string;
-  label: string;
-}
-
-interface SubItem {
-  key: string;
-  label: string;
-  children?: SubChild[];
-}
-
-interface DomainDef {
-  key: string;
-  icon: React.ReactNode;
-  label: string;
-  color: string;
-  sub: SubItem[];
-}
-
-const DOMAINS: DomainDef[] = [
-  { key: 'overview', icon: <DashboardOutlined />, label: '总览', color: '#86868b', sub: [] },
-  { key: 'codeops', icon: <CodeOutlined />, label: 'CodeOps', color: '#0071e3', sub: [
-    { key: '/codeops/workspace', label: '编码工作台' },
-    { key: '/codeops/pipelines', label: 'CI/CD 流水线' },
-  ]},
-  { key: 'dataops', icon: <DatabaseOutlined />, label: 'DataOps', color: '#0a84ff', sub: [
-    { key: '/dataops/catalog', label: '资产地图(AI)', children: [
-      { key: '/dataops/catalog/biz-systems', label: '元数据与标注' },
-      { key: '/dataops/catalog/warehouse', label: '数据仓库' },
-      { key: '/dataops/catalog/ontology', label: '本体建模' },
-      { key: '/dataops/catalog/etl', label: 'ETL代码库' },
-      { key: '/dataops/catalog/code', label: '业务代码库' },
-      { key: '/dataops/catalog/knowledge', label: '知识库' },
-      { key: '/dataops/catalog/smart-dev', label: '智能数开' },
-    ]},
-    { key: '/dataops/lineage', label: '数据血缘' },
-    { key: '/dataops/quality', label: '数据质量' },
-  ]},
-  { key: 'modelops', icon: <RobotOutlined />, label: 'ModelOps', color: '#5b5bf6', sub: [
-    { key: '/modelops/experiments', label: '实验管理' },
-    { key: '/modelops/gateway', label: '推理网关' },
-    { key: '/modelops/monitoring', label: '模型监控' },
-  ]},
-  { key: 'agentops', icon: <ApiOutlined />, label: 'AgentOps', color: '#ff9f0a', sub: [
-    { key: '/agentops/agents', label: 'Agent 设计' },
-    { key: '/agentops/skills', label: 'Skill 设计' },
-    { key: '/agentops/bundles', label: '编排方案' },
-    { key: '/agentops/deploy', label: '发布中心' },
-  ]},
-  { key: 'govops', icon: <SafetyOutlined />, label: 'GovOps', color: '#ff375f', sub: [
-    { key: '/govops/llm', label: 'LLM 配置' },
-    { key: '/govops/catalog', label: '资产目录' },
-    { key: '/govops/security', label: '安全合规' },
-    { key: '/govops/cost', label: '成本归因' },
-  ]},
-  { key: 'infra', icon: <CloudServerOutlined />, label: 'Infra', color: '#34c759', sub: [
-    { key: '/infra/compute', label: '算力管理', children: [
-      { key: '/infra/compute/nodes', label: '节点管理' },
-      { key: '/infra/compute/docker', label: 'Docker 管理' },
-      { key: '/infra/compute/services', label: '服务' },
-    ]},
-    { key: '/infra/aide', label: 'AIDE' },
-  ]},
+const QUICK_PROMPTS = [
+  { label: '打开任务看板', to: '/board' },
+  { label: '打开统一会话（OpenCode / DSH）', to: '/chat' },
+  { label: '打开 AIDE 编码环境', to: '/infra/aide' },
+  { label: '配置当前生效的 LLM', to: '/govops/llm' },
+  { label: '设计一个 Agent 并发布', to: '/agentops/agents' },
 ];
 
 export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, fetchCurrentUser } = useUserStore();
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    try {
-      return localStorage.getItem('ontomind_sidebar_open') !== '0';
-    } catch {
-      return true;
-    }
-  });
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
-  const screens = useBreakpoint();
-  const isMobile = !screens.md;
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [mode, setMode] = useState<ColorMode>(() => readColorMode());
 
-  const toggleSidebar = useCallback(() => {
-    setSidebarOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('ontomind_sidebar_open', next ? '1' : '0');
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
-
-  const openSidebar = useCallback(() => {
-    setSidebarOpen(true);
-    try {
-      localStorage.setItem('ontomind_sidebar_open', '1');
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const domainHome = useCallback((d: DomainDef) => {
-    if (!d.sub.length) return `/${d.key}`;
-    const first = d.sub[0];
-    if (first.children && first.children.length > 0) return first.children[0].key;
-    return first.key;
-  }, []);
+  useEffect(() => {
+    applyColorMode(mode);
+    return onColorModeChange(setMode);
+  }, [mode]);
 
   useEffect(() => {
     if (!currentUser) fetchCurrentUser();
   }, [currentUser, fetchCurrentUser]);
 
-  const currentDomain = useMemo(() => {
-    const p = location.pathname.split('/')[1] || 'overview';
-    return DOMAINS.find((d) => d.key === p) || DOMAINS[0];
-  }, [location.pathname]);
+  const currentDomain = useMemo(() => findDomain(location.pathname), [location.pathname]);
 
-  // 自动展开当前路径所在的三级菜单所属的二级项
   useEffect(() => {
     const path = location.pathname;
     for (const sub of currentDomain.sub) {
-      if (sub.children) {
-        const hasActive = sub.children.some((c) => path.startsWith(c.key));
-        if (hasActive) {
-          setExpandedSubs((prev) => {
-            if (prev.has(sub.key)) return prev;
-            const next = new Set(prev);
-            next.add(sub.key);
-            return next;
-          });
-        }
+      if (sub.children?.some((c) => path.startsWith(c.key))) {
+        setExpandedSubs((prev) => {
+          if (prev.has(sub.key)) return prev;
+          const next = new Set(prev);
+          next.add(sub.key);
+          return next;
+        });
       }
     }
   }, [location.pathname, currentDomain]);
@@ -171,8 +105,13 @@ export default function AppLayout() {
     });
   }, []);
 
+  const goDomain = useCallback(
+    (d: DomainDef) => navigate(domainHome(d)),
+    [navigate],
+  );
+
   const userMenu: MenuProps['items'] = [
-    { key: 'profile', icon: <UserOutlined />, label: currentUser?.displayName || currentUser?.username || '用户' },
+    { key: 'users', icon: <UserOutlined />, label: '用户管理' },
     { type: 'divider' },
     { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
   ];
@@ -182,253 +121,161 @@ export default function AppLayout() {
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+      return;
     }
+    if (key === 'users') navigate('/users');
   };
 
-  const showSidebar = sidebarOpen && currentDomain.sub.length > 0 && !isMobile;
+  const showContext = currentDomain.key !== 'board';
+  const leftOffset = RAIL_W + (showContext ? SIDEBAR_W : 0);
 
   return (
-    <Layout style={{ minHeight: '100vh', background: '#FFFFFF' }}>
-      {/* ===== 顶栏（Apple 毛玻璃固定导航）===== */}
-      <Header style={{
-        height: 52, lineHeight: '52px',
-        background: 'rgba(255,255,255,0.72)',
-        backdropFilter: 'saturate(180%) blur(20px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
-        borderBottom: '1px solid rgba(0,0,0,0.06)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 22px', position: 'sticky', top: 0, zIndex: 100,
-      }}>
-        {/* 左侧：Logo + 域导航 */}
-        <Space size={0}>
-          {/* 【UI 重构】Apple 风格 logo：SF 粗体、靛蓝强调 */}
-          <Text style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: 17, fontWeight: 600,
-            color: '#1d1d1f', marginRight: 24,
-            letterSpacing: '-0.02em',
-          }}>
-            OntoMind
-          </Text>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {DOMAINS.map((d) => {
-              const active = currentDomain.key === d.key;
-              return (
-                <div
-                  key={d.key}
-                  onClick={() => {
-                    openSidebar();
-                    navigate(domainHome(d));
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '0 11px', height: 52, cursor: 'pointer',
-                    borderBottom: active ? `2px solid ${d.color}` : '2px solid transparent',
-                    color: active ? d.color : '#6e6e73',
-                    fontSize: 13, fontWeight: active ? 600 : 500,
-                    transition: 'color .18s ease, border-color .18s ease',
-                    background: 'transparent',
-                  }}
-                  onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = '#1d1d1f'; }}
-                  onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#6e6e73'; }}
-                >
-                  <span style={{ fontSize: 15 }}>{d.icon}</span>
-                  <span>{d.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </Space>
-
-        {/* 右侧：侧栏折叠 + 用户 */}
-        <Space size={10}>
-          {currentDomain.sub.length > 0 && !isMobile ? (
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              title={sidebarOpen ? '收起侧栏' : '展开侧栏'}
-              style={{
-                width: 28,
-                height: 28,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid rgba(0,0,0,0.08)',
-                borderRadius: 8,
-                background: sidebarOpen ? 'rgba(0,0,0,0.03)' : '#fff',
-                color: '#6e6e73',
-                cursor: 'pointer',
-                fontSize: 14,
-              }}
-            >
-              {sidebarOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
-            </button>
-          ) : null}
-          <Dropdown menu={{ items: userMenu, onClick: handleMenuClick }} placement="bottomRight">
-            <Space size={6} style={{ cursor: 'pointer' }}>
-              <Avatar size={26} icon={<UserOutlined />} style={{ background: '#0071e3' }} />
-              <Text style={{ fontSize: 12, color: '#1d1d1f' }}>{currentUser?.displayName || currentUser?.username || 'admin'}</Text>
-            </Space>
-          </Dropdown>
-        </Space>
-      </Header>
-
-      <Layout style={{ minHeight: 'calc(100vh - 52px)', background: '#FFFFFF' }}>
-        {/* ===== 左侧栏：二级导航（Apple 浅色）===== */}
-        {showSidebar && (
-          <Sider width={180} style={{
-            background: '#F5F5F7',
-            borderRight: '1px solid rgba(0,0,0,0.06)',
-            overflow: 'auto',
-            position: 'relative',
-          }} trigger={null}>
-            <div style={{ padding: '14px 0' }}>
-              {/* 当前域标题 */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '0 10px 10px 14px',
-                color: currentDomain.color, fontSize: 12.5, fontWeight: 600,
-                letterSpacing: '0.02em', textTransform: 'uppercase',
-                justifyContent: 'space-between',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  <span style={{ fontSize: 14 }}>{currentDomain.icon}</span>
-                  <span>{currentDomain.label}</span>
-                </div>
+    <div className="om-shell">
+      <nav className="om-rail" aria-label="主导航">
+        <div className="om-rail-top">
+          <button type="button" className="om-rail-brand" title="OntoMind" onClick={() => navigate('/overview')}>
+            <BrandMark size={32} />
+          </button>
+        </div>
+        <div className="om-rail-mid">
+          {DOMAINS.map((d) => {
+            const active = currentDomain.key === d.key;
+            return (
+              <Tooltip key={d.key} title={d.label} placement="right">
                 <button
                   type="button"
-                  onClick={toggleSidebar}
-                  title="收起侧栏"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    border: 'none',
-                    borderRadius: 6,
-                    background: 'transparent',
-                    color: '#86868b',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
+                  className={active ? 'om-rail-item active' : 'om-rail-item'}
+                  aria-label={d.label}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => goDomain(d)}
                 >
-                  <MenuFoldOutlined style={{ fontSize: 12 }} />
+                  {DOMAIN_ICONS[d.key]}
                 </button>
-              </div>
-              <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '0 10px 6px' }} />
-              {/* 子菜单项 */}
-              {currentDomain.sub.map((s) => {
-                const hasChildren = s.children && s.children.length > 0;
+              </Tooltip>
+            );
+          })}
+        </div>
+        <div className="om-rail-bot">
+          <Tooltip title="搜索 ⌘K" placement="right">
+            <button type="button" className="om-rail-item" aria-label="搜索" onClick={() => setCmdOpen(true)}>
+              <SearchOutlined />
+            </button>
+          </Tooltip>
+          <Tooltip title={mode === 'dark' ? '浅色' : '深色'} placement="right">
+            <button
+              type="button"
+              className="om-rail-item"
+              aria-label="切换主题"
+              onClick={() => setColorMode(mode === 'dark' ? 'light' : 'dark')}
+            >
+              {mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+            </button>
+          </Tooltip>
+          <Dropdown menu={{ items: userMenu, onClick: handleMenuClick }} placement="topRight">
+            <button type="button" className="om-rail-item" aria-label="账户" style={{ padding: 0 }}>
+              <Avatar size={28} style={{ background: 'var(--accent)', fontSize: 12 }}>
+                {(currentUser?.displayName || currentUser?.username || 'A').slice(0, 1).toUpperCase()}
+              </Avatar>
+            </button>
+          </Dropdown>
+        </div>
+      </nav>
+
+      {showContext && (
+        <aside className="om-context">
+          <div className="om-context-head">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 18, color: currentDomain.color }}>{DOMAIN_ICONS[currentDomain.key]}</span>
+              <div className="om-context-title">{currentDomain.key === 'overview' ? 'OntoMind' : currentDomain.label}</div>
+            </div>
+            <div className="om-context-hint">
+              {currentDomain.key === 'overview'
+                ? 'AI 领域工程平台。工作区、Agent、数据与算力都在这里。'
+                : currentDomain.hint}
+            </div>
+          </div>
+          <div className="om-context-body">
+            {currentDomain.key === 'chat' ? (
+              <ChatSessionRail />
+            ) : currentDomain.key === 'overview' ? (
+              <>
+                <div className="om-kicker" style={{ padding: '8px 10px 0' }}>可以这样走</div>
+                <div className="om-prompt-list">
+                  {QUICK_PROMPTS.map((p) => (
+                    <button key={p.to} type="button" className="om-prompt-item" onClick={() => navigate(p.to)}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              currentDomain.sub.map((s) => {
+                const hasChildren = Boolean(s.children?.length);
                 const isExpanded = expandedSubs.has(s.key);
                 const anyChildActive = s.children?.some((c) => location.pathname.startsWith(c.key));
 
                 if (hasChildren) {
-                  // 有三级子菜单 → 展开/折叠
                   return (
                     <div key={s.key}>
-                      <div
-                        onClick={() => { toggleExpand(s.key); if (!isExpanded) navigate(s.children![0].key); }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '8px 14px', margin: '2px 6px',
-                          borderRadius: 8, cursor: 'pointer',
-                          fontSize: 13, fontWeight: anyChildActive ? 600 : 500,
-                          color: anyChildActive ? currentDomain.color : '#424245',
-                          background: anyChildActive ? `${currentDomain.color}12` : 'transparent',
-                          transition: 'all .18s ease',
-                          justifyContent: 'space-between',
+                      <button
+                        type="button"
+                        className={anyChildActive ? 'om-nav-item active' : 'om-nav-item'}
+                        onClick={() => {
+                          toggleExpand(s.key);
+                          if (!isExpanded && s.children?.[0]) navigate(s.children[0].key);
                         }}
-                        onMouseEnter={(e) => { if (!anyChildActive) e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; }}
-                        onMouseLeave={(e) => { if (!anyChildActive) e.currentTarget.style.background = 'transparent'; }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{
-                            width: 4, height: 4, borderRadius: '50%',
-                            background: anyChildActive ? currentDomain.color : '#86868b',
-                            flexShrink: 0,
-                          }} />
-                          {s.label}
-                        </div>
-                        <RightOutlined style={{
-                          fontSize: 10, color: '#86868b',
-                          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                          transition: 'transform .18s ease',
-                        }} />
-                      </div>
-                      {/* 三级子菜单 */}
-                      {isExpanded && (
-                        <div style={{ paddingLeft: 20 }}>
-                          {s.children!.map((c) => {
-                            const childActive = location.pathname.startsWith(c.key);
-                            return (
-                              <div
-                                key={c.key}
-                                onClick={() => navigate(c.key)}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: 8,
-                                  padding: '7px 14px', margin: '1px 6px',
-                                  borderRadius: 8, cursor: 'pointer',
-                                  fontSize: 12.5, fontWeight: childActive ? 600 : 400,
-                                  color: childActive ? currentDomain.color : '#6e6e73',
-                                  background: childActive ? `${currentDomain.color}0f` : 'transparent',
-                                  transition: 'all .18s ease',
-                                }}
-                                onMouseEnter={(e) => { if (!childActive) e.currentTarget.style.background = 'rgba(0,0,0,0.03)'; }}
-                                onMouseLeave={(e) => { if (!childActive) e.currentTarget.style.background = 'transparent'; }}
-                              >
-                                {c.label}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                        <span style={{ flex: 1 }}>{s.label}</span>
+                        <RightOutlined
+                          style={{
+                            fontSize: 10,
+                            color: 'var(--text-tertiary)',
+                            transform: isExpanded ? 'rotate(90deg)' : 'none',
+                            transition: 'transform .16s ease',
+                          }}
+                        />
+                      </button>
+                      {isExpanded &&
+                        s.children!.map((c) => {
+                          const childActive = location.pathname.startsWith(c.key);
+                          return (
+                            <button
+                              key={c.key}
+                              type="button"
+                              className={childActive ? 'om-nav-item om-nav-child active' : 'om-nav-item om-nav-child'}
+                              onClick={() => navigate(c.key)}
+                            >
+                              {c.label}
+                            </button>
+                          );
+                        })}
                     </div>
                   );
                 }
 
-                // 无子菜单的普通二级项
                 const subActive = location.pathname.startsWith(s.key);
                 return (
-                  <div
+                  <button
                     key={s.key}
+                    type="button"
+                    className={subActive ? 'om-nav-item active' : 'om-nav-item'}
                     onClick={() => navigate(s.key)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '8px 14px', margin: '2px 6px',
-                      borderRadius: 8, cursor: 'pointer',
-                      fontSize: 13, fontWeight: subActive ? 600 : 500,
-                      color: subActive ? currentDomain.color : '#424245',
-                      background: subActive ? `${currentDomain.color}12` : 'transparent',
-                      transition: 'all .18s ease',
-                    }}
-                    onMouseEnter={(e) => { if (!subActive) e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; }}
-                    onMouseLeave={(e) => { if (!subActive) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <span style={{
-                      width: 4, height: 4, borderRadius: '50%',
-                      background: subActive ? currentDomain.color : '#86868b',
-                      flexShrink: 0,
-                    }} />
                     {s.label}
-                  </div>
+                  </button>
                 );
-              })}
-            </div>
-          </Sider>
-        )}
+              })
+            )}
+          </div>
+        </aside>
+      )}
 
-        {/* ===== 内容区 ===== */}
-          <Content style={{
-            padding: 0, overflow: 'auto',
-            minHeight: 'calc(100vh - 52px)',
-            background: '#F5F5F7', /* 【UI 重构】浅灰底让白卡片浮起 */
-          }}>
-          <Outlet />
-        </Content>
-      </Layout>
+      <main className="om-main">
+        <Outlet />
+      </main>
 
-      <AideHost sidebarW={showSidebar ? 180 : 0} />
-    </Layout>
+      <AideHost sidebarW={leftOffset} />
+      <CmdKOmnibar open={cmdOpen} onOpenChange={setCmdOpen} />
+    </div>
   );
 }

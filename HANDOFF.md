@@ -11,15 +11,17 @@
 | 模块 | 路由 | 说明 |
 |---|---|---|
 | **Overview / 六域壳** | `/overview` 等 | CodeOps / DataOps / ModelOps / AgentOps / GovOps / Infra |
-| **AIDE** | `/aide` | iframe 嵌入 opencode Web UI（`AideHost` 常驻） |
+| **会话** | `/chat` | 原生聊天；OpenCode 优先 serve SSE；DSH 走 JSON-RPC 源码运行时（不是 Web UI） |
+| **看板** | `/board` | 任务看板；卡片绑定会话，列是工作流，`/api/v1/kanban` |
+| **AIDE** | `/infra/aide`（旧 `/aide`） | iframe 嵌入 opencode Web UI（`AideHost` 常驻，**未改**） |
 | **用户管理** | `/users` | 用户 / 角色 / 权限 / 审计 |
 | **DataOps** | `/dataops/*` | 仓库、智能数开、Wiki、元数据标注、本体建模 |
-| **AgentOps / Infra** | `/agentops/*` `/infra/*` | Agent/Skill 工厂、算力与容器 |
+| **AgentOps / Infra** | `/agentops/*` `/infra/*` | Agent/Skill 工厂；Infra「电脑」对齐 Yao computers |
 
-规模（2026-08-14）：
-- 后端 **10 个路由域**（auth/users/opencode/compute/agent-factory/skill-platform/dataops/wiki/metadata/ontology）、**40 张表**
-- 主题：**Apple Design**；依赖含 monaco / xterm / xyflow
-- 测试：`pytest` **85 passed**；`npm run build` / `npm run lint` 须 0 error
+规模（2026-09-01）：
+- 后端 **12 个路由域**（… + `harness` / `kanban`）、**51 张表**（含会话 + 看板）
+- 主题：**Yao Agents CUI**（Outfit + `#3371fc`）；依赖含 monaco / xterm / xyflow
+- 测试：`pytest` 以最新一次本地跑数为准；`npm run build` / `npm run lint` 须 0 error
 
 > 🗑️ 2026-08-03 曾大清理历史模块；之后已增量恢复 Compute/Agent/DataOps/Wiki/Ontology。  
 > **以 [AGENTS.md](./AGENTS.md) 与当前代码为准**，勿盲信下文旧「4 张表」残留描述（已逐步改写）。
@@ -295,7 +297,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 # 期望：healthy=true, embed_source="serve"
 
 # 后端测试
-cd backend && pytest -q          # 期望 85 passed
+cd backend && pytest -q
 
 # 前端构建 / lint
 cd frontend && npm run build     # 期望 0 error

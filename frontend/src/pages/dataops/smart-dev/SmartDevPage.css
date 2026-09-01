@@ -20,7 +20,7 @@
   --sd-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Text', system-ui, sans-serif;
   --sd-mono: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
 
-  height: calc(100vh - 52px);
+  height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;

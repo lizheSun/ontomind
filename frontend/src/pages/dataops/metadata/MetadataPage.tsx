@@ -640,7 +640,7 @@ export default function MetadataPage() {
       className="page-enter"
       style={{
         padding: 16,
-        height: 'calc(100vh - 52px)',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         gap: 12,

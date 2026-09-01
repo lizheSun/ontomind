@@ -1,138 +1,205 @@
 /**
- * 平台总览仪表盘 — 整合五个域的核心指标。
- * 【UI 重构】Apple 官网风格：浅色卡片 + 大片留白 + 分层文字。
- * 设计参照 PROTOTYPE-GUIDANCE.md §9.2 导航结构。
+ * 总览 — 对齐 Yao /dashboard/assistants：标题 + 筛选 + 专家卡片列表。
  */
-import { Space, Typography } from 'antd';
+import { useMemo, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button, Input } from 'antd';
 import {
-  ApiOutlined, CloudServerOutlined, CodeOutlined,
-  DatabaseOutlined, RobotOutlined, SafetyOutlined,
+  ApiOutlined,
+  AppstoreOutlined,
+  CodeOutlined,
+  DatabaseOutlined,
+  DesktopOutlined,
+  MessageOutlined,
+  RobotOutlined,
+  SafetyOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
+import { PageHeader } from '../../components/common/PageHeader';
+import { DOMAINS, domainHome } from '../../nav';
 
-const { Text } = Typography;
-
-interface MetricCard {
-  title: string;
-  value: string;
-  trend: string;
-  color: string;
-  icon: React.ReactNode;
-  status: 'up' | 'down' | 'stable' | 'warning';
-}
-
-const metrics: MetricCard[] = [
-  { title: 'AI 代码贡献率', value: '38.5%', trend: '+3.2%', color: '#0071e3', icon: <CodeOutlined />, status: 'up' },
-  { title: '数据资产', value: '1,247', trend: '+87', color: '#0a84ff', icon: <DatabaseOutlined />, status: 'up' },
-  { title: '模型服务', value: '12', trend: 'P99: 234ms', color: '#5b5bf6', icon: <RobotOutlined />, status: 'stable' },
-  { title: '活跃 Agent', value: '8', trend: '97.3% 成功率', color: '#ff9f0a', icon: <ApiOutlined />, status: 'up' },
-  { title: '安全合规', value: '合规', trend: '2 项待办', color: '#ff375f', icon: <SafetyOutlined />, status: 'warning' },
-  { title: '算力集群', value: '32', trend: '73% 利用率', color: '#34c759', icon: <CloudServerOutlined />, status: 'stable' },
-];
-
-/* 【UI 重构】Apple 风格卡片 hover 动效 */
-const cardHoverIn = (e: React.MouseEvent<HTMLDivElement>) => {
-  e.currentTarget.style.transform = 'translateY(-2px)';
-  e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.07)';
-  e.currentTarget.style.borderColor = 'rgba(0,0,0,0.16)';
+const ICONS: Record<string, ReactNode> = {
+  overview: <SearchOutlined />,
+  chat: <MessageOutlined />,
+  board: <AppstoreOutlined />,
+  codeops: <CodeOutlined />,
+  dataops: <DatabaseOutlined />,
+  modelops: <RobotOutlined />,
+  agentops: <ApiOutlined />,
+  govops: <SafetyOutlined />,
+  infra: <DesktopOutlined />,
 };
-const cardHoverOut = (e: React.MouseEvent<HTMLDivElement>) => {
-  e.currentTarget.style.transform = '';
-  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)';
-  e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)';
+
+const TAGS: Record<string, { label: string; bg: string; color: string }[]> = {
+  chat: [
+    { label: 'OpenCode', bg: '#e6f7ff', color: '#0958d9' },
+    { label: 'DSH', bg: '#f6ffed', color: '#389e0d' },
+  ],
+  board: [
+    { label: 'Kanban', bg: '#e6f7ff', color: '#0958d9' },
+    { label: 'Task', bg: '#fff7e6', color: '#d48806' },
+  ],
+  codeops: [
+    { label: 'Workspace', bg: '#fff7e6', color: '#d48806' },
+    { label: 'CI/CD', bg: '#e6f7ff', color: '#0958d9' },
+  ],
+  dataops: [
+    { label: 'Warehouse', bg: '#f6ffed', color: '#389e0d' },
+    { label: 'Ontology', bg: '#f9f0ff', color: '#531dab' },
+    { label: 'Wiki', bg: '#fff7e6', color: '#d48806' },
+  ],
+  modelops: [
+    { label: 'Gateway', bg: '#e6f7ff', color: '#0958d9' },
+    { label: 'Eval', bg: '#fff0f6', color: '#c41d7f' },
+  ],
+  agentops: [
+    { label: 'Agent', bg: '#fff7e6', color: '#d48806' },
+    { label: 'Skill', bg: '#e6fffb', color: '#08979c' },
+    { label: 'Deploy', bg: '#f6ffed', color: '#389e0d' },
+  ],
+  govops: [
+    { label: 'LLM', bg: '#e6f7ff', color: '#0958d9' },
+    { label: 'Security', bg: '#fff1f0', color: '#cf1322' },
+  ],
+  infra: [
+    { label: 'AIDE', bg: '#e6f7ff', color: '#0958d9' },
+    { label: 'Compute', bg: '#f6ffed', color: '#389e0d' },
+  ],
 };
+
+const COPY: Record<string, string> = {
+  chat: '原生会话。OpenCode 与 DeepSeek Harness 作为插件接入，输入框即可切换。',
+  board: '任务看板。卡片绑定会话，列是工作流，运行状态单独过滤。',
+  codeops: 'AI 辅助编码工作台与 CI/CD 流水线，把仓库、审查和发布放在同一处。',
+  dataops: '数据仓库、知识库、元数据标注与本体建模，从资产到语义层一条链。',
+  modelops: '实验对比、推理网关与模型监控，把服务质量和漂移看清楚。',
+  agentops: '设计 Agent / Skill，编排方案并发布到算力节点。',
+  govops: 'LLM 多套配置、资产目录、安全合规与成本归因。',
+  infra: '电脑、容器与 AIDE。节点是执行环境，容器即工作区。',
+};
+
+const FILTERS = ['全部', '会话', '看板', 'CodeOps', 'DataOps', 'ModelOps', 'AgentOps', 'GovOps', 'Infra'];
 
 export default function OverviewPage() {
+  const navigate = useNavigate();
+  const [q, setQ] = useState('');
+  const [tab, setTab] = useState('全部');
+
+  const cards = useMemo(() => {
+    return DOMAINS.filter((d) => d.key !== 'overview')
+      .filter((d) => (tab === '全部' ? true : d.label === tab))
+      .filter((d) => {
+        if (!q.trim()) return true;
+        const hay = `${d.label} ${d.hint} ${COPY[d.key] ?? ''}`.toLowerCase();
+        return hay.includes(q.trim().toLowerCase());
+      });
+  }, [q, tab]);
+
   return (
-    <div className="page-enter" style={{
-      padding: '40px 48px',
-      maxWidth: 1400,
-      margin: '0 auto',
-    }}>
-      {/* 【UI 重构】Hero 标题区：大留白 + SF 字体层级 */}
-      <Space direction="vertical" size={4} style={{ marginBottom: 40 }}>
-        <Text style={{
-          fontFamily: "var(--font-sans, -apple-system, 'SF Pro Display', sans-serif)",
-          fontSize: 36, fontWeight: 700,
-          color: '#1d1d1f', letterSpacing: '-0.03em',
-        }}>
-          OntoMind
-        </Text>
-        <Text style={{ fontSize: 15, color: '#6e6e73', fontWeight: 400, letterSpacing: '-0.01em' }}>
-          AI 领域工程平台 · CodeOps · DataOps · ModelOps · AgentOps · GovOps 五域融合
-        </Text>
-      </Space>
+    <div className="om-page page-enter">
+      <PageHeader
+        title={
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <MessageOutlined style={{ color: 'var(--accent)' }} />
+            工作台
+          </span>
+        }
+        desc="所有 Agent、工作区与数据能力集中在一处。从卡片进入对应域。"
+      />
 
-      {/* 【UI 重构】Bento Grid：Apple 浅色卡片 + 柔和阴影 */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-        gap: 20,
-      }}>
-        {metrics.map((m) => (
-          <div key={m.title} style={{
-            background: '#FFFFFF',
-            borderRadius: 18,
-            padding: '24px 26px',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-            border: '1px solid rgba(0,0,0,0.06)',
-            cursor: 'default',
-            transition: 'transform .22s ease, box-shadow .22s ease, border-color .22s ease',
-          }}
-          onMouseEnter={cardHoverIn}
-          onMouseLeave={cardHoverOut}
-          >
-            {/* 图标 + 状态指示 */}
-            <div style={{
-              display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-              marginBottom: 16,
-            }}>
-              <span style={{
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <Input
+          prefix={<SearchOutlined style={{ color: 'var(--text-tertiary)' }} />}
+          placeholder="搜索域、能力…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          style={{ flex: 1, height: 40 }}
+          allowClear
+        />
+        <Button type="primary" size="large" icon={<SearchOutlined />}>
+          搜索
+        </Button>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          gap: 4,
+          borderBottom: '1px solid var(--border-hairline)',
+          marginBottom: 16,
+          overflowX: 'auto',
+        }}
+      >
+        {FILTERS.map((f) => {
+          const active = tab === f;
+          return (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setTab(f)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: '8px 12px',
+                fontSize: 13,
+                cursor: 'pointer',
+                color: active ? 'var(--accent)' : 'var(--text-tertiary)',
+                fontWeight: active ? 500 : 400,
+                borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+                fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {f}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {cards.map((d) => (
+          <article key={d.key} className="om-card" style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 8,
+                background: 'var(--bg-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 fontSize: 22,
-                color: m.color,
-                opacity: 0.85,
-                transition: 'opacity .18s ease',
-              }}>{m.icon}</span>
-              {/* 状态段 */}
-              <span style={{
-                fontSize: 10.5, fontWeight: 600,
-                color: m.status === 'up' ? '#34c759'
-                  : m.status === 'down' ? '#ff3b30'
-                  : m.status === 'warning' ? '#ff9f0a'
-                  : '#86868b',
-              }}>
-                {m.status === 'up' && '↑ '}
-                {m.status === 'down' && '↓ '}
-                {m.status === 'up' && '增长'}
-                {m.status === 'down' && '下降'}
-                {m.status === 'stable' && '稳定'}
-                {m.status === 'warning' && '待处理'}
-              </span>
+                color: d.color,
+                flexShrink: 0,
+              }}
+            >
+              {ICONS[d.key]}
             </div>
-
-            {/* 数值 */}
-            <div style={{
-              fontSize: 32, fontWeight: 700,
-              color: '#1d1d1f',
-              fontFamily: "var(--font-sans, -apple-system, 'SF Pro Display', sans-serif)",
-              letterSpacing: '-0.02em',
-              marginBottom: 6,
-              lineHeight: 1.1,
-            }}>
-              {m.value}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{d.label}</div>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '8px 0' }}>
+                {(TAGS[d.key] ?? []).map((t) => (
+                  <span
+                    key={t.label}
+                    className="om-chip"
+                    style={{ background: t.bg, color: t.color }}
+                  >
+                    {t.label}
+                  </span>
+                ))}
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0 }}>
+                {COPY[d.key]}
+              </p>
+              <div style={{ marginTop: 12 }}>
+                <Button type="primary" size="small" icon={<MessageOutlined />} onClick={() => navigate(domainHome(d))}>
+                  进入
+                </Button>
+              </div>
             </div>
-
-            {/* 标题 */}
-            <div style={{
-              fontSize: 13, color: '#6e6e73', fontWeight: 500, marginBottom: 4,
-            }}>
-              {m.title}
-            </div>
-
-            {/* 趋势 */}
-            <div style={{ fontSize: 12, color: '#86868b' }}>
-              {m.trend}
-            </div>
-          </div>
+          </article>
         ))}
       </div>
     </div>

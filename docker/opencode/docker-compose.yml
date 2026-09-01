@@ -1,0 +1,84 @@
+version: '3.9'
+
+# OntoMind 专家团 · OpenCode 容器编排
+#
+# 用法：
+#   1. 复制 .env.example 为 .env，填入 ARK_API_KEY
+#   2. docker compose up -d
+#   3. 在 OntoMind 前端「算力调度 → Docker 服务」里对应端口即可
+#
+# 说明：
+#   - 每个专家一个容器，端口 4201 起递增
+#   - agent / skill 目录以 read-only 挂载宿主的 ~/.config/opencode
+#   - workspace 挂载各自独立目录，避免专家之间互相污染文件
+
+x-opencode-common: &opencode-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      OPENCODE_VERSION: ${OPENCODE_VERSION:-latest}
+  image: ontomind/opencode:${OPENCODE_VERSION:-latest}
+  restart: unless-stopped
+  environment: &opencode-env
+    ARK_API_KEY: ${ARK_API_KEY:-}
+    ARK_BASE_URL: ${ARK_BASE_URL:-https://ark.cn-beijing.volces.com/api/plan/v3}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+    OPENCODE_CORS: ${OPENCODE_CORS:-http://localhost:5173}
+  volumes:
+    # agent / skill 定义（read-only，由 OntoMind 后端写入宿主目录）
+    - ${HOME}/.config/opencode/agent:/root/.config/opencode/agent:ro
+    - ${HOME}/.config/opencode/skills:/root/.config/opencode/skills:ro
+
+services:
+  # 数据分析专家
+  oc-data-analyst:
+    <<: *opencode-common
+    container_name: ontomind-oc-data-analyst
+    ports:
+      - "4201:4096"
+    volumes:
+      - ${HOME}/.config/opencode/agent:/root/.config/opencode/agent:ro
+      - ${HOME}/.config/opencode/skills:/root/.config/opencode/skills:ro
+      - oc-ws-data-analyst:/workspace
+
+  # 前端专家
+  oc-frontend:
+    <<: *opencode-common
+    container_name: ontomind-oc-frontend
+    ports:
+      - "4202:4096"
+    volumes:
+      - ${HOME}/.config/opencode/agent:/root/.config/opencode/agent:ro
+      - ${HOME}/.config/opencode/skills:/root/.config/opencode/skills:ro
+      - oc-ws-frontend:/workspace
+
+  # 后端专家
+  oc-backend:
+    <<: *opencode-common
+    container_name: ontomind-oc-backend
+    ports:
+      - "4203:4096"
+    volumes:
+      - ${HOME}/.config/opencode/agent:/root/.config/opencode/agent:ro
+      - ${HOME}/.config/opencode/skills:/root/.config/opencode/skills:ro
+      - oc-ws-backend:/workspace
+
+  # 产品经理
+  oc-product-manager:
+    <<: *opencode-common
+    container_name: ontomind-oc-product-manager
+    ports:
+      - "4204:4096"
+    volumes:
+      - ${HOME}/.config/opencode/agent:/root/.config/opencode/agent:ro
+      - ${HOME}/.config/opencode/skills:/root/.config/opencode/skills:ro
+      - oc-ws-product-manager:/workspace
+
+volumes:
+  oc-ws-data-analyst:
+  oc-ws-frontend:
+  oc-ws-backend:
+  oc-ws-product-manager:

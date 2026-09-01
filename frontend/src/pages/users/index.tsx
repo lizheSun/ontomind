@@ -164,7 +164,7 @@ export default function UsersPage() {
   ];
 
   return (
-    <div>
+    <div className="om-page page-enter">
       <div
         style={{
           display: 'flex',
@@ -174,10 +174,10 @@ export default function UsersPage() {
         }}
       >
         <div>
-          <h2 style={{ color: '#e8eef5', fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>
+          <h2 className="om-page-title">
             用户管理
           </h2>
-          <p style={{ color: '#506380', margin: '4px 0 0', fontSize: 12 }}>
+          <p className="om-page-desc">
             管理系统用户账号与权限
           </p>
         </div>
@@ -199,14 +199,7 @@ export default function UsersPage() {
         </Space>
       </div>
 
-      <div
-        style={{
-          borderRadius: 14,
-          border: '1px solid rgba(255,255,255,0.06)',
-          background: 'linear-gradient(145deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.005) 100%)',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="om-card" style={{ padding: 0, overflow: 'hidden' }}>
         <Table<User>
           rowKey="id"
           columns={columns}

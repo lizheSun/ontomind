@@ -123,8 +123,8 @@ export default function AidePage() {
       // 把「为什么不能用 + 怎么修」一次说清，而不是笼统一句「不可用」
       const hint = !svc.host_port
         ? `容器内 ${svc.container_port} 端口没有映射到宿主，浏览器无法访问。` +
-          `请到「算力管理 → 容器」用「修改配置」给该端口加映射，或把服务改起在已映射的端口上。`
-        : svc.status_detail || '宿主访问不到，请到「算力管理 → 服务」页排查';
+          `请到「电脑 → 容器」用「修改配置」给该端口加映射，或把服务改起在已映射的端口上。`
+        : svc.status_detail || '宿主访问不到，请到「电脑 → 服务」页排查';
       message.warning(hint, 8);
       return;
     }
@@ -151,7 +151,7 @@ export default function AidePage() {
         message.warning(
           blocked
             ? `找到 ${oc.length} 个服务但都不可用。${blocked.container_name}：${blocked.status_detail ?? '宿主访问不到'}`
-            : `找到 ${oc.length} 个服务但都未在运行，请到「算力管理 → 服务」页启动`,
+            : `找到 ${oc.length} 个服务但都未在运行，请到「电脑 → 服务」页启动`,
         );
       } else {
         message.info('未发现任何容器内的 opencode 服务');
@@ -297,7 +297,7 @@ export default function AidePage() {
         pointerEvents: 'none', // 让 iframe 可点，只有工具条自己接事件
       }
     : {
-        height: 'calc(100vh - 52px)', /* 【UI 重构】同步顶栏高度 52 */
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         background: 'var(--paper-00, #fff)',
@@ -316,7 +316,7 @@ export default function AidePage() {
           gap: 12,
           padding: '0 12px',
           borderBottom: '1px solid var(--border-hairline, rgba(26,25,24,0.08))',
-          background: 'var(--paper-01, #fafaf7)',
+          background: 'var(--bg-surface)',
           pointerEvents: 'auto',
         }}
       >
@@ -324,11 +324,10 @@ export default function AidePage() {
           <CodeOutlined style={{ color: 'var(--accent, #0071e3)', fontSize: 14 }} />{/* 【UI 重构】Apple Blue */}
           <span
             style={{
-              fontFamily: "'Fraunces', var(--font-serif), serif",
+              fontFamily: 'var(--font-sans)',
               fontSize: 14,
-              fontWeight: 500,
-              fontStyle: 'italic',
-              color: 'var(--ink-100, #1a1918)',
+              fontWeight: 600,
+              color: 'var(--text-primary)',
             }}
           >
             AIDE
@@ -481,7 +480,7 @@ export default function AidePage() {
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   暂无已登记的 opencode 服务
                   <br />
-                  到「算力管理 → 服务」页启动或扫描发现
+                  到「电脑 → 服务」页启动或扫描发现
                 </Typography.Text>
               </div>
             }
@@ -679,8 +678,8 @@ export default function AidePage() {
                             </div>
                           ))}
                           <p style={{ margin: '6px 0 0', color: 'var(--ink-60, #605c56)' }}>
-                            两种修法：① 到「算力管理 → 容器」用「修改配置」把该容器端口映射到宿主；
-                            ② 到「算力管理 → 服务」用「启动服务」在<b>已映射的端口</b>上重起（会自动绑 0.0.0.0）。
+                            两种修法：① 到「电脑 → 容器」用「修改配置」把该容器端口映射到宿主；
+                            ② 到「电脑 → 服务」用「启动服务」在<b>已映射的端口</b>上重起（会自动绑 0.0.0.0）。
                           </p>
                         </div>
                       }

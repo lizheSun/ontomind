@@ -1,38 +1,58 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, message, App } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
-
+import {
+  UserOutlined,
+  LockOutlined,
+  MailOutlined,
+  MoonOutlined,
+  SunOutlined,
+  RocketOutlined,
+  LinkOutlined,
+  CloudOutlined,
+  CodeOutlined,
+  ApiOutlined,
+  DatabaseOutlined,
+  CheckCircleOutlined,
+} from '@ant-design/icons';
 import userService from '../services/user.service';
+import { BrandMark } from '../components/common/BrandMark';
+import { applyColorMode, readColorMode, setColorMode, type ColorMode } from '../theme';
 
-
-
-function formatApiError(err: any, fallback: string): string {
-  const detail = err?.response?.data?.detail;
+function formatApiError(err: unknown, fallback: string): string {
+  const e = err as { response?: { data?: { detail?: unknown; message?: string } }; code?: string; message?: string };
+  const detail = e?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
-  if (detail && typeof detail === 'object' && typeof detail.message === 'string') return detail.message;
-  const msg = err?.response?.data?.message;
+  if (detail && typeof detail === 'object' && 'message' in detail && typeof (detail as { message: unknown }).message === 'string') {
+    return String((detail as { message: string }).message);
+  }
+  const msg = e?.response?.data?.message;
   if (typeof msg === 'string') return msg;
-  if (!err?.response) {
+  if (!e?.response) {
     const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-    if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout'))
+    if (e?.code === 'ECONNABORTED' || e?.message?.includes('timeout'))
       return `请求超时（30s）。后端 ${base} 可能负载过高或卡住。`;
     return `连不上后端 ${base}（已自动重试 3 次）。请检查后端是否在跑。`;
   }
-  return err?.message || fallback;
+  return e?.message || fallback;
 }
 
 export default function Login() {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [mode, setMode] = useState<ColorMode>(() => readColorMode());
+  const authRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { notification } = App.useApp();
 
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 80);
-    return () => clearTimeout(t);
-  }, []);
+    applyColorMode(mode);
+  }, [mode]);
+
+  useEffect(() => {
+    if (showAuth) authRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [showAuth]);
 
   const handleLogin = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -42,11 +62,12 @@ export default function Login() {
       if (res.data.user) localStorage.setItem('user', JSON.stringify(res.data.user));
       message.success('登录成功');
       navigate('/');
-    } catch (err: any) {
+    } catch (err: unknown) {
       notification.error({
         message: '登录失败',
         description: <span style={{ whiteSpace: 'pre-line', fontSize: 12.5, lineHeight: 1.7 }}>{formatApiError(err, '请检查用户名和密码')}</span>,
-        placement: 'top', duration: 8,
+        placement: 'top',
+        duration: 8,
       });
     } finally {
       setLoading(false);
@@ -59,185 +80,145 @@ export default function Login() {
       await userService.register(values);
       message.success('注册成功，请登录');
       setActiveTab('login');
-    } catch (err: any) {
+    } catch (err: unknown) {
       notification.error({
         message: '注册失败',
         description: <span style={{ whiteSpace: 'pre-line', fontSize: 12.5, lineHeight: 1.7 }}>{formatApiError(err, '注册失败，请稍后重试')}</span>,
-        placement: 'top', duration: 8,
+        placement: 'top',
+        duration: 8,
       });
     } finally {
       setLoading(false);
     }
   };
 
-  /* 【UI 重构】Apple 登录页：纯白画布 + 大面积留白 + SF 字体层级 + Apple Blue 主色 */
-
-  const tabBtnStyle = (active: boolean): React.CSSProperties => ({
-    flex: 1,
-    padding: '12px 0',
-    fontSize: 14,
-    fontWeight: active ? 600 : 400,
-    color: active ? '#1d1d1f' : '#86868b',
-    background: 'transparent',
-    border: 'none',
-    borderBottom: active ? '2px solid #0071e3' : '2px solid transparent',
-    cursor: 'pointer',
-    transition: 'all .18s ease',
-    letterSpacing: '-0.01em',
-  });
-
-  const inputStyle: React.CSSProperties = {
-    height: 48,
-    borderRadius: 12,
-    fontSize: 15,
-    border: '1px solid rgba(0,0,0,0.12)',
-    background: '#FFFFFF',
-    padding: '0 16px',
+  const toggleTheme = () => {
+    const next = mode === 'dark' ? 'light' : 'dark';
+    setColorMode(next);
+    setMode(next);
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#F5F5F7', /* 【UI 重构】Apple 浅灰底 */
-      padding: 24,
-    }}>
-      <div style={{
-        width: 380, maxWidth: '100%',
-        opacity: mounted ? 1 : 0,
-        transform: mounted ? 'translateY(0)' : 'translateY(8px)',
-        transition: 'opacity .7s ease, transform .7s ease',
-      }}>
-        {/* 【UI 重构】Logo：SF Pro Display 粗体 + Apple Blue 点缀 */}
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <div style={{
-            fontFamily: "var(--font-sans, -apple-system, 'SF Pro Display', sans-serif)",
-            fontSize: 34, fontWeight: 700,
-            color: '#1d1d1f', letterSpacing: '-0.03em',
-            lineHeight: 1.1, marginBottom: 6,
-          }}>
-            OntoMind
-          </div>
-          <div style={{
-            fontSize: 13, color: '#86868b', fontFamily: "var(--font-sans, -apple-system, sans-serif)",
-            fontWeight: 400, letterSpacing: '0.02em',
-          }}>
-            AI 领域工程平台
-          </div>
+    <div className="om-welcome">
+      <div className="om-welcome-bar">
+        <button type="button" className="om-rail-item" onClick={toggleTheme} aria-label="切换主题" style={{ width: 30, height: 30 }}>
+          {mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+        </button>
+      </div>
+
+      <header className="om-welcome-hero">
+        <div className="om-welcome-logo-wrap">
+          <BrandMark size={48} />
         </div>
+        <h1 className="om-welcome-title">欢迎使用 OntoMind</h1>
+        <p className="om-welcome-sub">把数据、Agent 与算力放在一处，随时待命。</p>
+        <div className="om-welcome-actions">
+          <button type="button" className="om-pill om-pill-primary" onClick={() => setShowAuth(true)}>
+            <RocketOutlined /> 开始使用
+          </button>
+          <button
+            type="button"
+            className="om-pill om-pill-ghost"
+            onClick={() => document.getElementById('om-welcome-cards')?.scrollIntoView({ behavior: 'smooth' })}
+          >
+            <LinkOutlined /> 了解平台
+          </button>
+        </div>
+      </header>
 
-        {/* 【UI 重构】Apple 风格卡片容器：白底 + 柔和阴影 + 大圆角 */}
-        <div style={{
-          background: '#FFFFFF',
-          borderRadius: 22,
-          padding: '28px 24px 22px',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.05)',
-          border: '1px solid rgba(0,0,0,0.06)',
-        }}>
-          {/* Tab 切换 */}
-          <div style={{ display: 'flex', marginBottom: 24 }}>
-            <button style={tabBtnStyle(activeTab === 'login')} onClick={() => setActiveTab('login')}>
-              登录
-            </button>
-            <button style={tabBtnStyle(activeTab === 'register')} onClick={() => setActiveTab('register')}>
-              注册
-            </button>
+      {showAuth && (
+        <div ref={authRef} className="om-welcome-auth">
+          <div style={{ display: 'flex', marginBottom: 20, borderBottom: '1px solid var(--border-hairline)' }}>
+            {(['login', 'register'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  flex: 1,
+                  padding: '10px 0',
+                  fontSize: 14,
+                  fontWeight: activeTab === tab ? 500 : 400,
+                  color: activeTab === tab ? 'var(--accent)' : 'var(--text-tertiary)',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {tab === 'login' ? '登录' : '注册'}
+              </button>
+            ))}
           </div>
-
           {activeTab === 'login' ? (
             <Form onFinish={handleLogin} size="large" layout="vertical">
               <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]} style={{ marginBottom: 14 }}>
-                <Input
-                  prefix={<UserOutlined style={{ color: '#86868b' }} />}
-                  placeholder="用户名"
-                  style={inputStyle}
-                />
+                <Input prefix={<UserOutlined style={{ color: 'var(--text-tertiary)' }} />} placeholder="用户名" />
               </Form.Item>
-              <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]} style={{ marginBottom: 24 }}>
-                <Input.Password
-                  prefix={<LockOutlined style={{ color: '#86868b' }} />}
-                  placeholder="密码"
-                  style={inputStyle}
-                />
+              <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]} style={{ marginBottom: 20 }}>
+                <Input.Password prefix={<LockOutlined style={{ color: 'var(--text-tertiary)' }} />} placeholder="密码" />
               </Form.Item>
-              <Button type="primary" htmlType="submit" loading={loading} block style={{
-                height: 48, borderRadius: 12, fontSize: 15, fontWeight: 600,
-                letterSpacing: '-0.01em',
-              }}>
-                登录
+              <Button type="primary" htmlType="submit" loading={loading} block size="large">
+                继续
               </Button>
-              <div style={{ textAlign: 'center', marginTop: 18 }}>
-                <a onClick={() => setActiveTab('register')} style={{
-                  color: '#0071e3', fontSize: 13, cursor: 'pointer', fontWeight: 500,
-                  transition: 'color .18s ease',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.color = '#0077ED'}
-                onMouseLeave={(e) => e.currentTarget.style.color = '#0071e3'}
-                >还没有账号？创建新账号</a>
-              </div>
             </Form>
           ) : (
             <Form onFinish={handleRegister} size="large" layout="vertical">
-              <Form.Item name="username" rules={[
-                { required: true, message: '请输入用户名' },
-                { min: 3, message: '用户名至少3个字符' },
-              ]} style={{ marginBottom: 14 }}>
-                <Input
-                  prefix={<UserOutlined style={{ color: '#86868b' }} />}
-                  placeholder="用户名"
-                  style={inputStyle}
-                />
+              <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }, { min: 3, message: '用户名至少3个字符' }]} style={{ marginBottom: 14 }}>
+                <Input prefix={<UserOutlined style={{ color: 'var(--text-tertiary)' }} />} placeholder="用户名" />
               </Form.Item>
-              <Form.Item name="email" rules={[
-                { required: true, message: '请输入邮箱' },
-                { type: 'email', message: '邮箱格式不正确' },
-              ]} style={{ marginBottom: 14 }}>
-                <Input
-                  prefix={<MailOutlined style={{ color: '#86868b' }} />}
-                  placeholder="邮箱"
-                  style={inputStyle}
-                />
+              <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '邮箱格式不正确' }]} style={{ marginBottom: 14 }}>
+                <Input prefix={<MailOutlined style={{ color: 'var(--text-tertiary)' }} />} placeholder="邮箱" />
               </Form.Item>
-              <Form.Item name="password" rules={[
-                { required: true, message: '请输入密码' },
-                { min: 6, message: '密码至少6个字符' },
-              ]} style={{ marginBottom: 24 }}>
-                <Input.Password
-                  prefix={<LockOutlined style={{ color: '#86868b' }} />}
-                  placeholder="密码"
-                  style={inputStyle}
-                />
+              <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }, { min: 6, message: '密码至少6个字符' }]} style={{ marginBottom: 20 }}>
+                <Input.Password prefix={<LockOutlined style={{ color: 'var(--text-tertiary)' }} />} placeholder="密码" />
               </Form.Item>
-              <Button type="primary" htmlType="submit" loading={loading} block style={{
-                height: 48, borderRadius: 12, fontSize: 15, fontWeight: 600,
-                letterSpacing: '-0.01em',
-              }}>
+              <Button type="primary" htmlType="submit" loading={loading} block size="large">
                 创建账号
               </Button>
-              <div style={{ textAlign: 'center', marginTop: 18 }}>
-                <a onClick={() => setActiveTab('login')} style={{
-                  color: '#0071e3', fontSize: 13, cursor: 'pointer', fontWeight: 500,
-                  transition: 'color .18s ease',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.color = '#0077ED'}
-                onMouseLeave={(e) => e.currentTarget.style.color = '#0071e3'}
-                >已有账号？登录</a>
-              </div>
             </Form>
           )}
         </div>
+      )}
 
-        {/* 【UI 重构】版本号：极淡色，克制存在感 */}
-        <div style={{ textAlign: 'center', marginTop: 28 }}>
-          <span style={{
-            color: '#86868b', fontSize: 11,
-            fontFamily: "var(--font-sans, -apple-system, sans-serif)",
-            letterSpacing: '0.04em',
-          }}>v0.1.0</span>
-        </div>
+      <div className="om-welcome-banner">
+        <CloudOutlined style={{ color: 'var(--accent)', fontSize: 18 }} />
+        <span style={{ flex: 1 }}>
+          OntoMind 工作台：编码、数据、Agent 与算力，<strong>统一账号</strong>进入。
+        </span>
+        <button type="button" className="om-welcome-badge om-welcome-badge-rec" style={{ border: 'none', cursor: 'pointer', height: 28, padding: '0 12px' }} onClick={() => { setShowAuth(true); setActiveTab('register'); }}>
+          注册获取
+        </button>
       </div>
+
+      <div id="om-welcome-cards" className="om-welcome-cards">
+        <article className="om-welcome-card om-welcome-card--primary">
+          <span className="om-welcome-badge om-welcome-badge-rec">推荐</span>
+          <CodeOutlined style={{ fontSize: 36, color: 'var(--accent)' }} />
+          <h3>AIDE</h3>
+          <p>OpenCode 编码环境，容器即工作区，随时指挥你的 AI 写代码。</p>
+          <Button type="primary" block onClick={() => setShowAuth(true)}>开始使用</Button>
+        </article>
+        <article className="om-welcome-card">
+          <span className="om-welcome-badge om-welcome-badge-req">工作台</span>
+          <ApiOutlined style={{ fontSize: 36, color: 'var(--accent)' }} />
+          <h3>AgentOps</h3>
+          <p>设计 Agent / Skill，编排方案并发布到算力节点。</p>
+          <Button block onClick={() => setShowAuth(true)}>了解更多</Button>
+        </article>
+        <article className="om-welcome-card">
+          <span className="om-welcome-badge om-welcome-badge-ok"><CheckCircleOutlined /> 数据层</span>
+          <DatabaseOutlined style={{ fontSize: 36, color: '#6c757d' }} />
+          <h3>DataOps</h3>
+          <p>仓库、知识库、元数据标注与本体建模，从资产到语义层。</p>
+          <div style={{ color: '#00c853', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <CheckCircleOutlined /> 已接入
+          </div>
+        </article>
+      </div>
+
+      <div className="om-welcome-foot">OntoMind</div>
     </div>
   );
 }

@@ -102,7 +102,7 @@ export default function KnowledgeBasePage() {
   const treeDocs = useMemo(() => docs.filter((d) => !d.parent_id || !docs.some((x) => x.id === d.parent_id)), [docs]);
 
   return (
-    <div className="page-enter" style={{ height: 'calc(100vh - 52px)', display: 'flex', flexDirection: 'column', background: 'var(--bg-page, #F5F5F7)' }}>
+    <div className="page-enter" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-root)' }}>
       <div
         style={{
           height: 48,

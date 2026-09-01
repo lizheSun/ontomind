@@ -47,6 +47,8 @@ def test_openapi_exposes_expected_domains(anon_client):
         "wiki",
         "metadata",
         "ontology",
+        "harness",
+        "kanban",
     }, f"实际: {v1_domains}"
 
 
@@ -181,4 +183,6 @@ def test_orm_has_expected_tables():
         "ontologies", "ontology_build_jobs",
         "ontology_object_types", "ontology_properties", "ontology_link_types",
         "ontology_mappings", "ontology_metrics", "ontology_cqs", "ontology_versions",
+        "harness_sessions", "harness_messages",
+        "kanban_boards", "kanban_columns", "kanban_tasks",
     }

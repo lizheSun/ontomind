@@ -16,18 +16,16 @@ import {
   Alert,
   App,
   Button,
-  Empty,
   Modal,
   Popconfirm,
   Select,
   Space,
   Switch,
-  Table,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd';
 import {
+  ApiOutlined,
   CloudServerOutlined,
   DeleteOutlined,
   ExportOutlined,
@@ -37,14 +35,10 @@ import {
   SearchOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
+import { EmptyState } from '../common/EmptyState';
 import useComputeStore, { extractErrMsg } from '../../stores/computeStore';
 import type { ContainerInfo, ContainerServiceInfo } from '../../types/compute';
-import {
-  serviceKindLabel,
-  serviceStatusColor,
-  serviceStatusLabel,
-} from '../../types/compute';
+import { serviceKindLabel, serviceStatusLabel } from '../../types/compute';
 import {
   deleteContainerService,
   discoverContainerServices,
@@ -54,21 +48,9 @@ import {
   refreshContainerServices,
   stopContainerService,
 } from '../../services/compute.service';
+import { AddrFoot, FilterTabs, HostCard, StatusPill, timeAgo } from './computerUi';
 
 const { Text } = Typography;
-
-/** 把时间戳渲染成「X 前」，让用户一眼看出状态新鲜度 */
-function timeAgo(iso?: string | null): string {
-  if (!iso) return '从未探测';
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '—';
-  const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (sec < 10) return '刚刚';
-  if (sec < 60) return `${sec} 秒前`;
-  if (sec < 3600) return `${Math.floor(sec / 60)} 分钟前`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)} 小时前`;
-  return `${Math.floor(sec / 86400)} 天前`;
-}
 
 /** 探测超过 60s 视为「可能已过期」，提示用户刷新 */
 function isStale(iso?: string | null): boolean {
@@ -249,214 +231,51 @@ export default function ServicesPanel() {
     return { total: services.length, running, aide, problem };
   }, [services]);
 
-  const columns: ColumnsType<ContainerServiceInfo> = [
-    {
-      title: '服务',
-      key: 'name',
-      width: 190,
-      render: (_, r) => (
-        <Space orientation="vertical" size={0}>
-          <Space size={6}>
-            <Text strong>{r.name}</Text>
-            {r.is_aide_source && (
-              <Tooltip title="AIDE 页面可以选择这个服务作为嵌入源">
-                <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
-                  AIDE
-                </Tag>
-              </Tooltip>
-            )}
-          </Space>
-          <Text type="secondary" style={{ fontSize: 11 }}>
-            {serviceKindLabel[r.kind]}
-          </Text>
-        </Space>
-      ),
-    },
-    {
-      title: '所在容器',
-      key: 'container',
-      width: 180,
-      render: (_, r) => (
-        <Space orientation="vertical" size={0}>
-          <Text style={{ fontSize: 12.5 }}>{r.container_name}</Text>
-          <Text type="secondary" style={{ fontSize: 10.5 }}>
-            {r.node_name} · {r.container_id.slice(0, 12)}
-          </Text>
-        </Space>
-      ),
-    },
-    {
-      title: '端口（宿主→容器）',
-      key: 'port',
-      width: 150,
-      render: (_, r) => (
-        <Space orientation="vertical" size={0}>
-          <Text style={{ fontFamily: 'monospace', fontSize: 12 }}>
-            {r.host_port ? `${r.host_port} → ${r.container_port}` : `— → ${r.container_port}`}
-          </Text>
-          {r.bind_address && (
-            <Text
-              type={r.bind_address === '127.0.0.1' ? 'danger' : 'secondary'}
-              style={{ fontSize: 10.5, fontFamily: 'monospace' }}
-            >
-              bind {r.bind_address}
-            </Text>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: '状态',
-      key: 'status',
-      width: 190,
-      render: (_, r) => {
-        const stale = isStale(r.last_checked_at);
-        return (
-          <Space orientation="vertical" size={2}>
-            <Space size={6}>
-              <Tag color={serviceStatusColor[r.status]} style={{ margin: 0 }}>
-                {serviceStatusLabel[r.status]}
-              </Tag>
-              {r.status === 'running' && !r.host_reachable && (
-                <Tooltip title={r.status_detail || '宿主访问不到'}>
-                  <WarningOutlined style={{ color: '#faad14' }} />
-                </Tooltip>
-              )}
-            </Space>
-            <Tooltip title={r.last_checked_at ? new Date(r.last_checked_at).toLocaleString() : ''}>
-              <Text
-                type={stale ? 'warning' : 'secondary'}
-                style={{ fontSize: 10.5 }}
-              >
-                探测于 {timeAgo(r.last_checked_at)}
-                {stale && ' · 可能已过期'}
-              </Text>
-            </Tooltip>
-          </Space>
-        );
-      },
-    },
-    {
-      title: '说明',
-      dataIndex: 'status_detail',
-      ellipsis: true,
-      render: (v: string | null) =>
-        v ? (
-          <Tooltip title={v} styles={{ root: { maxWidth: 420 } }}>
-            <Text style={{ fontSize: 11.5, color: 'var(--ink-60, #605c56)' }}>{v}</Text>
-          </Tooltip>
-        ) : (
-          <Text type="secondary" style={{ fontSize: 11.5 }}>
-            —
-          </Text>
-        ),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 170,
-      fixed: 'right',
-      render: (_, r) => {
-        const busy = busyId === r.id;
-        return (
-          <Space size={2}>
-            <Tooltip title="重新探测该服务状态">
-              <Button
-                size="small"
-                type="text"
-                loading={busy}
-                icon={<ReloadOutlined />}
-                onClick={() => rowAction(r.id, '探测', () => refreshContainerService(r.id))}
-              />
-            </Tooltip>
-            <Tooltip title={r.access_url ? `打开 ${r.access_url}` : '无宿主访问地址'}>
-              <Button
-                size="small"
-                type="text"
-                icon={<ExportOutlined />}
-                disabled={!r.access_url || !r.host_reachable}
-                onClick={() => window.open(r.access_url!, '_blank', 'noopener')}
-              />
-            </Tooltip>
-            <Tooltip title="停止容器内该服务进程">
-              <Popconfirm
-                title={`停止 ${r.name}？`}
-                description="仅停止容器内进程，登记会保留，之后可再启动"
-                onConfirm={() => rowAction(r.id, '停止', () => stopContainerService(r.id))}
-              >
-                <Button
-                  size="small"
-                  type="text"
-                  danger
-                  loading={busy}
-                  icon={<PoweroffOutlined />}
-                  disabled={r.status !== 'running'}
-                />
-              </Popconfirm>
-            </Tooltip>
-            <Tooltip title="删除登记（不影响容器内进程）">
-              <Popconfirm
-                title="删除这条服务登记？"
-                description="只是从平台移除记录，容器里的进程不会被停止"
-                onConfirm={() => rowAction(r.id, '删除登记', () => deleteContainerService(r.id))}
-              >
-                <Button size="small" type="text" danger loading={busy} icon={<DeleteOutlined />} />
-              </Popconfirm>
-            </Tooltip>
-          </Space>
-        );
-      },
-    },
-  ];
+  const [filter, setFilter] = useState<'running' | 'stopped' | 'all'>('all');
+
+  const visible = useMemo(() => {
+    return services.filter((s) => {
+      if (filter === 'running') return s.status === 'running';
+      if (filter === 'stopped') return s.status !== 'running';
+      return true;
+    });
+  }, [services, filter]);
+
+  const pillTone = (s: ContainerServiceInfo): 'ok' | 'off' | 'warn' => {
+    if (s.status === 'running' && !s.host_reachable) return 'warn';
+    if (s.status === 'running') return 'ok';
+    return 'off';
+  };
 
   return (
     <div>
-      {/* 工具条 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 12,
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Space size={12} wrap>
-          <Text style={{ fontSize: 12, color: 'var(--ink-60, #605c56)' }}>
-            共 {stats.total} 个服务 · 运行中 {stats.running} · 可作 AIDE 源 {stats.aide}
-            {stats.problem > 0 && (
-              <Text type="warning" style={{ fontSize: 12 }}>
-                {' '}
-                · {stats.problem} 个宿主访问不到
-              </Text>
-            )}
-          </Text>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <Space size={4}>
+          <Switch size="small" checked={autoRefresh} onChange={setAutoRefresh} />
+          <Text style={{ fontSize: 12 }}>15s 自动刷新</Text>
         </Space>
-        <Space size={8}>
-          <Space size={4}>
-            <Switch size="small" checked={autoRefresh} onChange={setAutoRefresh} />
-            <Text style={{ fontSize: 12 }}>15s 自动刷新</Text>
-          </Space>
-          <Tooltip title="扫描所有容器，把已在跑但未登记的服务补录进来">
-            <Button size="small" icon={<SearchOutlined />} loading={loading} onClick={doDiscover}>
-              扫描发现
-            </Button>
-          </Tooltip>
-          <Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={doRefreshAll}>
-            刷新状态
+        <Tooltip title="扫描所有容器，把已在跑但未登记的服务补录进来">
+          <Button icon={<SearchOutlined />} loading={loading} onClick={() => void doDiscover()}>
+            扫描发现
           </Button>
-          <Button
-            type="primary"
-            size="small"
-            icon={<PlayCircleOutlined />}
-            onClick={openLaunch}
-            disabled={!selectedNode}
-          >
-            启动服务
-          </Button>
-        </Space>
+        </Tooltip>
+        <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void doRefreshAll()}>
+          刷新
+        </Button>
+        <Button type="primary" icon={<PlayCircleOutlined />} onClick={openLaunch} disabled={!selectedNode}>
+          添加服务
+        </Button>
       </div>
+
+      <FilterTabs
+        value={filter}
+        onChange={(k) => setFilter(k as typeof filter)}
+        items={[
+          { key: 'running', label: '运行中', count: stats.running },
+          { key: 'stopped', label: '已停止', count: stats.total - stats.running },
+          { key: 'all', label: '全部', count: stats.total },
+        ]}
+      />
 
       {stats.problem > 0 && (
         <Alert
@@ -469,31 +288,102 @@ export default function ServicesPanel() {
         />
       )}
 
-      <Table<ContainerServiceInfo>
-        size="middle"
-        rowKey="id"
-        columns={columns}
-        dataSource={services}
-        loading={loading}
-        pagination={false}
-        scroll={{ x: 1080 }}
-        locale={{
-          emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <span>
-                  暂无已登记的服务
-                  <br />
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    点「启动服务」在容器里拉起 opencode，或点「扫描发现」把已在跑的服务补录进来
-                  </Text>
-                </span>
-              }
-            />
-          ),
-        }}
-      />
+      {visible.length === 0 ? (
+        <EmptyState
+          title="暂无服务"
+          description="点「添加服务」在容器里拉起 opencode，或点「扫描发现」把已在跑的服务补录进来。"
+          action={
+            <Button type="primary" icon={<PlayCircleOutlined />} onClick={openLaunch} disabled={!selectedNode}>
+              添加服务
+            </Button>
+          }
+        />
+      ) : (
+        <div className="om-host-list">
+          {visible.map((r) => {
+            const busy = busyId === r.id;
+            const stale = isStale(r.last_checked_at);
+            const port = r.host_port ? `${r.host_port} → ${r.container_port}` : `— → ${r.container_port}`;
+            return (
+              <HostCard
+                key={r.id}
+                glyph={<ApiOutlined />}
+                title={
+                  <span>
+                    {r.name}
+                    {r.is_aide_source ? (
+                      <span className="om-chip" style={{ marginLeft: 8, background: 'var(--accent-tint)', color: 'var(--accent)' }}>
+                        AIDE
+                      </span>
+                    ) : null}
+                  </span>
+                }
+                subtitle={`${serviceKindLabel[r.kind]} · ${r.container_name}`}
+                pill={
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {r.status === 'running' && !r.host_reachable && (
+                      <Tooltip title={r.status_detail || '宿主访问不到'}>
+                        <WarningOutlined style={{ color: 'var(--warning)' }} />
+                      </Tooltip>
+                    )}
+                    <StatusPill tone={pillTone(r)} label={serviceStatusLabel[r.status]} />
+                  </span>
+                }
+                foot={
+                  <AddrFoot
+                    addr={port}
+                    tag={r.node_name}
+                    when={`探测于 ${timeAgo(r.last_checked_at)}${stale ? ' · 可能已过期' : ''}`}
+                  />
+                }
+                actions={
+                  <Space size={2}>
+                    <Tooltip title="重新探测">
+                      <Button
+                        size="small"
+                        type="text"
+                        loading={busy}
+                        icon={<ReloadOutlined />}
+                        onClick={() => void rowAction(r.id, '探测', () => refreshContainerService(r.id))}
+                      />
+                    </Tooltip>
+                    <Tooltip title={r.access_url ? `打开 ${r.access_url}` : '无宿主访问地址'}>
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<ExportOutlined />}
+                        disabled={!r.access_url || !r.host_reachable}
+                        onClick={() => window.open(r.access_url!, '_blank', 'noopener')}
+                      />
+                    </Tooltip>
+                    <Popconfirm
+                      title={`停止 ${r.name}？`}
+                      description="仅停止容器内进程，登记会保留"
+                      onConfirm={() => void rowAction(r.id, '停止', () => stopContainerService(r.id))}
+                    >
+                      <Button
+                        size="small"
+                        type="text"
+                        danger
+                        loading={busy}
+                        icon={<PoweroffOutlined />}
+                        disabled={r.status !== 'running'}
+                      />
+                    </Popconfirm>
+                    <Popconfirm
+                      title="删除这条服务登记？"
+                      description="只是从平台移除记录，容器里的进程不会被停止"
+                      onConfirm={() => void rowAction(r.id, '删除登记', () => deleteContainerService(r.id))}
+                    >
+                      <Button size="small" type="text" danger loading={busy} icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  </Space>
+                }
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* 启动服务弹窗 */}
       <Modal
@@ -603,7 +493,7 @@ export default function ServicesPanel() {
           <Space size={6}>
             <CloudServerOutlined style={{ color: '#8c8c8c' }} />
             <Text type="secondary" style={{ fontSize: 12 }}>
-              未选择节点，「启动服务」不可用。请先到「节点管理」选一个节点。
+              未选择节点，「添加服务」不可用。请先到「电脑」页选一台机器。
             </Text>
           </Space>
         </div>

@@ -960,3 +960,73 @@ CREATE TABLE wiki_spaces (
 	PRIMARY KEY (id)
 )COMMENT='Wiki 空间'
 
+CREATE TABLE harness_sessions (
+	user_id INTEGER NOT NULL,
+	title VARCHAR(256) NOT NULL,
+	plugin_id VARCHAR(32) NOT NULL,
+	plugin_session_id VARCHAR(128),
+	workspace_path VARCHAR(1024) NOT NULL,
+	id INTEGER NOT NULL COMMENT '主键ID' AUTO_INCREMENT,
+	created_at DATETIME COMMENT '创建时间' DEFAULT now(),
+	updated_at DATETIME COMMENT '更新时间',
+	PRIMARY KEY (id),
+	FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+)COMMENT='统一会话（OpenCode / DSH 插件）'
+
+CREATE TABLE harness_messages (
+	session_id INTEGER NOT NULL,
+	role VARCHAR(16) NOT NULL,
+	parts_json JSON NOT NULL,
+	error_text TEXT,
+	id INTEGER NOT NULL COMMENT '主键ID' AUTO_INCREMENT,
+	created_at DATETIME COMMENT '创建时间' DEFAULT now(),
+	updated_at DATETIME COMMENT '更新时间',
+	PRIMARY KEY (id),
+	FOREIGN KEY(session_id) REFERENCES harness_sessions (id) ON DELETE CASCADE
+)COMMENT='统一会话消息（parts JSON）'
+
+CREATE TABLE kanban_boards (
+	user_id INTEGER NOT NULL,
+	name VARCHAR(128) NOT NULL,
+	icon VARCHAR(32),
+	color VARCHAR(20),
+	position INTEGER NOT NULL,
+	id INTEGER NOT NULL COMMENT '主键ID' AUTO_INCREMENT,
+	created_at DATETIME COMMENT '创建时间' DEFAULT now(),
+	updated_at DATETIME COMMENT '更新时间',
+	PRIMARY KEY (id),
+	FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
+)COMMENT='任务看板'
+
+CREATE TABLE kanban_columns (
+	board_id INTEGER NOT NULL,
+	name VARCHAR(128) NOT NULL,
+	icon VARCHAR(32),
+	color VARCHAR(20),
+	position INTEGER NOT NULL,
+	collapsed BOOLEAN NOT NULL,
+	id INTEGER NOT NULL COMMENT '主键ID' AUTO_INCREMENT,
+	created_at DATETIME COMMENT '创建时间' DEFAULT now(),
+	updated_at DATETIME COMMENT '更新时间',
+	PRIMARY KEY (id),
+	FOREIGN KEY(board_id) REFERENCES kanban_boards (id) ON DELETE CASCADE
+)COMMENT='看板列'
+
+CREATE TABLE kanban_tasks (
+	board_id INTEGER NOT NULL,
+	column_id INTEGER,
+	session_id INTEGER,
+	title VARCHAR(256) NOT NULL,
+	plugin_id VARCHAR(32) NOT NULL,
+	run_status VARCHAR(16) NOT NULL,
+	position INTEGER NOT NULL,
+	summary TEXT,
+	id INTEGER NOT NULL COMMENT '主键ID' AUTO_INCREMENT,
+	created_at DATETIME COMMENT '创建时间' DEFAULT now(),
+	updated_at DATETIME COMMENT '更新时间',
+	PRIMARY KEY (id),
+	FOREIGN KEY(board_id) REFERENCES kanban_boards (id) ON DELETE CASCADE,
+	FOREIGN KEY(column_id) REFERENCES kanban_columns (id) ON DELETE SET NULL,
+	FOREIGN KEY(session_id) REFERENCES harness_sessions (id) ON DELETE SET NULL
+)COMMENT='看板任务（可绑定统一会话）'
+

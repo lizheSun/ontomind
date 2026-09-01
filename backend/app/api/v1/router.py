@@ -4,6 +4,8 @@
 - auth      认证（登录 / 注册 / me）
 - users     用户管理（用户 / 角色 / 权限 / 审计）
 - opencode  AIDE：opencode Web UI 探活 + 启停
+- harness   统一会话：OpenCode / DSH 插件 SSE
+- kanban    任务看板：列 = 工作流，卡片可绑 harness session
 - compute   算力管理：节点管理 + Docker 操作 + 容器终端 + 容器服务登记
 - agent-factory  Agent 工厂：Agent/Skill 模板、Loop 编排、发布到容器
 
@@ -24,7 +26,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import agent_factory, auth, compute, dataops, metadata, ontology, opencode, skill_platform, users, wiki
+from app.api.v1 import agent_factory, auth, compute, dataops, harness, kanban, metadata, ontology, opencode, skill_platform, users, wiki
 
 api_router = APIRouter()
 
@@ -34,6 +36,12 @@ api_router.include_router(users.router, prefix="/users", tags=["用户管理"])
 
 # --- AIDE（opencode Web UI 嵌入）---
 api_router.include_router(opencode.router, prefix="/opencode", tags=["AIDE / OpenCode"])
+
+# --- 统一会话（OpenCode / DSH 插件，不走 AIDE iframe）---
+api_router.include_router(harness.router, tags=["统一会话"])
+
+# --- 任务看板 ---
+api_router.include_router(kanban.router, tags=["任务看板"])
 
 # --- 算力管理（节点 + Docker + 容器终端）---
 api_router.include_router(compute.router, tags=["算力管理"])
