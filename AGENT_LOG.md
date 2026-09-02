@@ -5,7 +5,7 @@
 
 ---
 
-## 当前快照（2026-09-01）
+## 当前快照（2026-09-02）
 
 ### 产品现在是什么
 
@@ -15,13 +15,13 @@ OntoMind = **AI Agent 工作平台** + DataOps/本体语义层。落地页 `/ove
 |---|---|---|
 | 会话 | `/chat` | 原生聊天。OpenCode / DSH 插件。**不是** AIDE iframe |
 | 看板 | `/board` | 卡片 = 会话任务；列是工作流；点卡片本页打开对话层 |
-| AIDE | `/infra/aide` | iframe 嵌 opencode Web UI（`AideHost` 常驻，别往路由里塞） |
+| AIDE | `/infra/aide` | iframe 嵌 OpenCode 或 DeepSeek Harness Web（`AideHost` 常驻，别往路由里塞） |
 | 用户 | `/users` | 用户 / 角色 / 权限 |
 | DataOps | `/dataops/*` | 数仓、智能数开、Wiki、元数据、本体 |
 | AgentOps / Infra | `/agentops/*` `/infra/*` | Agent/Skill 工厂；「电脑」管节点和容器 |
 
 后端路由域：`auth` / `users` / `opencode` / **`harness`** / **`kanban`** / `compute` / `agent-factory` / `skill-platform` / `dataops` / `wiki` / `metadata` / `ontology`。  
-ORM **51** 张表（清单：`backend/app/db/models/__init__.py`）。`pytest` **106 passed**。
+ORM **51** 张表（清单：`backend/app/db/models/__init__.py`）。`pytest` **108 passed**。
 
 ---
 
@@ -49,6 +49,15 @@ ORM **51** 张表（清单：`backend/app/db/models/__init__.py`）。`pytest` *
    - Yao 风格登录页、品牌标、空状态、StatusDot；**未改** AIDE iframe 行为。
 
 5. **可选**：`docker/opencode/` 是把 opencode serve 打进容器的样例（本机开发不强制）。
+
+6. **AIDE 可嵌 DeepSeek Harness Web**
+   - 本机默认 `http://127.0.0.1:3080/`（`dsh --profile web` / `dsh web`）。源下拉可切 OpenCode / DSH / 容器。
+   - 「电脑 → 服务」类型 `dsh_web`：扫描发现 **3080** 或命令含 `dsh`。
+   - **不是** `/chat` 的 DSH JSON-RPC 插件；Web 给人看，JSON-RPC 给会话 runner。
+
+7. **元数据标准项种子（消金）**
+   - `MetaStandardService.ensure_seed_standards` 补齐身份/借据/申请/金额/利率/逾期等约 30 条 published 标准，别名对齐 ODS 高频列。
+   - 启动幂等：已有编码只合并 aliases / 补 domain，不覆盖人工改过的名称与规则。
 
 ---
 
@@ -106,7 +115,7 @@ cd frontend && npm run dev
 ```bash
 curl -s http://localhost:8000/health
 curl -s http://127.0.0.1:4096/global/health   # 期望 healthy
-cd backend && pytest -q                       # 106 passed
+cd backend && pytest -q                       # 108 passed
 cd frontend && npm run lint && npm run build
 ```
 
@@ -139,6 +148,31 @@ cd frontend && npm run lint && npm run build
 - `AideHost` 必须与 `<Outlet/>` 同级常驻。
 - 加 runner：实现 `RunnerPlugin`（`probe` + `stream` → `StreamEvent`），在 `PluginRegistry.with_builtins` 注册。
 - 看板：拖拽不改 `run_status`；前端只打 `/api/v1/kanban/*`。
+
+---
+
+## 2026-09-02
+
+### Agent: AIDE 嵌 DeepSeek Harness Web + 消金标准项种子（提交收尾）
+
+### 目标
+1. AIDE 能嵌本机 DSH Web（默认 `http://127.0.0.1:3080/`），「电脑 → 服务」能发现/启动 `dsh_web`
+2. 元数据标准项不够跑标注/绑定全流程：按消金行业口径 + ODS/DIM 高频列补种子
+
+### 决策
+- AIDE 与 `/chat` DSH **分路**：iframe 嵌 `dsh --profile web`；会话 runner 仍走 JSON-RPC。未选手动源时嵌入优先级：OpenCode serve UI → opencode web → **DSH 3080**
+- 容器发现：监听 **3080** 或命令含 `dsh` → `dsh_web`；MySQL ENUM 靠启动 `ALTER` 补值（`create_all` 不会加 ENUM）
+- 标准项种子约 32 条 published（身份/借据/申请/金额/利率/逾期/技术字段），别名对齐 `cust_id` / `loan_no` / `appl_seq` / `id_no` 等。幂等：已有编码只合并 aliases、补 domain，不覆盖人工改过的名称与规则
+- 补上缺失的 `list_standards`（标准项 Tab 依赖它）
+
+### 验证
+- `pytest` **108 passed**
+- 浏览器：`/infra/aide` 切「本机 DeepSeek Harness」能嵌 3080 UI；「电脑 → 服务」添加类型含 DSH web；`/dataops/catalog/biz-systems` 标准项列表可见 32 条
+
+### 修改文件
+- AIDE / 服务：`opencode.py`、`compute_service.py`、`container_service_model.py`、`AidePage.tsx`、`aideStore.ts`、`ServicesPanel.tsx`、`AideHost.tsx`
+- 标准项：`meta_standard_service.py`、`MetadataPage.tsx`、`tests/test_standards.py`、`tests/test_smoke.py`
+- 文档：`AGENTS.md`、`HANDOFF.md`、本文件
 
 ---
 

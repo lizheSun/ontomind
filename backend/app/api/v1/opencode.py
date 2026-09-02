@@ -36,6 +36,9 @@ router = APIRouter()
 OPENCODE_HOST = settings.OPENCODE_HOST
 OPENCODE_PORT = settings.OPENCODE_PORT
 OPENCODE_BASE = f"http://{OPENCODE_HOST}:{OPENCODE_PORT}"
+DSH_WEB_HOST = settings.DSH_WEB_HOST
+DSH_WEB_PORT = settings.DSH_WEB_PORT
+DSH_WEB_BASE = f"http://{DSH_WEB_HOST}:{DSH_WEB_PORT}"
 
 
 def _port_open(host: str, port: int, timeout: float = 0.4) -> bool:
@@ -87,6 +90,47 @@ def _cli_version(cli: Optional[str]) -> str:
     _VERSION_CACHE["value"] = version
     _VERSION_CACHE["at"] = now
     return version
+
+
+def _is_dsh_web_cmd(low: str) -> bool:
+    if "deepseek-harness" in low:
+        return "web" in low or "--profile web" in low
+    padded = f" {low} "
+    if " dsh " in padded or low.startswith("dsh ") or "/dsh " in low or low.endswith("/dsh"):
+        return "web" in low or "--profile web" in low
+    return False
+
+
+def _find_dsh_web_processes() -> list[dict]:
+    """扫描本机 `dsh web` / `dsh --profile web` 进程."""
+    try:
+        import psutil
+    except ImportError:
+        return []
+    results: list[dict] = []
+    for proc in psutil.process_iter(["pid", "cmdline", "create_time"]):
+        try:
+            cmdline = proc.info.get("cmdline") or []
+            joined = " ".join(str(a) for a in cmdline)
+            if not _is_dsh_web_cmd(joined.lower()):
+                continue
+            port = DSH_WEB_PORT
+            for i, arg in enumerate(cmdline):
+                if str(arg) == "--port" and i + 1 < len(cmdline):
+                    try:
+                        port = int(cmdline[i + 1])
+                    except ValueError:
+                        pass
+            results.append({
+                "pid": proc.info["pid"],
+                "port": port,
+                "url": f"http://{DSH_WEB_HOST}:{port}",
+                "started_at": proc.info.get("create_time"),
+                "cmdline": joined,
+            })
+        except Exception:
+            continue
+    return results
 
 
 def _find_web_processes() -> list[dict]:
@@ -162,7 +206,8 @@ async def web_status(fast: bool = False, detail: bool = False):
     优先级：
     1. serve(4096) 若能直接返回 HTML（opencode ≥ 1.18）→ 直接嵌，零额外进程
     2. 已有 `opencode web` 实例 → 嵌那个
-    3. 都没有 → healthy=False，前端展示「一键拉起」
+    3. 本机 DeepSeek Harness web（默认 3080）→ 嵌那个
+    4. 都没有 → healthy=False，前端展示「一键拉起」
 
     性能参数：
     - ``fast=1``  : 只做端口探活（~4ms），跳过 HTML 探测和版本查询。前端轮询用。
@@ -170,6 +215,7 @@ async def web_status(fast: bool = False, detail: bool = False):
     """
     serve_alive = _port_open(OPENCODE_HOST, OPENCODE_PORT)
     web_alive = _port_open(OPENCODE_HOST, OPENCODE_WEB_PORT)
+    dsh_alive = _port_open(DSH_WEB_HOST, DSH_WEB_PORT)
     web_url = f"http://{OPENCODE_HOST}:{OPENCODE_WEB_PORT}"
 
     if fast:
@@ -178,22 +224,25 @@ async def web_status(fast: bool = False, detail: bool = False):
         serve_has_ui = serve_alive and cached_html
         version = str(_VERSION_CACHE["value"] or "")
         cli_path = ""
+        dsh_cli = ""
     else:
         cli_path = shutil.which("opencode") or ""
         version = _cli_version(cli_path)
         serve_has_ui = await _serves_html(OPENCODE_BASE) if serve_alive else False
+        dsh_cli = shutil.which("dsh") or ""
 
-    # 决策嵌入源
+    # 决策嵌入源：OpenCode 优先，否则本机 DSH web（默认 3080）
     if serve_has_ui:
         embed_url, source = OPENCODE_BASE, "serve"
     elif web_alive:
         embed_url, source = web_url, "web"
+    elif dsh_alive:
+        embed_url, source = DSH_WEB_BASE, "dsh"
     else:
         embed_url, source = "", "none"
 
     return {
         "code": "SUCCESS",
-        "message": "ok",
         "data": {
             "healthy": bool(embed_url),
             "embed_url": embed_url,
@@ -201,22 +250,25 @@ async def web_status(fast: bool = False, detail: bool = False):
             "cli_installed": bool(cli_path) if not fast else bool(version),
             "cli_path": cli_path,
             "version": version,
-            # serve（对话工作台复用）
             "serve_base_url": OPENCODE_BASE,
             "serve_port": OPENCODE_PORT,
             "serve_healthy": serve_alive,
             "serve_has_ui": serve_has_ui,
-            # 独立 web（兜底）
             "web_url": web_url,
             "web_port": OPENCODE_WEB_PORT,
             "web_healthy": web_alive,
             "web_instances": _find_web_processes() if detail else [],
+            "dsh_web_url": DSH_WEB_BASE,
+            "dsh_web_port": DSH_WEB_PORT,
+            "dsh_web_healthy": dsh_alive,
+            "dsh_cli_installed": bool(dsh_cli) if not fast else dsh_alive,
         },
     }
 
 
 class WebStartRequest(BaseModel):
-    port: int = Field(OPENCODE_WEB_PORT, ge=1024, le=65535)
+    kind: str = Field("opencode", description="opencode | dsh")
+    port: int | None = Field(None, ge=1024, le=65535)
     cors: str = Field(
         "http://localhost:5173",
         description="允许的前端 origin（逗号分隔可传多个）",
@@ -229,18 +281,27 @@ async def web_start(
     payload: WebStartRequest,
     _user_id: int = Depends(get_current_user_id),
 ):
-    """拉起 `opencode web`（供 AIDE 页面 iframe 嵌入）.
+    """拉起本机 web UI（opencode web 或 DeepSeek Harness web）供 AIDE iframe 嵌入.
 
     幂等：端口已在跑则直接返回现有实例。
     """
-    if _port_open(OPENCODE_HOST, payload.port):
+    kind = (payload.kind or "opencode").strip().lower()
+    if kind == "dsh":
+        return await _start_dsh_web(payload)
+    return await _start_opencode_web(payload)
+
+
+async def _start_opencode_web(payload: WebStartRequest) -> dict:
+    port = payload.port or OPENCODE_WEB_PORT
+    if _port_open(OPENCODE_HOST, port):
         return {
             "code": "SUCCESS",
             "message": "opencode web 已在运行",
             "data": {
                 "already_running": True,
-                "port": payload.port,
-                "url": f"http://{OPENCODE_HOST}:{payload.port}",
+                "kind": "opencode",
+                "port": port,
+                "url": f"http://{OPENCODE_HOST}:{port}",
             },
         }
 
@@ -253,15 +314,13 @@ async def web_start(
             status_code=400,
         )
 
-    args = [cli, "web", "--port", str(payload.port), "--hostname", payload.hostname]
-    # 多个 cors origin 需要重复传 --cors
+    args = [cli, "web", "--port", str(port), "--hostname", payload.hostname]
     for origin in (payload.cors or "").split(","):
         origin = origin.strip()
         if origin:
             args.extend(["--cors", origin])
 
     env = os.environ.copy()
-    # 避免 opencode web 自动打开浏览器（AIDE 页面自己 iframe 嵌）
     env.setdefault("OPENCODE_NO_OPEN", "1")
     env.setdefault("BROWSER", "none")
 
@@ -273,10 +332,8 @@ async def web_start(
         env=env,
     )
 
-    # 轮询 15s 等端口就绪（web 首次启动要构建静态资源，比 serve 慢）
     for _ in range(150):
-        if _port_open(OPENCODE_HOST, payload.port):
-            # 启动成功：清掉 HTML 探测缓存，让下次 status 重新判定嵌入源
+        if _port_open(OPENCODE_HOST, port):
             _HTML_CACHE["value"] = None
             _HTML_CACHE["at"] = 0.0
             _HTML_CACHE["url"] = ""
@@ -285,23 +342,82 @@ async def web_start(
                 "message": "opencode web 已启动",
                 "data": {
                     "already_running": False,
+                    "kind": "opencode",
                     "pid": proc.pid,
-                    "port": payload.port,
-                    "url": f"http://{OPENCODE_HOST}:{payload.port}",
+                    "port": port,
+                    "url": f"http://{OPENCODE_HOST}:{port}",
                 },
             }
         await asyncio.sleep(0.1)
 
     raise BusinessException(
-        f"opencode web 启动超时（15s 内端口 {payload.port} 未就绪），"
-        f"请手工执行 `opencode web --port {payload.port}` 排查",
+        f"opencode web 启动超时（15s 内端口 {port} 未就绪），"
+        f"请手工执行 `opencode web --port {port}` 排查",
         code="OPENCODE_WEB_START_TIMEOUT",
         status_code=500,
     )
 
 
+async def _start_dsh_web(payload: WebStartRequest) -> dict:
+    port = payload.port or DSH_WEB_PORT
+    if _port_open(DSH_WEB_HOST, port):
+        return {
+            "code": "SUCCESS",
+            "message": "DeepSeek Harness web 已在运行",
+            "data": {
+                "already_running": True,
+                "kind": "dsh",
+                "port": port,
+                "url": f"http://{DSH_WEB_HOST}:{port}",
+            },
+        }
+
+    cli = shutil.which("dsh")
+    if not cli:
+        raise BusinessException(
+            "本机未找到 dsh CLI。请安装 DeepSeek Harness，或手工执行："
+            "`dsh --profile web`（默认 http://127.0.0.1:3080/）",
+            code="DSH_CLI_NOT_FOUND",
+            status_code=400,
+        )
+
+    env = os.environ.copy()
+    env.setdefault("BROWSER", "none")
+    args = [cli, "web", "--no-open", "--host", payload.hostname, "--port", str(port)]
+    proc = subprocess.Popen(  # noqa: S603
+        args,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        env=env,
+    )
+
+    for _ in range(150):
+        if _port_open(DSH_WEB_HOST, port):
+            return {
+                "code": "SUCCESS",
+                "message": "DeepSeek Harness web 已启动",
+                "data": {
+                    "already_running": False,
+                    "kind": "dsh",
+                    "pid": proc.pid,
+                    "port": port,
+                    "url": f"http://{DSH_WEB_HOST}:{port}",
+                },
+            }
+        await asyncio.sleep(0.1)
+
+    raise BusinessException(
+        f"DSH web 启动超时（15s 内端口 {port} 未就绪）。"
+        f"请手工执行 `dsh --profile web` 或 `dsh web --port {port}`",
+        code="DSH_WEB_START_TIMEOUT",
+        status_code=500,
+    )
+
+
 class WebStopRequest(BaseModel):
-    port: int = Field(OPENCODE_WEB_PORT, ge=1024, le=65535)
+    kind: str = Field("opencode", description="opencode | dsh")
+    port: int | None = Field(None, ge=1024, le=65535)
 
 
 @router.post("/web/stop")
@@ -309,15 +425,24 @@ async def web_stop(
     payload: WebStopRequest,
     _user_id: int = Depends(get_current_user_id),
 ):
-    """停掉指定端口的 `opencode web`."""
+    """停掉指定端口的本机 web UI."""
     import signal as _signal
 
-    matched = [p for p in _find_web_processes() if p["port"] == payload.port]
+    kind = (payload.kind or "opencode").strip().lower()
+    if kind == "dsh":
+        port = payload.port or DSH_WEB_PORT
+        matched = [p for p in _find_dsh_web_processes() if p["port"] == port]
+        label = "DeepSeek Harness web"
+    else:
+        port = payload.port or OPENCODE_WEB_PORT
+        matched = [p for p in _find_web_processes() if p["port"] == port]
+        label = "opencode web"
+
     if not matched:
         return {
             "code": "SUCCESS",
-            "message": f"端口 {payload.port} 上没有 opencode web 进程",
-            "data": {"stopped": [], "port": payload.port},
+            "message": f"端口 {port} 上没有 {label} 进程",
+            "data": {"stopped": [], "port": port, "kind": kind},
         }
 
     killed: list[int] = []
@@ -335,15 +460,14 @@ async def web_stop(
         except (ProcessLookupError, OSError):
             pass
 
-    # 停止后清缓存，避免 status 继续返回已失效的嵌入源
     _HTML_CACHE["value"] = None
     _HTML_CACHE["at"] = 0.0
     _HTML_CACHE["url"] = ""
 
     return {
         "code": "SUCCESS",
-        "message": f"已停止端口 {payload.port} 的 opencode web",
-        "data": {"stopped": killed, "port": payload.port},
+        "message": f"已停止端口 {port} 的 {label}",
+        "data": {"stopped": killed, "port": port, "kind": kind},
     }
 
 

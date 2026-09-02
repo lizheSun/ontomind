@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     OPENCODE_PORT: int = 4096       # serve（优先复用）
     OPENCODE_WEB_PORT: int = 4097   # 独立 web（兜底）
 
+    # === AIDE / DeepSeek Harness Web ===
+    # `dsh --profile web` / `dsh web` 默认 http://127.0.0.1:3080/
+    DSH_WEB_HOST: str = "127.0.0.1"
+    DSH_WEB_PORT: int = 3080
+
     # === DeepSeek Harness（会话插件，不是 Web UI）===
     # 指向 deepseek-harness 源码检出。空则尝试同级目录 ../deepseek-harness
     DSH_REPO: str = ""

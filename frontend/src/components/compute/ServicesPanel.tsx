@@ -72,7 +72,7 @@ export default function ServicesPanel() {
   // 启动服务弹窗
   const [launchOpen, setLaunchOpen] = useState(false);
   const [launchContainer, setLaunchContainer] = useState<string | undefined>();
-  const [launchKind, setLaunchKind] = useState<'opencode_web' | 'opencode_serve'>('opencode_web');
+  const [launchKind, setLaunchKind] = useState<'opencode_web' | 'opencode_serve' | 'dsh_web'>('opencode_web');
   const [launchPort, setLaunchPort] = useState<number>(4096);
   const [launching, setLaunching] = useState(false);
 
@@ -291,7 +291,7 @@ export default function ServicesPanel() {
       {visible.length === 0 ? (
         <EmptyState
           title="暂无服务"
-          description="点「添加服务」在容器里拉起 opencode，或点「扫描发现」把已在跑的服务补录进来。"
+          description="点「添加服务」在容器里拉起 OpenCode 或 DeepSeek Harness，或点「扫描发现」把已在跑的服务补录进来。"
           action={
             <Button type="primary" icon={<PlayCircleOutlined />} onClick={openLaunch} disabled={!selectedNode}>
               添加服务
@@ -438,11 +438,12 @@ export default function ServicesPanel() {
             value={launchKind}
             onChange={(v) => {
               setLaunchKind(v);
-              setLaunchPort(v === 'opencode_web' ? 4096 : 4096);
+              setLaunchPort(v === 'dsh_web' ? 3080 : 4096);
             }}
             options={[
               { value: 'opencode_web', label: 'opencode web — 仅前端 UI，适合 AIDE 嵌入' },
               { value: 'opencode_serve', label: 'opencode serve — 内置 UI + API（1.18+）' },
+              { value: 'dsh_web', label: 'DeepSeek Harness web — 默认 3080，适合 AIDE 嵌入' },
             ]}
           />
         </div>
@@ -452,14 +453,17 @@ export default function ServicesPanel() {
             容器内端口
           </Text>
           <Text type="secondary" style={{ fontSize: 11.5, marginLeft: 8, fontFamily: 'monospace' }}>
-            例：4096
+            例：{launchKind === 'dsh_web' ? '3080' : '4096'}
           </Text>
           <Select
             size="small"
             style={{ width: '100%', marginTop: 4 }}
             value={launchPort}
             onChange={setLaunchPort}
-            options={[4096, 4097].map((p) => ({ value: p, label: String(p) }))}
+            options={(launchKind === 'dsh_web' ? [3080, 3081] : [4096, 4097]).map((p) => ({
+              value: p,
+              label: String(p),
+            }))}
           />
           <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
             该端口需已映射到宿主，否则浏览器访问不到。可在「容器」页用「修改配置」加映射。
@@ -482,8 +486,9 @@ export default function ServicesPanel() {
             <Text style={{ color: '#666', fontSize: 11, display: 'block', marginBottom: 4 }}>
               等价命令
             </Text>
-            opencode {launchKind === 'opencode_web' ? 'web' : 'serve'} --port {launchPort}{' '}
-            --hostname 0.0.0.0 --cors {window.location.origin}
+            {launchKind === 'dsh_web'
+              ? `dsh web --host 0.0.0.0 --port ${launchPort} --no-open`
+              : `opencode ${launchKind === 'opencode_web' ? 'web' : 'serve'} --port ${launchPort} --hostname 0.0.0.0 --cors ${window.location.origin}`}
           </div>
         )}
       </Modal>

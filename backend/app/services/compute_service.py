@@ -61,8 +61,8 @@ logger = logging.getLogger(__name__)
 # 容器内常见 shell 候选，按优先级排序（控制台自动探测用）
 SHELL_CANDIDATES = ["/bin/bash", "/bin/ash", "/bin/sh"]
 
-# AIDE 可嵌入的 opencode 服务类型
-_AIDE_KINDS = {ServiceKind.OPENCODE_WEB, ServiceKind.OPENCODE_SERVE}
+# AIDE 可嵌入的服务类型（opencode UI + DSH Web）
+_AIDE_KINDS = {ServiceKind.OPENCODE_WEB, ServiceKind.OPENCODE_SERVE, ServiceKind.DSH_WEB}
 
 # ---------------------------------------------------------------------------
 # 短 TTL 缓存
@@ -386,12 +386,16 @@ def _default_service_name(kind: ServiceKind, port: int) -> str:
         return f"opencode web :{port}"
     if kind == ServiceKind.OPENCODE_SERVE:
         return f"opencode serve :{port}"
+    if kind == ServiceKind.DSH_WEB:
+        return f"DeepSeek Harness web :{port}"
     return f"service :{port}"
 
 
 def _detect_kind_from_command(cmd: str) -> ServiceKind:
     """从启动命令猜服务类型（自动登记时用）."""
     low = (cmd or "").lower()
+    if re.search(r"\bdsh\b", low) or "deepseek-harness" in low or "deepseek harness" in low:
+        return ServiceKind.DSH_WEB
     if "opencode" not in low:
         return ServiceKind.OTHER
     if " serve" in low or low.endswith("serve"):
@@ -402,7 +406,7 @@ def _detect_kind_from_command(cmd: str) -> ServiceKind:
 
 
 def _extract_port_from_command(cmd: str, default: Optional[int] = None) -> Optional[int]:
-    """从命令里抓 --port <n>."""
+    """从命令里抓 --port <n>；DSH web 没写端口时默认 3080."""
     m = re.search(r"--port[= ]+(\d{1,5})", cmd or "")
     if m:
         try:
@@ -411,7 +415,11 @@ def _extract_port_from_command(cmd: str, default: Optional[int] = None) -> Optio
                 return p
         except ValueError:
             pass
-    return default
+    if default is not None:
+        return default
+    if _detect_kind_from_command(cmd) == ServiceKind.DSH_WEB:
+        return 3080
+    return None
 
 
 
@@ -2085,22 +2093,29 @@ class ComputeService:
             )
 
         kind = ServiceKind(data.kind)
-        subcmd = "web" if kind == ServiceKind.OPENCODE_WEB else "serve"
-        port = data.container_port
-        log_path = f"/var/log/opencode/{subcmd}-{port}.log"
+        if kind == ServiceKind.DSH_WEB:
+            port = data.container_port
+            log_path = f"/var/log/dsh/web-{port}.log"
+            launch_cmd = f"dsh web --host {data.hostname} --port {port} --no-open"
+            mkdir = "mkdir -p /var/log/dsh"
+        else:
+            subcmd = "web" if kind == ServiceKind.OPENCODE_WEB else "serve"
+            port = data.container_port
+            log_path = f"/var/log/opencode/{subcmd}-{port}.log"
 
-        parts = [
-            "opencode", subcmd,
-            "--port", str(port),
-            "--hostname", data.hostname,
-        ]
-        cors = (data.cors or "").strip()
-        if cors:
-            for origin in cors.split(","):
-                origin = origin.strip()
-                if origin:
-                    parts += ["--cors", shlex.quote(origin)]
-        launch_cmd = " ".join(parts)
+            parts = [
+                "opencode", subcmd,
+                "--port", str(port),
+                "--hostname", data.hostname,
+            ]
+            cors = (data.cors or "").strip()
+            if cors:
+                for origin in cors.split(","):
+                    origin = origin.strip()
+                    if origin:
+                        parts += ["--cors", shlex.quote(origin)]
+            launch_cmd = " ".join(parts)
+            mkdir = "mkdir -p /var/log/opencode"
 
         # 如果该端口已经在监听，直接登记而不重复起进程（幂等）
         try:
@@ -2115,15 +2130,11 @@ class ComputeService:
                 node_id,
                 meta.id,
                 ContainerExecRequest(
-                    command=(
-                        f"mkdir -p /var/log/opencode && "
-                        f"nohup {launch_cmd} > {log_path} 2>&1 &"
-                    ),
+                    command=f"{mkdir} && nohup {launch_cmd} > {log_path} 2>&1 &",
                     mode="async",
                 ),
             )
             exec_id = exec_resp.exec_id
-            # 等端口起来（opencode web 首启要构建资源，给足时间）
             for _ in range(40):
                 await asyncio.sleep(0.5)
                 try:
@@ -2273,19 +2284,20 @@ class ComputeService:
                 if listens is None:
                     continue
 
-                # 只自动登记 opencode 常用端口（4096/4097）以及已有映射的端口
+                # 自动登记：opencode 4096/4097、DSH web 3080，以及已映射的监听端口
                 mapped = {pm.container_port for pm in c.port_mappings}
-                candidates = {p for p in listens if p in (4096, 4097)} | (
+                candidates = {p for p in listens if p in (4096, 4097, 3080)} | (
                     {p for p in listens if p in mapped}
                 )
                 for port in candidates:
                     if self.svc_repo.get_by_container_port(c.id, port):
                         continue  # 已登记，refresh 阶段会更新状态
-                    kind = (
-                        ServiceKind.OPENCODE_WEB
-                        if port in (4096, 4097)
-                        else ServiceKind.OTHER
-                    )
+                    if port == 3080:
+                        kind = ServiceKind.DSH_WEB
+                    elif port in (4096, 4097):
+                        kind = ServiceKind.OPENCODE_WEB
+                    else:
+                        kind = ServiceKind.OTHER
                     host_port = next(
                         (pm.host_port for pm in c.port_mappings if pm.container_port == port),
                         None,

@@ -13,7 +13,7 @@
 | **Overview / 六域壳** | `/overview` 等 | CodeOps / DataOps / ModelOps / AgentOps / GovOps / Infra |
 | **会话** | `/chat` | 原生聊天；OpenCode 优先 serve SSE；DSH 走 JSON-RPC 源码运行时（不是 Web UI） |
 | **看板** | `/board` | 任务看板；卡片绑定会话，列是工作流，`/api/v1/kanban` |
-| **AIDE** | `/infra/aide`（旧 `/aide`） | iframe 嵌入 opencode Web UI（`AideHost` 常驻，**未改**） |
+| **AIDE** | `/infra/aide`（旧 `/aide`） | iframe 嵌入 OpenCode / DeepSeek Harness Web（`AideHost` 常驻，**未改**） |
 | **用户管理** | `/users` | 用户 / 角色 / 权限 / 审计 |
 | **DataOps** | `/dataops/*` | 仓库、智能数开、Wiki、元数据标注、本体建模 |
 | **AgentOps / Infra** | `/agentops/*` `/infra/*` | Agent/Skill 工厂；Infra「电脑」对齐 Yao computers |

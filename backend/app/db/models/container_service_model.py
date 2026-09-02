@@ -32,6 +32,7 @@ class ServiceKind(str, enum.Enum):
 
     OPENCODE_WEB = "opencode_web"      # opencode web：仅前端 UI
     OPENCODE_SERVE = "opencode_serve"  # opencode serve：内置 UI + API
+    DSH_WEB = "dsh_web"                # DeepSeek Harness Web UI（默认 3080）
     OTHER = "other"                    # 其它常驻服务（仅登记，不做 AIDE 源）
 
 
@@ -72,7 +73,7 @@ class ContainerService(BaseModel):
         SAEnum(ServiceKind, values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
         default=ServiceKind.OTHER,
-        comment="服务类型: opencode_web / opencode_serve / other",
+        comment="服务类型: opencode_web / opencode_serve / dsh_web / other",
     )
     name = Column(String(128), nullable=False, comment="服务显示名")
     container_port = Column(Integer, nullable=False, comment="容器内监听端口")

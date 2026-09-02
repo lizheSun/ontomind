@@ -519,8 +519,9 @@ export default function MetadataPage() {
         rowKey="id"
         dataSource={standards}
         columns={[
-          { title: '编码', dataIndex: 'code', width: 140 },
-          { title: '名称', dataIndex: 'name', width: 120 },
+          { title: '编码', dataIndex: 'code', width: 150 },
+          { title: '名称', dataIndex: 'name', width: 110 },
+          { title: '域', dataIndex: 'domain', width: 90 },
           { title: '安全', dataIndex: 'security_level', width: 70 },
           { title: '语义', dataIndex: 'semantic_type', width: 100 },
           {

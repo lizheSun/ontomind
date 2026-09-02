@@ -34,6 +34,13 @@ import type { AideContainerSource, ContainerServiceInfo } from '../../types/comp
 
 const { Text } = Typography;
 
+function kindChip(kind: ContainerServiceInfo['kind']): string {
+  if (kind === 'opencode_serve') return 'serve';
+  if (kind === 'dsh_web') return 'DSH';
+  if (kind === 'opencode_web') return 'web';
+  return kind;
+}
+
 export default function AidePage() {
   const { message } = App.useApp();
 
@@ -54,7 +61,9 @@ export default function AidePage() {
   // ---- 容器服务源（从 MySQL container_services 读，不再实时扫容器）----
   const containerSource = useAideStore((s) => s.containerSource);
   const setContainerSource = useAideStore((s) => s.setContainerSource);
-  /** 全部 opencode 类服务（含不可用的，便于告知原因） */
+  const localKind = useAideStore((s) => s.localKind);
+  const setLocalKind = useAideStore((s) => s.setLocalKind);
+  /** 全部可嵌 AIDE 的服务（含不可用的，便于告知原因） */
   const [services, setServices] = useState<ContainerServiceInfo[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(false);
 
@@ -75,7 +84,6 @@ export default function AidePage() {
         const rows = discover
           ? (await discoverContainerServices()).services
           : await listContainerServices(undefined, refresh);
-        // 只关心 opencode 类（other 类不能拿来嵌 AIDE）
         setServices(rows.filter((r) => r.kind !== 'other'));
       } catch {
         /* 静默：AIDE 主流程不依赖它 */
@@ -144,7 +152,7 @@ export default function AidePage() {
       setServices(oc);
       const usable = oc.filter((x) => x.is_aide_source);
       if (usable.length > 0) {
-        message.success(`发现 ${usable.length} 个可用 opencode 服务（共 ${oc.length} 个）`);
+        message.success(`发现 ${usable.length} 个可用 AIDE 服务（共 ${oc.length} 个）`);
       } else if (oc.length > 0) {
         // 有服务但都不可用 —— 直接把最典型的原因说出来
         const blocked = oc.find((x) => x.status === 'running' && !x.host_reachable);
@@ -154,7 +162,7 @@ export default function AidePage() {
             : `找到 ${oc.length} 个服务但都未在运行，请到「电脑 → 服务」页启动`,
         );
       } else {
-        message.info('未发现任何容器内的 opencode 服务');
+        message.info('未发现容器内的 OpenCode / DeepSeek Harness 服务');
       }
     } catch (err) {
       message.error(err instanceof Error ? err.message : '扫描服务失败');
@@ -198,13 +206,6 @@ export default function AidePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 未就绪时才轮询；就绪后完全停止
-  useEffect(() => {
-    if (status?.healthy) return;
-    const t = window.setInterval(() => void refresh({ silent: true }), 5000);
-    return () => window.clearInterval(t);
-  }, [status?.healthy, refresh]);
-
   // ---- ESC 退出全屏 ----
   useEffect(() => {
     if (!fullscreen) return;
@@ -216,12 +217,23 @@ export default function AidePage() {
   }, [fullscreen, setFullscreen]);
 
   // ---- 操作 ----
-  const doStart = async () => {
+  const doStart = async (kind?: 'opencode' | 'dsh') => {
     setStarting(true);
     try {
-      const r = await aideService.start({ cors: window.location.origin });
+      const useDsh =
+        kind === 'dsh' ||
+        (kind == null &&
+          (localKind === 'dsh' || (!containerSource && status?.embed_source === 'dsh')));
+      if (useDsh) setLocalKind('dsh');
+      else if (kind === 'opencode') setLocalKind('opencode');
+      const r = await aideService.start({
+        kind: useDsh ? 'dsh' : 'opencode',
+        cors: window.location.origin,
+      });
       message.success(
-        r.already_running ? `opencode web 已在运行：${r.url}` : `opencode web 已启动：${r.url}`,
+        r.already_running
+          ? `${useDsh ? 'DeepSeek Harness' : 'opencode'} web 已在运行：${r.url}`
+          : `${useDsh ? 'DeepSeek Harness' : 'opencode'} web 已启动：${r.url}`,
       );
       await refresh({ full: true });
     } catch (err) {
@@ -235,8 +247,12 @@ export default function AidePage() {
     if (!status) return;
     setStopping(true);
     try {
-      await aideService.stop(status.web_port);
-      message.success('opencode web 已停止');
+      const useDsh = localKind === 'dsh' || status.embed_source === 'dsh';
+      await aideService.stop({
+        kind: useDsh ? 'dsh' : 'opencode',
+        port: useDsh ? status.dsh_web_port : status.web_port,
+      });
+      message.success(useDsh ? 'DeepSeek Harness web 已停止' : 'opencode web 已停止');
       await refresh({ full: true });
     } catch (err) {
       message.error(err instanceof Error ? err.message : '停止失败');
@@ -260,8 +276,40 @@ export default function AidePage() {
     return hit?.id;
   }, [containerSource, services]);
 
-  /** 选了容器源时，就绪判定走容器源（不依赖本机 opencode status） */
-  const ready = containerSource ? !!embedUrl : !!status?.healthy && !!embedUrl;
+  /** 选了容器源时，就绪判定走容器源（不依赖本机 status） */
+  const ocReady = !!(status?.serve_has_ui || status?.web_healthy);
+  const dshReady = !!status?.dsh_web_healthy;
+  const ready = containerSource
+    ? !!embedUrl
+    : localKind === 'dsh'
+      ? dshReady
+      : localKind === 'opencode'
+        ? ocReady
+        : !!status?.healthy && !!embedUrl;
+
+  // 当前选中源未就绪时才轮询；就绪后完全停止
+  useEffect(() => {
+    if (ready) return;
+    const t = window.setInterval(() => void refresh({ silent: true }), 5000);
+    return () => window.clearInterval(t);
+  }, [ready, refresh]);
+
+  const sourceKey = containerSource
+    ? (selectedServiceId ? `svc:${selectedServiceId}` : undefined)
+    : localKind === 'dsh'
+      ? 'local:dsh'
+      : localKind === 'opencode'
+        ? 'local:opencode'
+        : status?.embed_source === 'dsh'
+          ? 'local:dsh'
+          : 'local:opencode';
+
+  const showStop =
+    !containerSource &&
+    (localKind === 'dsh'
+      ? dshReady
+      : status?.embed_source === 'web' ||
+        (localKind !== 'opencode' && status?.embed_source === 'dsh' && dshReady));
 
   /** 可直接用的容器服务 */
   const usableServices = useMemo(
@@ -280,11 +328,13 @@ export default function AidePage() {
 
   const srcLabel = containerSource
     ? `容器 ${containerSource.container_name}`
-    : status?.embed_source === 'serve'
-      ? '复用 serve'
-      : status?.embed_source === 'web'
-        ? '独立 web'
-        : '未就绪';
+    : localKind === 'dsh' || status?.embed_source === 'dsh'
+      ? 'DeepSeek Harness'
+      : status?.embed_source === 'serve'
+        ? '复用 serve'
+        : status?.embed_source === 'web'
+          ? '独立 web'
+          : '未就绪';
 
   const shellStyle: React.CSSProperties = fullscreen
     ? {
@@ -376,7 +426,7 @@ export default function AidePage() {
               {embedUrl}
             </Text>
           )}
-          {!containerSource && status?.version && (
+          {!containerSource && localKind !== 'dsh' && status?.version && (
             <Text style={{ fontSize: 11, color: 'var(--ink-40, #8f8b84)' }}>
               v{status.version}
             </Text>
@@ -398,39 +448,110 @@ export default function AidePage() {
           )}
         </Space>
 
-        {/* ---- 容器服务源选择器（选项来自 MySQL container_services）---- */}
+        {/* ---- 源选择器：本机 OpenCode / 本机 DSH / 容器服务 ---- */}
         <Space size={4} align="center">
           <ApiOutlined style={{ color: 'var(--ink-40, #8f8b84)', fontSize: 13 }} />
           <Select
             size="small"
-            placeholder="选择容器 opencode 服务"
-            style={{ width: 300 }}
+            placeholder="选择 AIDE 源"
+            style={{ width: 320 }}
             allowClear
             loading={sourcesLoading}
-            value={selectedServiceId}
+            value={sourceKey}
             onChange={(val) => {
               if (val == null) {
                 setContainerSource(null);
-                message.info('已切回本机 opencode');
+                setLocalKind(null);
+                message.info('已切回自动选择本机源');
                 return;
               }
-              void pickService(val as number);
+              if (val === 'local:dsh') {
+                setLocalKind('dsh');
+                message.info('已切到本机 DeepSeek Harness（默认 :3080）');
+                return;
+              }
+              if (val === 'local:opencode') {
+                setLocalKind('opencode');
+                message.info('已切到本机 OpenCode');
+                return;
+              }
+              if (typeof val === 'string' && val.startsWith('svc:')) {
+                void pickService(Number(val.slice(4)));
+              }
             }}
             onOpenChange={(open) => {
-              // 打开下拉时做一次「扫描发现 + 回探」，
-              // 这样用户刚在容器里起的服务能立刻出现在列表里
               if (open) void fetchServices(false, true);
             }}
             optionLabelProp="label"
-            options={services.map((svc) => ({
-              value: svc.id,
-              // 不可用的置灰但仍展示，让用户知道「为什么这个不能选」
-              disabled: !svc.host_reachable || !svc.host_port,
-              label: `${svc.container_name} :${svc.host_port ?? '—'}`,
-              title: svc.status_detail ?? '',
-            }))}
+            options={[
+              {
+                label: '本机',
+                options: [
+                  { value: 'local:opencode', label: '本机 OpenCode' },
+                  { value: 'local:dsh', label: '本机 DeepSeek Harness' },
+                ],
+              },
+              ...(services.length
+                ? [
+                    {
+                      label: '容器',
+                      options: services.map((svc) => ({
+                        value: `svc:${svc.id}`,
+                        disabled: !svc.host_reachable || !svc.host_port,
+                        label: `${svc.container_name} :${svc.host_port ?? '—'}`,
+                        title: svc.status_detail ?? '',
+                      })),
+                    },
+                  ]
+                : []),
+            ]}
             optionRender={(opt) => {
-              const svc = services.find((x) => x.id === opt.value);
+              const val = String(opt.value ?? '');
+              if (val === 'local:opencode') {
+                return (
+                  <div style={{ lineHeight: 1.5, padding: '2px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: ocReady ? '#22c55e' : '#bfbcb5',
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span style={{ fontWeight: 500 }}>本机 OpenCode</span>
+                      <Tag style={{ fontSize: 10, margin: 0 }}>serve/web</Tag>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-40, #8f8b84)', fontFamily: "'JetBrains Mono', monospace" }}>
+                      {status?.serve_base_url || 'http://127.0.0.1:4096'}
+                    </div>
+                  </div>
+                );
+              }
+              if (val === 'local:dsh') {
+                return (
+                  <div style={{ lineHeight: 1.5, padding: '2px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: dshReady ? '#22c55e' : '#bfbcb5',
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span style={{ fontWeight: 500 }}>本机 DeepSeek Harness</span>
+                      <Tag style={{ fontSize: 10, margin: 0 }}>DSH</Tag>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-40, #8f8b84)', fontFamily: "'JetBrains Mono', monospace" }}>
+                      {status?.dsh_web_url || 'http://127.0.0.1:3080/'}
+                    </div>
+                  </div>
+                );
+              }
+              const svc = services.find((x) => `svc:${x.id}` === val);
               if (!svc) return opt.label;
               const ok = svc.host_reachable && !!svc.host_port;
               return (
@@ -453,9 +574,7 @@ export default function AidePage() {
                       }}
                     />
                     <span style={{ fontWeight: 500 }}>{svc.container_name}</span>
-                    <Tag style={{ fontSize: 10, margin: 0 }}>
-                      {svc.kind === 'opencode_serve' ? 'serve' : 'web'}
-                    </Tag>
+                    <Tag style={{ fontSize: 10, margin: 0 }}>{kindChip(svc.kind)}</Tag>
                     {!ok && <WarningOutlined style={{ color: '#faad14', fontSize: 11 }} />}
                   </div>
                   <div
@@ -475,17 +594,8 @@ export default function AidePage() {
                 </div>
               );
             }}
-            notFoundContent={
-              <div style={{ padding: 10, textAlign: 'center' }}>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  暂无已登记的 opencode 服务
-                  <br />
-                  到「电脑 → 服务」页启动或扫描发现
-                </Typography.Text>
-              </div>
-            }
           />
-          <Tooltip title="扫描容器并回探服务状态（会把刚在容器里手工起的 opencode 也发现出来）">
+          <Tooltip title="扫描容器并回探服务状态（会把刚在容器里手工起的 OpenCode / DSH 也发现出来）">
             <Button
               size="small"
               type="text"
@@ -494,11 +604,9 @@ export default function AidePage() {
               onClick={() => void doRefreshServices()}
             />
           </Tooltip>
-          {/* 即使当前用的是本机 opencode，也要让用户知道容器里还有可选服务 ——
-              否则「我起了容器 opencode 但 AIDE 看不到」会一直困扰用户 */}
           {!containerSource && usableServices.length > 0 && (
             <Tooltip
-              title={`容器里有 ${usableServices.length} 个可用的 opencode 服务，点开左侧下拉可切换`}
+              title={`容器里有 ${usableServices.length} 个可用的 AIDE 服务，点开左侧下拉可切换`}
             >
               <Tag
                 color="blue"
@@ -526,7 +634,7 @@ export default function AidePage() {
         <div style={{ flex: 1 }} />
 
         <Space size={4}>
-          <Tooltip title="重新加载 opencode UI">
+          <Tooltip title="重新加载 AIDE">
             <Button size="small" type="text" icon={<ReloadOutlined />} onClick={reload} />
           </Tooltip>
           <Tooltip title="在新窗口打开">
@@ -546,9 +654,8 @@ export default function AidePage() {
               onClick={() => setFullscreen(!fullscreen)}
             />
           </Tooltip>
-          {/* 容器源模式下这些按钮针对的是本机 opencode，与当前嵌入源无关，故隐藏 */}
-          {containerSource ? null : status?.embed_source === 'web' ? (
-            <Tooltip title="停止 opencode web">
+          {containerSource ? null : showStop ? (
+            <Tooltip title={localKind === 'dsh' || status?.embed_source === 'dsh' ? '停止 DeepSeek Harness web' : '停止 opencode web'}>
               <Button
                 size="small"
                 type="text"
@@ -593,7 +700,7 @@ export default function AidePage() {
             >
               <Spin />
               <Text style={{ fontSize: 12, color: 'var(--ink-40, #8f8b84)' }}>
-                首次加载 opencode UI…（之后切换页面不会再重载）
+                首次加载 AIDE…（之后切换页面不会再重载）
               </Text>
             </div>
           ) : null
@@ -610,7 +717,7 @@ export default function AidePage() {
           >
             <Spin />
             <Text style={{ fontSize: 12, color: 'var(--ink-40, #8f8b84)' }}>
-              探测 opencode…
+              探测本机 AIDE 源…
             </Text>
           </div>
         ) : (
@@ -626,20 +733,19 @@ export default function AidePage() {
             <Result
               status="info"
               icon={<CodeOutlined style={{ color: 'var(--accent, #0071e3)' }} />}
-              title="opencode 未就绪"
+              title="AIDE 未就绪"
               subTitle={
                 <div style={{ textAlign: 'left', maxWidth: 620, margin: '0 auto' }}>
-                  {/* 容器里已有可用服务 → 直接引导去选，不要让用户以为必须起本机 opencode */}
                   {usableServices.length > 0 && (
                     <Alert
                       type="success"
                       showIcon
                       style={{ marginBottom: 14, textAlign: 'left' }}
-                      title={`检测到 ${usableServices.length} 个可用的容器 opencode 服务`}
+                      title={`检测到 ${usableServices.length} 个可用的容器 AIDE 服务`}
                       description={
                         <div style={{ fontSize: 12 }}>
                           <p style={{ margin: '0 0 6px' }}>
-                            用上方的「选择容器 opencode 服务」下拉即可直接接入，无需在本机再起一个。
+                            用上方源下拉即可直接接入容器里的 OpenCode 或 DeepSeek Harness，无需在本机再起一个。
                           </p>
                           {usableServices.map((s) => (
                             <Button
@@ -657,13 +763,12 @@ export default function AidePage() {
                     />
                   )}
 
-                  {/* 容器里有服务在跑但宿主访问不到 → 说清原因与修法 */}
                   {usableServices.length === 0 && blockedServices.length > 0 && (
                     <Alert
                       type="warning"
                       showIcon
                       style={{ marginBottom: 14, textAlign: 'left' }}
-                      title={`容器里有 ${blockedServices.length} 个 opencode 在运行，但浏览器访问不到`}
+                      title={`容器里有 ${blockedServices.length} 个服务在运行，但浏览器访问不到`}
                       description={
                         <div style={{ fontSize: 12 }}>
                           {blockedServices.map((s) => (
@@ -687,7 +792,7 @@ export default function AidePage() {
                   )}
 
                   <p style={{ color: 'var(--ink-60, #605c56)', fontSize: 13 }}>
-                    也可以让 AIDE 用<b>本机</b>的 opencode。两种方式任选其一：
+                    也可以让 AIDE 用<b>本机</b>源。OpenCode 与 DeepSeek Harness 任选：
                   </p>
                   <div
                     style={{
@@ -702,7 +807,13 @@ export default function AidePage() {
                     }}
                   >
                     <div style={{ color: 'var(--ink-40, #8f8b84)' }}>
-                      # 方式 1：复用对话工作台的 serve（推荐，opencode ≥ 1.18 自带 UI）
+                      # 本机 DeepSeek Harness Web（默认 http://127.0.0.1:3080/）
+                    </div>
+                    <div>dsh --profile web</div>
+                    <div>dsh web --host 127.0.0.1 --port {status?.dsh_web_port ?? 3080} --no-open</div>
+                    <div style={{ height: 8 }} />
+                    <div style={{ color: 'var(--ink-40, #8f8b84)' }}>
+                      # 本机 OpenCode serve（≥ 1.18 自带 UI）
                     </div>
                     <div>
                       opencode serve --port {status?.serve_port ?? 4096} --cors{' '}
@@ -710,16 +821,16 @@ export default function AidePage() {
                     </div>
                     <div style={{ height: 8 }} />
                     <div style={{ color: 'var(--ink-40, #8f8b84)' }}>
-                      # 方式 2：独立 web（点下面「一键启动」等价）
+                      # 或独立 opencode web
                     </div>
                     <div>
                       opencode web --port {status?.web_port ?? 4097} --cors{' '}
                       {window.location.origin}
                     </div>
                   </div>
-                  {status && !status.cli_installed && (
+                  {status && !status.cli_installed && !status.dsh_cli_installed && (
                     <p style={{ color: '#a5361e', fontSize: 12, marginTop: 12 }}>
-                      ⚠️ 本机未检测到 opencode CLI，请先安装：
+                      ⚠️ 本机未检测到 opencode / dsh CLI。OpenCode：
                       <br />
                       <code>curl -fsSL https://opencode.ai/install | bash</code>
                     </p>
@@ -727,15 +838,22 @@ export default function AidePage() {
                 </div>
               }
               extra={
-                <Space>
+                <Space wrap>
                   <Button
                     type="primary"
                     icon={<PlayCircleOutlined />}
                     loading={starting}
-                    onClick={() => void doStart()}
+                    onClick={() => void doStart('dsh')}
+                  >
+                    一键启动 DeepSeek Harness
+                  </Button>
+                  <Button
+                    icon={<PlayCircleOutlined />}
+                    loading={starting}
+                    onClick={() => void doStart('opencode')}
                     disabled={status ? !status.cli_installed : false}
                   >
-                    一键启动 opencode web
+                    启动 opencode web
                   </Button>
                   <Button icon={<ReloadOutlined />} onClick={() => void refresh({ full: true })}>
                     重新探测本机

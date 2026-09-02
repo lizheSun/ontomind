@@ -66,6 +66,29 @@ def _seed_column(db_session, source_id: int):
     return t, c1, c2
 
 
+def test_seed_standards_cover_consumer_finance(db_session):
+    from app.services.meta_standard_service import SEED_STANDARDS, MetaStandardService
+
+    svc = MetaStandardService(db_session)
+    svc.ensure_seed_standards()
+    codes = {s.code for s in svc.list_standards(limit=500)}
+    for need in (
+        "STD_MOBILE",
+        "STD_ID_CARD",
+        "STD_CUST_ID",
+        "STD_LOAN_NO",
+        "STD_APPLY_NO",
+        "STD_PRINCIPAL",
+        "STD_OVERDUE_DAYS",
+        "STD_CHANNEL_ID",
+    ):
+        assert need in codes
+    assert len(SEED_STANDARDS) >= 20
+    # 幂等
+    svc.ensure_seed_standards()
+    assert {s.code for s in svc.list_standards(limit=500)} == codes
+
+
 def test_standard_one_to_many_bind(client, db_session, auth_headers):
     src = _seed_source(db_session)
     _, c1, c2 = _seed_column(db_session, src.id)

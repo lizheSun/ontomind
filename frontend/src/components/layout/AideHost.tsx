@@ -34,6 +34,8 @@ export default function AideHost({ sidebarW }: Props) {
   const visible = useAideStore((s) => s.visible);
   const fullscreen = useAideStore((s) => s.fullscreen);
   const reloadToken = useAideStore((s) => s.reloadToken);
+  const localKind = useAideStore((s) => s.localKind);
+  const embedSource = useAideStore((s) => s.status?.embed_source);
   const setLoaded = useAideStore((s) => s.setLoaded);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -57,7 +59,11 @@ export default function AideHost({ sidebarW }: Props) {
     <iframe
       ref={iframeRef}
       src={embedUrl}
-      title="AIDE — opencode"
+      title={
+        localKind === 'dsh' || embedSource === 'dsh'
+          ? 'AIDE — DeepSeek Harness'
+          : 'AIDE — opencode'
+      }
       onLoad={() => setLoaded(true)}
       style={{
         position: 'fixed',

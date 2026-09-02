@@ -15,6 +15,25 @@ import type { AideStatus } from '../services/aide.service';
 import type { AideContainerSource } from '../types/compute';
 
 const CACHE_KEY = 'ontomind_aide_status';
+const LOCAL_KEY = 'ontomind_aide_local_kind';
+
+function readLocalKind(): 'opencode' | 'dsh' | null {
+  try {
+    const v = sessionStorage.getItem(LOCAL_KEY);
+    return v === 'dsh' || v === 'opencode' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalKind(v: 'opencode' | 'dsh' | null) {
+  try {
+    if (v) sessionStorage.setItem(LOCAL_KEY, v);
+    else sessionStorage.removeItem(LOCAL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 function readCache(): AideStatus | null {
   try {
@@ -49,8 +68,10 @@ interface AideState {
   fullscreen: boolean;
   /** 递增以触发 iframe reload */
   reloadToken: number;
-  /** 用户选择的容器 AIDE 源（null = 使用默认 opencode serve/web） */
+  /** 用户选择的容器 AIDE 源（null = 使用本机 OpenCode / DSH） */
   containerSource: AideContainerSource | null;
+  /** 本机源：opencode | dsh | null（null = 跟后端 embed_source 走） */
+  localKind: 'opencode' | 'dsh' | null;
 
   setStatus: (s: AideStatus | null) => void;
   setVisible: (v: boolean) => void;
@@ -58,6 +79,7 @@ interface AideState {
   setFullscreen: (v: boolean) => void;
   reload: () => void;
   setContainerSource: (source: AideContainerSource | null) => void;
+  setLocalKind: (kind: 'opencode' | 'dsh' | null) => void;
 }
 
 const cached = readCache();
@@ -72,12 +94,26 @@ export const useAideStore = create<AideState>((set, get) => ({
   fullscreen: false,
   reloadToken: 0,
   containerSource: null,
+  localKind: readLocalKind(),
 
   setStatus: (s) => {
     writeCache(s);
-    // 如果用户选了容器源，embedUrl 由容器源决定，不受 status 影响
-    if (get().containerSource) return;
-    const nextUrl = s?.healthy ? s.embed_url : '';
+    if (get().containerSource) {
+      set({ status: s });
+      return;
+    }
+    const local = get().localKind;
+    let nextUrl = '';
+    if (local === 'dsh') {
+      nextUrl = s?.dsh_web_healthy ? s.dsh_web_url || '' : '';
+    } else if (local === 'opencode') {
+      nextUrl = s?.serve_has_ui || s?.web_healthy ? s.embed_url || '' : '';
+      if (s?.embed_source === 'dsh') {
+        nextUrl = s.serve_has_ui ? s.serve_base_url : s.web_healthy ? s.web_url : '';
+      }
+    } else {
+      nextUrl = s?.healthy ? s.embed_url : '';
+    }
     const prevUrl = get().embedUrl;
     set({
       status: s,
@@ -101,17 +137,43 @@ export const useAideStore = create<AideState>((set, get) => ({
         embedUrl: url,
         mounted: true,
         loaded: false,
-        status: null, // 不依赖后端 status
+        status: get().status, // 不依赖后端 status 切源，但保留探活结果
       });
     } else {
-      // 切换回默认：从缓存恢复
-      const cached = readCache();
+      const s = get().status || readCache();
+      const local = get().localKind;
+      let url = '';
+      if (local === 'dsh') url = s?.dsh_web_healthy ? s.dsh_web_url || '' : '';
+      else if (local === 'opencode') {
+        url = s?.serve_has_ui ? s.serve_base_url || '' : s?.web_healthy ? s.web_url || '' : '';
+      } else {
+        url = s?.healthy ? s.embed_url || '' : '';
+      }
       set({
         containerSource: null,
-        embedUrl: cached?.healthy ? cached.embed_url : '',
+        embedUrl: url,
         mounted: get().mounted,
         loaded: false,
       });
     }
+  },
+
+  setLocalKind: (kind) => {
+    writeLocalKind(kind);
+    const s = get().status;
+    let url = '';
+    if (kind === 'dsh') url = s?.dsh_web_healthy ? s.dsh_web_url || '' : '';
+    else if (kind === 'opencode') {
+      url = s?.serve_has_ui ? s.serve_base_url : s?.web_healthy ? s.web_url : '';
+    } else {
+      url = s?.healthy ? s.embed_url : '';
+    }
+    set({
+      localKind: kind,
+      containerSource: null,
+      embedUrl: url,
+      mounted: get().mounted || !!url,
+      loaded: false,
+    });
   },
 }));

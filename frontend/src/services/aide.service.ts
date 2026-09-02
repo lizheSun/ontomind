@@ -20,8 +20,8 @@ export interface AideStatus {
   healthy: boolean;
   /** iframe 用的最终 URL（空串代表没有可用源） */
   embed_url: string;
-  /** 嵌入源：serve(复用对话工作台) / web(独立进程) / none */
-  embed_source: 'serve' | 'web' | 'none';
+  /** 嵌入源：serve / web / dsh / none */
+  embed_source: 'serve' | 'web' | 'dsh' | 'none';
   cli_installed: boolean;
   cli_path: string;
   version: string;
@@ -35,6 +35,10 @@ export interface AideStatus {
   web_port: number;
   web_healthy: boolean;
   web_instances: AideWebInstance[];
+  dsh_web_url?: string;
+  dsh_web_port?: number;
+  dsh_web_healthy?: boolean;
+  dsh_cli_installed?: boolean;
 }
 
 export interface AideStartResult {
@@ -65,19 +69,20 @@ export const aideService = {
       })
       .then((r) => unwrap<AideStatus>(r)),
 
-  /** 拉起独立 opencode web（serve 没 UI 时的兜底） */
-  start: (opts?: { port?: number; cors?: string; hostname?: string }) =>
+  /** 拉起独立 web（serve 没 UI 时的兜底；kind=dsh 则起 DeepSeek Harness web） */
+  start: (opts?: { kind?: 'opencode' | 'dsh'; port?: number; cors?: string; hostname?: string }) =>
     api
       .post('/opencode/web/start', {
+        kind: opts?.kind ?? 'opencode',
         port: opts?.port,
         cors: opts?.cors ?? `${window.location.origin}`,
         hostname: opts?.hostname ?? '127.0.0.1',
       })
       .then((r) => unwrap<AideStartResult>(r)),
 
-  /** 停掉独立 opencode web */
-  stop: (port?: number) =>
+  /** 停掉独立 web */
+  stop: (opts?: { kind?: 'opencode' | 'dsh'; port?: number }) =>
     api
-      .post('/opencode/web/stop', { port })
+      .post('/opencode/web/stop', { kind: opts?.kind ?? 'opencode', port: opts?.port })
       .then((r) => unwrap<{ stopped: number[]; port: number }>(r)),
 };

@@ -153,7 +153,7 @@ CREATE TABLE container_services (
 	container_id VARCHAR(64) NOT NULL COMMENT '容器 ID（短 ID）', 
 	container_name VARCHAR(255) NOT NULL COMMENT '容器名称', 
 	image VARCHAR(512) COMMENT '容器镜像', 
-	kind ENUM('opencode_web','opencode_serve','other') NOT NULL COMMENT '服务类型: opencode_web / opencode_serve / other', 
+	kind ENUM('opencode_web','opencode_serve','dsh_web','other') NOT NULL COMMENT '服务类型: opencode_web / opencode_serve / dsh_web / other', 
 	name VARCHAR(128) NOT NULL COMMENT '服务显示名', 
 	container_port INTEGER NOT NULL COMMENT '容器内监听端口', 
 	host_port INTEGER COMMENT '映射到宿主的端口（无映射则为 NULL）', 
@@ -174,7 +174,7 @@ CREATE TABLE container_services (
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_container_port UNIQUE (container_id, container_port), 
 	FOREIGN KEY(node_id) REFERENCES compute_nodes (id) ON DELETE CASCADE
-)COMMENT='容器服务登记表（opencode web/serve 等常驻服务）'
+)COMMENT='容器服务登记表（opencode web/serve、DeepSeek Harness web 等常驻服务）'
 
 
 

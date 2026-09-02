@@ -244,7 +244,7 @@ export interface AideContainerSource {
 
 // ---- 容器服务登记（container_services 表） ----
 
-export type ServiceKind = 'opencode_web' | 'opencode_serve' | 'other';
+export type ServiceKind = 'opencode_web' | 'opencode_serve' | 'dsh_web' | 'other';
 export type ServiceStatus = 'running' | 'stopped' | 'unreachable' | 'unknown';
 
 /**
@@ -291,7 +291,7 @@ export interface ServiceRefreshResult {
 }
 
 export interface ServiceLaunchRequest {
-  kind: 'opencode_web' | 'opencode_serve';
+  kind: 'opencode_web' | 'opencode_serve' | 'dsh_web';
   container_port: number;
   cors?: string;
   hostname?: string;
@@ -323,5 +323,6 @@ export const serviceStatusLabel: Record<ServiceStatus, string> = {
 export const serviceKindLabel: Record<ServiceKind, string> = {
   opencode_web: 'opencode web',
   opencode_serve: 'opencode serve',
+  dsh_web: 'DeepSeek Harness web',
   other: '其它服务',
 };

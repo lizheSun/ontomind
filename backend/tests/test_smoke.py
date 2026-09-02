@@ -121,7 +121,23 @@ def test_opencode_web_status_shape(client):
         "serve_port", "serve_healthy", "web_port", "web_healthy",
     ):
         assert key in d, f"缺字段 {key}"
-    assert d["embed_source"] in ("serve", "web", "none")
+    assert d["embed_source"] in ("serve", "web", "dsh", "none")
+    for key in ("dsh_web_url", "dsh_web_port", "dsh_web_healthy"):
+        assert key in d, f"缺字段 {key}"
+    assert d["dsh_web_port"] == 3080
+
+
+def test_detect_dsh_web_kind_from_command():
+    from app.db.models.container_service_model import ServiceKind
+    from app.services.compute_service import _detect_kind_from_command, _extract_port_from_command
+
+    assert _detect_kind_from_command("dsh web --port 3080") == ServiceKind.DSH_WEB
+    assert _detect_kind_from_command("dsh --profile web") == ServiceKind.DSH_WEB
+    assert _detect_kind_from_command("nohup dsh web --host 0.0.0.0 --no-open") == ServiceKind.DSH_WEB
+    assert _extract_port_from_command("dsh web") == 3080
+    assert _extract_port_from_command("dsh web --port 3099") == 3099
+    assert _detect_kind_from_command("opencode serve --port 4096") == ServiceKind.OPENCODE_SERVE
+    assert _detect_kind_from_command("opencode web --port 4097") == ServiceKind.OPENCODE_WEB
 
 
 # ---------------------------------------------------------------------------

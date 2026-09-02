@@ -11,13 +11,13 @@ OntoMind — AI Agent 工作平台 + DataOps/本体语义层。落地页 `/overv
 主要能力：
 1. **会话** — 原生聊天 `/chat`：交互层 + OpenCode / DSH 插件（**不是** AIDE iframe）
 2. **看板** — 任务看板 `/board`：卡片绑定会话，列是工作流，运行状态单独过滤
-3. **AIDE** — iframe 嵌入 opencode Web UI（`/infra/aide`），模块独立
+3. **AIDE** — iframe 嵌入 OpenCode / DeepSeek Harness Web UI（`/infra/aide`），模块独立
 4. **用户管理** — `/users`
 5. **DataOps** — 数据仓库、智能数开、Wiki 知识库、元数据标注、本体建模
 6. **AgentOps / Infra** — Agent/Skill 设计与容器发布；Infra「电脑」管理节点与容器
 
 后端路由域（`/api/v1/`）：`auth` / `users` / `opencode` / `harness` / `kanban` / `compute` / `agent-factory` / `skill-platform` / `dataops` / `wiki` / `metadata` / `ontology`。  
-ORM **51 张表**（权威清单见 `app/db/models/__init__.py`）。`pytest` 当前 **106 passed**。
+ORM **51 张表**（权威清单见 `app/db/models/__init__.py`）。`pytest` 当前 **108 passed**。
 
 > 🗑️ **2026-08-03 曾大清理**历史五层/专家团等模块；之后又增量恢复 Compute/Agent/DataOps/Wiki/Ontology。  
 > 以**当前代码与本文件**为准，不要盲信旧 HANDOFF 里「只有 4 张表」的段落。
@@ -35,6 +35,7 @@ ORM **51 张表**（权威清单见 `app/db/models/__init__.py`）。`pytest` �
 
 ```bash
 opencode serve --port 4096 --cors http://localhost:5173
+dsh --profile web            # DeepSeek Harness Web，默认 http://127.0.0.1:3080/
 cd backend && uvicorn app.main:app --reload --port 8000
 cd frontend && npm run dev
 
@@ -61,6 +62,10 @@ cd backend && pytest
 ## AIDE
 
 - `AideHost` 必须与 `<Outlet/>` 同级常驻，**禁止**放进路由（卸载会重建 iframe，慢 ~18.5x）
+- 可嵌 **本机 OpenCode**（serve 4096 / web 4097）或 **本机 DeepSeek Harness Web**（默认 `http://127.0.0.1:3080/`，`dsh --profile web` / `dsh web`）
+- 未手动选源时嵌入优先级：OpenCode serve UI → opencode web → **DSH 3080** → none
+- 容器服务类型 `dsh_web`：扫描发现端口 **3080** 或命令含 `dsh`；「电脑 → 服务」可启动
+- **不要**把 AIDE 的 DSH Web 和 `/chat` 的 DSH JSON-RPC 插件混为一谈（Web 给人看，JSON-RPC 给会话 runner）
 
 ## 统一会话（/chat）
 

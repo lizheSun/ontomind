@@ -18,12 +18,32 @@ from app.db.session import engine, Base
 import app.db.models  # noqa: F401 — import all models for table discovery
 
 
+def _ensure_container_service_kind_enum() -> None:
+    """MySQL native ENUM 不会随 Model 自动加值；补上 dsh_web。"""
+    if engine.dialect.name != "mysql":
+        return
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE container_services MODIFY COLUMN kind "
+                    "ENUM('opencode_web','opencode_serve','dsh_web','other') "
+                    "NOT NULL DEFAULT 'other'"
+                )
+            )
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup / shutdown lifecycle."""
     validate_production_security()
     # 建表（dev 便利）：当前 13 张表，清单见 app/db/models/__init__.py
     Base.metadata.create_all(bind=engine)
+    _ensure_container_service_kind_enum()
     # 播种 Agent 工厂内置预设（幂等；失败不阻塞启动）
     from app.db.seed_agent_factory import seed_agent_factory
     from app.db.session import SessionLocal

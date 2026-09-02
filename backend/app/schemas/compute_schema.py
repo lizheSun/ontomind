@@ -291,6 +291,28 @@ COMMAND_TEMPLATES: List[dict] = [
         },
     },
     {
+        "id": "dsh-web",
+        "name": "DeepSeek Harness web",
+        "description": (
+            "后台启动 DeepSeek Harness Web UI（dsh web）。"
+            "默认端口 3080。容器内务必 --host 0.0.0.0，否则宿主访问不到。"
+            "日志写入 /var/log/dsh/web-{port}.log"
+        ),
+        "command": (
+            "mkdir -p /var/log/dsh && "
+            "nohup dsh web --host {hostname} --port {port} --no-open "
+            "> /var/log/dsh/web-{port}.log 2>&1 &"
+        ),
+        "mode": "async",
+        "params": {
+            "port": {"type": "number", "default": 3080, "label": "Web 端口", "example": "3080"},
+            "hostname": {
+                "type": "string", "default": "0.0.0.0",
+                "label": "绑定地址", "example": "0.0.0.0（不要用 127.0.0.1）",
+            },
+        },
+    },
+    {
         "id": "check-bind-address",
         "name": "检查端口绑定地址（排查宿主访问不到）",
         "description": (
@@ -497,7 +519,7 @@ class ContainerServiceResponse(BaseModel):
     container_name: str
     image: Optional[str] = None
 
-    kind: str                      # opencode_web / opencode_serve / other
+    kind: str                      # opencode_web / opencode_serve / dsh_web / other
     name: str
     container_port: int
     host_port: Optional[int] = None
@@ -526,7 +548,7 @@ class ContainerServiceCreate(BaseModel):
     container_port: int = Field(..., ge=1, le=65535, description="容器内监听端口")
     kind: str = Field(
         "other",
-        pattern="^(opencode_web|opencode_serve|other)$",
+        pattern="^(opencode_web|opencode_serve|dsh_web|other)$",
         description="服务类型",
     )
     name: Optional[str] = Field(None, max_length=128, description="显示名，留空自动生成")
@@ -549,7 +571,7 @@ class ServiceLaunchRequest(BaseModel):
     """在容器内启动一个常驻服务并登记到 DB。"""
     kind: str = Field(
         ...,
-        pattern="^(opencode_web|opencode_serve)$",
+        pattern="^(opencode_web|opencode_serve|dsh_web)$",
         description="要启动的服务类型",
     )
     container_port: int = Field(
