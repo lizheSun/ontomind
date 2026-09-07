@@ -5,7 +5,7 @@
 
 ---
 
-## 当前快照（2026-09-02）
+## 当前快照（2026-09-07）
 
 ### 产品现在是什么
 
@@ -148,6 +148,28 @@ cd frontend && npm run lint && npm run build
 - `AideHost` 必须与 `<Outlet/>` 同级常驻。
 - 加 runner：实现 `RunnerPlugin`（`probe` + `stream` → `StreamEvent`），在 `PluginRegistry.with_builtins` 注册。
 - 看板：拖拽不改 `run_status`；前端只打 `/api/v1/kanban/*`。
+
+---
+
+## 2026-09-07
+
+### Agent: push main + 本机运维备忘
+
+### 目标
+把本地领先 `origin/main` 的提交推到远程，并记本机排障备忘。
+
+### 推送范围
+- `f5725b7` feat: 统一会话 `/chat` 与任务看板 `/board`
+- `4d3ec76` feat: AIDE 嵌入 DSH Web，并补消金元数据标准项种子
+- 本条：仅文档 `AGENT_LOG.md`（快照日期 → 2026-09-07）
+
+### 本机备忘（未改代码）
+- 局域网 IP：`10.20.40.170`
+- Docker 容器 `opencode` / `opencode001` 若 PID1 是裸 `opencode`（TUI），映射 14096→4096、14097→4097 也不会有 serve/web 监听，平台会显示 stopped。需容器内跑 `opencode serve/web --hostname 0.0.0.0`，或走「电脑 → 服务 → 添加服务」
+- AIDE DSH Web 与 `/chat` DSH JSON-RPC 仍分路：Web 默认 `http://127.0.0.1:3080/`（`dsh --profile web`）
+
+### 验证
+- `git status`：push 前 working tree clean（本提交除外）；`pytest` 此前 **108 passed**
 
 ---
 
